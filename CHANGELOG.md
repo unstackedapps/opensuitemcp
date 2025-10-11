@@ -14,12 +14,14 @@ First stable release of OpenSuiteMCP - an open source, production-ready NetSuite
 ### Features
 
 #### Authentication & Security
+
 - OAuth 2.0 with PKCE authentication flow
 - Secure session management with file-based persistence
 - Automatic token refresh
 - No credentials stored client-side
 
 #### AI Integration
+
 - Multi-provider AI support (OpenAI, Anthropic Claude, Google Gemini)
 - LangChain framework for AI orchestration
 - Streaming responses with real-time tool execution visibility
@@ -27,6 +29,7 @@ First stable release of OpenSuiteMCP - an open source, production-ready NetSuite
 - Type-safe tool definitions with Zod validation
 
 #### NetSuite Integration
+
 - Native MCP REST API integration (no local server needed)
 - 5 built-in MCP tools:
   - `ns_runReport` - Run NetSuite reports
@@ -38,6 +41,7 @@ First stable release of OpenSuiteMCP - an open source, production-ready NetSuite
 - Real-time tool execution feedback
 
 #### User Experience
+
 - Natural language query interface
 - Beautiful React UI with Tailwind CSS
 - Dark mode support
@@ -47,6 +51,7 @@ First stable release of OpenSuiteMCP - an open source, production-ready NetSuite
 - Real-time streaming AI responses
 
 #### Developer Experience
+
 - Full TypeScript/JSDoc support
 - Comprehensive documentation (README, ARCHITECTURE, INSTALLATION)
 - Development mode with hot reload
@@ -56,6 +61,7 @@ First stable release of OpenSuiteMCP - an open source, production-ready NetSuite
 ### Technical Stack
 
 **Backend:**
+
 - Express.js web server
 - LangChain AI framework
 - MCP SDK for NetSuite integration
@@ -63,12 +69,14 @@ First stable release of OpenSuiteMCP - an open source, production-ready NetSuite
 - Zod for schema validation
 
 **Frontend:**
+
 - React 18 with Vite
 - Tailwind CSS with dark mode
 - Lucide React icons
 - React Markdown with GFM support
 
 ### Documentation
+
 - Complete installation guide
 - Architecture documentation
 - Troubleshooting section
@@ -78,4 +86,3 @@ First stable release of OpenSuiteMCP - an open source, production-ready NetSuite
 ---
 
 [1.0.0]: https://github.com/yourusername/opensuitemcp/releases/tag/v1.0.0
-
