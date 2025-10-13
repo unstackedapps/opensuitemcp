@@ -26,6 +26,7 @@ const OpenSuiteMCP = () => {
   const [notification, setNotification] = useState(null);
   const messagesEndRef = useRef(null);
   const statusCheckInterval = useRef(null);
+  const inputRef = useRef(null);
 
   const showNotification = (type, message) => {
     setNotification({ type, message, id: Date.now() });
@@ -65,6 +66,9 @@ const OpenSuiteMCP = () => {
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setIsLoading(true);
+
+    // Focus back on input after a brief delay
+    setTimeout(() => inputRef.current?.focus(), 100);
 
     try {
       const response = await fetch("http://localhost:3001/api/chat/message", {
@@ -229,6 +233,8 @@ const OpenSuiteMCP = () => {
           if (data.messages && data.messages.length > 0) {
             console.log(`Loaded ${data.messages.length} messages from session`);
             setMessages(data.messages);
+            // Scroll to bottom after messages are loaded
+            setTimeout(() => scrollToBottom(), 100);
           }
         }
       } catch (error) {
@@ -448,7 +454,7 @@ const OpenSuiteMCP = () => {
       )}
 
       {/* Messages Container */}
-      <div className="flex-1 overflow-y-auto px-6 py-4">
+      <div className="flex-1 overflow-y-auto px-6 py-4 scrollbar-hide">
         {messages.length === 0 ? (
           <WelcomeMessage isConnected={netsuiteAuth.isAuthenticated} availableTools={availableTools} />
         ) : (
@@ -465,24 +471,27 @@ const OpenSuiteMCP = () => {
       {/* Input Area */}
       <div className="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-6 py-4">
         <div className="max-w-4xl mx-auto">
-          <form onSubmit={handleSubmit} className="flex space-x-4">
-            <textarea
-              value={input}
-              onChange={handleInputChange}
-              onKeyPress={handleKeyPress}
-              placeholder={netsuiteAuth.isAuthenticated ? "Ask about NetSuite reports, searches, or data..." : "Connect to NetSuite first..."}
-              className="flex-1 px-4 py-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 resize-none placeholder-gray-400 dark:placeholder-gray-500"
-              rows="2"
-              disabled={isLoading || !netsuiteAuth.isAuthenticated}
-            />
-            <button
-              type="submit"
-              disabled={isLoading || !input?.trim() || !netsuiteAuth.isAuthenticated}
-              className="px-6 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center space-x-2"
-            >
-              <Send className="w-5 h-5" />
-              <span>{isLoading ? "Sending..." : "Send"}</span>
-            </button>
+          <form onSubmit={handleSubmit} className="relative flex items-center">
+            <div className="flex-1 relative">
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={handleInputChange}
+                onKeyPress={handleKeyPress}
+                placeholder={netsuiteAuth.isAuthenticated ? "Ask about NetSuite reports, searches, or data..." : "Connect to NetSuite first..."}
+                className="w-full px-4 py-3 pr-12 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-full focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 resize-none placeholder-gray-400 dark:placeholder-gray-500 overflow-hidden"
+                rows="1"
+                disabled={!netsuiteAuth.isAuthenticated}
+                style={{ maxHeight: "120px" }}
+              />
+              <button
+                type="submit"
+                disabled={isLoading || !input?.trim() || !netsuiteAuth.isAuthenticated}
+                className="absolute right-2 bottom-3.5 p-2 bg-blue-600 dark:bg-blue-500 text-white rounded-full hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center"
+              >
+                <Send className="w-5 h-5" />
+              </button>
+            </div>
           </form>
           {!netsuiteAuth.isAuthenticated && <p className="mt-2 text-sm text-orange-600 dark:text-orange-400">⚠️ Connect to NetSuite in Settings to start</p>}
           {netsuiteAuth.isAuthenticated && !aiProvider.configured && <p className="mt-2 text-sm text-amber-600 dark:text-amber-400">💡 Configure an AI provider in Settings to enable queries</p>}

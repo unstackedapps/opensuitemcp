@@ -8,6 +8,9 @@ export default {
     theme: {
         extend: {},
     },
+    corePlugins: {
+        scrollbar: false,
+    },
     plugins: [
         require('@tailwindcss/typography'),
     ],

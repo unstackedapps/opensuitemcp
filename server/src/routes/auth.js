@@ -192,6 +192,45 @@ router.get('/status', async (req, res) => {
     const hasTokens = !!req.session.netsuiteTokens;
     const userId = req.session.id;
 
+    // Check if token is expired or about to expire (within 5 minutes)
+    if (hasTokens && req.session.netsuiteTokens.expiresAt) {
+        const expiresAt = new Date(req.session.netsuiteTokens.expiresAt).getTime();
+        const now = Date.now();
+        const fiveMinutes = 5 * 60 * 1000;
+
+        if (expiresAt - now < fiveMinutes) {
+            console.log('⚠️ Access token expired or expiring soon - refreshing...');
+            try {
+                const newTokens = await netsuiteAuth.refreshAccessToken(
+                    req.session.netsuiteTokens.refresh_token,
+                    {
+                        accountId: req.session.netsuiteTokens.accountId,
+                        clientId: req.session.netsuiteTokens.clientId
+                    }
+                );
+
+                const newExpiresAt = new Date(Date.now() + (newTokens.expires_in * 1000)).toISOString();
+                req.session.netsuiteTokens = {
+                    ...req.session.netsuiteTokens,
+                    ...newTokens,
+                    expiresAt: newExpiresAt
+                };
+
+                console.log('✅ Access token refreshed successfully');
+            } catch (error) {
+                console.error('❌ Failed to refresh token:', error.message);
+                // Token refresh failed - clear session
+                req.session.netsuiteTokens = null;
+                req.session.isAuthenticated = false;
+                return res.json({
+                    isAuthenticated: false,
+                    mcpConnected: false,
+                    error: 'Session expired. Please reconnect to NetSuite.'
+                });
+            }
+        }
+    }
+
     // Check if MCP connection is actually active and healthy
     let mcpConnected = mcpService.hasActiveConnection(userId);
 

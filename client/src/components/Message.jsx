@@ -1,6 +1,5 @@
 import React from "react";
-import { User } from "lucide-react";
-import LockOpen from "./icons/LockOpen";
+import { User, Bot } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -12,13 +11,13 @@ const Message = ({ message }) => {
       <div className={`flex max-w-3xl ${isUser ? "flex-row-reverse" : "flex-row"} space-x-3`}>
         <div className={`flex-shrink-0 ${isUser ? "ml-3" : "mr-3"}`}>
           <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isUser ? "bg-blue-600" : "bg-gray-700"}`}>
-            {isUser ? <User className="w-6 h-6 text-white" /> : <LockOpen className="w-6 h-6 text-white" />}
+            {isUser ? <User className="w-6 h-6 text-white" /> : <Bot className="w-6 h-6 text-white" />}
           </div>
         </div>
         <div className="flex-1">
           <div className={`rounded-lg px-4 py-3 ${isUser ? "bg-blue-600 dark:bg-blue-500 text-white" : "bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600"}`}>
             {isUser ? (
-              <p className="whitespace-pre-wrap text-white">{message.content}</p>
+              <p className="whitespace-pre-wrap text-white text-sm">{message.content}</p>
             ) : (
               <>
                 {/* Integrated thinking with tool details */}
@@ -74,7 +73,7 @@ const Message = ({ message }) => {
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
                     components={{
-                      p: ({ children }) => <p className="mb-3 last:mb-0">{children}</p>,
+                      p: ({ children }) => <p className="mb-3">{children}</p>,
                       ul: ({ children }) => <ul className="mb-3 space-y-1">{children}</ul>,
                       strong: ({ children }) => <strong className="font-semibold text-gray-900 dark:text-white">{children}</strong>,
                     }}
