@@ -398,7 +398,18 @@ const OpenSuiteMCP = () => {
           <div className="flex items-center space-x-3">
             <LockOpen className="w-8 h-8 text-blue-600 dark:text-blue-500" />
             <div>
-              <h1 className="text-xl font-semibold text-gray-900 dark:text-white">OpenSuiteMCP</h1>
+              <div className="flex items-center space-x-2">
+                <h1 className="text-xl font-semibold text-gray-900 dark:text-white">OpenSuiteMCP</h1>
+                <a
+                  href="https://github.com/devszilla/opensuitemcp"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-2 py-0.5 text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                  title="View on GitHub"
+                >
+                  v1.1.0
+                </a>
+              </div>
               <p className="text-sm text-gray-500 dark:text-gray-400">Open Source NetSuite MCP Client</p>
             </div>
           </div>
