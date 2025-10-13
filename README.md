@@ -69,7 +69,47 @@ This is **not** a regex-based chatbot. The AI handles everything:
 - 🎯 **Handles Context**: Remembers conversation flow
 - ⚡ **Adapts**: Works with ANY query, not just predefined patterns
 
-## 🏗️ Architecture
+## 🏗️ Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         USER BROWSER                            │
+├─────────────────────────────────────────────────────────────────┤
+│  React Frontend (Vite + Tailwind)                               │
+│  ├─ Custom State Management                                     │
+│  ├─ Real-time Streaming UI (SSE)                                │
+│  └─ Configuration Management                                    │
+└────────────────┬────────────────────────────────────────────────┘
+                 │ HTTP + Server-Sent Events
+                 ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    EXPRESS.JS BACKEND                           │
+├─────────────────────────────────────────────────────────────────┤
+│  Session Management (File-based, Persistent)                    │
+│  ├─ OAuth Tokens                                                │
+│  ├─ AI API Keys                                                 │
+│  └─ User Preferences & Conversation History                     │
+│                                                                 │
+│  LangChain Framework                                            │
+│  ├─ Agent Executor - Multi-step reasoning                       │
+│  ├─ Tool Execution - Type-safe with Zod                         │
+│  ├─ Streaming Support - Real-time responses                     │
+│  └─ Provider Abstraction (OpenAI/Anthropic/Google)              │
+└────────────┬─────────────────────────┬──────────────────────────┘
+             │                         │
+             │                         │
+             ▼                         ▼
+┌──────────────────────┐   ┌─────────────────────────┐
+│   NETSUITE MCP API   │   │  AI PROVIDER APIS       │
+│   (OAuth 2.0/PKCE)   │   │  - OpenAI (GPT)         │
+│                      │   │  - Anthropic (Claude)   │
+│  - Tools Discovery   │   │  - Google (Gemini)      │
+│  - Query Execution   │   │                         │
+│  - JSON-RPC 2.0      │   │  Dynamic Model Selection│
+└──────────────────────┘   └─────────────────────────┘
+```
+
+### Project Structure
 
 ```
 opensuitemcp/
@@ -94,12 +134,122 @@ opensuitemcp/
 ## 📋 Prerequisites
 
 - Node.js (v18 or higher)
-- NetSuite account with OAuth 2.0 integration configured
+- NetSuite account with:
+  - Administrator access to create roles and OAuth integrations
+  - A custom role with OAuth 2.0 and MCP permissions (see setup instructions)
+  - A user assigned to this role
 - **OpenAI API key, Anthropic API key, OR Google AI API key** (required for AI-first NLQ functionality)
 
-## 🚀 Setup Instructions
+## 🚀 Installation & Setup
 
-### 1. NetSuite Configuration
+### 1. Clone and Install
+
+```bash
+# Clone the repository
+git clone https://github.com/devszilla/opensuitemcp.git
+cd opensuitemcp
+
+# Install backend dependencies
+cd server
+npm install
+
+# Install frontend dependencies
+cd ../client
+npm install
+```
+
+**That's it!** All correct versions are in `package.json`:
+
+**Backend AI Dependencies:**
+
+- ✅ `langchain@^0.3.35` - LangChain core framework
+- ✅ `@langchain/openai@^0.6.14` - OpenAI provider
+- ✅ `@langchain/anthropic@^0.3.30` - Anthropic provider
+- ✅ `@langchain/google-genai@^0.2.18` - Google Gemini provider
+- ✅ `@langchain/core@^0.3.78` - LangChain utilities
+- ✅ `zod@^3.25.76` - Type-safe schemas
+
+### 2. Environment Setup
+
+```bash
+# Copy the example environment file
+cd server
+cp env.example .env
+```
+
+The default values in `.env` are ready for development. You only need to modify them for production deployment (see Production Deployment section below).
+
+### 3. NetSuite Role Configuration (CRITICAL)
+
+> **⚠️ IMPORTANT**: Before configuring OAuth, you must create a custom NetSuite role with the proper permissions. Without this role, the OAuth flow and MCP tools will not work.
+
+#### Step 1: Create Custom Role
+
+1. Log into NetSuite as an Administrator
+2. Go to **Setup > Users/Roles > Manage Roles**
+3. Click **New**
+4. Configure the role:
+   - **Name**: OpenSuiteMCP User Role (or your preferred name)
+   - **Center Type**: Choose appropriate center for your users
+
+#### Step 2: Assign Required Permissions (CRITICAL)
+
+The role **MUST** have these three permissions for OAuth 2.0 and MCP to work:
+
+1. **Log in using OAuth 2.0 Access Tokens**
+
+   - Navigate to **Setup** tab in the role
+   - Check **Log in using OAuth 2.0 Access Tokens**
+
+2. **MCP Server Connection**
+
+   - Navigate to **Setup** tab in the role
+   - Check **MCP Server Connection**
+
+3. **OAuth 2.0 Authorized Applications Management**
+   - Navigate to **Setup** tab in the role
+   - Check **OAuth 2.0 Authorized Applications Management**
+
+#### Step 3: Configure MCP Tool Permissions
+
+Depending on which MCP tools you want to use, assign these permissions:
+
+**For Record Management Tools:**
+
+- `ns_createRecord`, `ns_getRecord`, `ns_getRecordTypeMetadata`, `ns_updateRecord`
+  - Navigate to **Permissions > Setup** tab
+  - Add **REST Web Services** permission with **Full** access level
+
+**For Report Tools:**
+
+- `ns_listAllReports` and `ns_runReport`
+  - No specific permissions required to see the tools
+  - Data visibility depends on other role permissions (e.g., Customers - View, Transactions - View)
+
+**For Saved Search Tools:**
+
+- `ns_listSavedSearches` and `ns_runSavedSearch`
+  - Navigate to **Permissions > Lists** tab
+  - Add **Perform Search** permission
+  - Add view permissions for record types in your searches (e.g., Customer - View, Transaction - View)
+
+**For SuiteQL Tool:**
+
+- `ns_runCustomSuiteQL`
+  - Add view permissions for tables you want to query
+  - Example: Customer - View, Vendor - View, Transaction - View
+
+#### Step 4: Assign Role to User
+
+1. Go to **Lists > Employees > Employees** (or **Setup > Users/Roles > Manage Users**)
+2. Select the user who will use OpenSuiteMCP
+3. Click **Edit**
+4. In the **Access** tab, add your custom role to **Roles**
+5. Click **Save**
+
+> **💡 Security Best Practice**: Create a dedicated NetSuite user account for OpenSuiteMCP with only the permissions needed for your use case. Do not use an Administrator account.
+
+### 4. NetSuite OAuth Configuration
 
 1. Log into NetSuite
 2. Go to **Setup > Integration > Manage Integrations**
@@ -119,35 +269,7 @@ opensuitemcp/
 
 > **💡 Important**: Since we're using **Public Client** and **Authorization Code Grant** with PKCE, you do NOT need a Client Secret. The PKCE flow provides security without requiring a client secret.
 
-### 2. Backend Setup
-
-```bash
-# Navigate to server directory
-cd server
-
-# Install dependencies
-npm install
-
-# Create environment file
-cp env.example .env
-
-# Edit .env and add your configuration
-# SESSION_SECRET=your-secure-random-string
-# CLIENT_URL=http://localhost:5173
-# API_URL=http://localhost:3001
-```
-
-### 3. Frontend Setup
-
-```bash
-# Navigate to client directory
-cd client
-
-# Install dependencies
-npm install
-```
-
-### 4. No Additional MCP Setup Needed!
+### 5. No Additional MCP Setup Needed!
 
 This application uses **NetSuite's native MCP REST API** - no local MCP server installation required! Once you authenticate with OAuth, the app automatically connects to:
 
@@ -188,8 +310,16 @@ The application will be available at:
    - **Scope** should already be set to `mcp` (default)
 4. Click **Connect with OAuth 2.0**
 5. A popup window will open for NetSuite authorization
-6. Log in and authorize the application
-7. The popup will close and you'll be connected
+6. Log in to NetSuite
+7. **Review the OAuth consent screen:**
+   - You should see information about **BYO LLM (Bring Your Own LLM)**
+   - Important warnings about AI usage and accuracy will be displayed
+   - **If you don't see this information**, you're likely associated with the wrong role
+   - Click **"Choose Another Role"** and select your **custom MCP role** (the one you created in Step 3 of setup)
+8. Click **Authorize** to grant access
+9. The popup will close and you'll be connected
+
+> **💡 Tip**: If the OAuth consent screen doesn't show MCP-related information, it means your current role doesn't have MCP Server Connection permission. Make sure to select the correct role that has the three required permissions (OAuth 2.0 Access Tokens, MCP Server Connection, and OAuth 2.0 Authorized Applications Management).
 
 ### 2. Configure AI Provider (Required)
 
@@ -228,13 +358,55 @@ Once connected, ask anything in plain English:
 
 ## 🔧 Available MCP Tools
 
-The application provides access to these NetSuite MCP tools:
+With proper role configuration, the application provides access to **9 native NetSuite MCP tools**:
 
-1. **ns_runReport**: Run a NetSuite report
-2. **ns_listAllReports**: List all available reports
-3. **ns_listSavedSearches**: List saved searches
-4. **ns_runSavedSearch**: Run a saved search
-5. **ns_runCustomSuiteQL**: Execute SuiteQL queries
+### Record Management Tools
+
+1. **ns_createRecord**: Create new records in NetSuite
+
+   - First call `ns_getRecordTypeMetadata` to understand the record structure
+   - Then create the record with the appropriate data
+
+2. **ns_updateRecord**: Update existing NetSuite records
+
+   - First call `ns_getRecordTypeMetadata` to understand the record structure
+   - Then update the record with new data
+
+3. **ns_getRecord**: Retrieve a specific record from NetSuite
+
+   - Specify record type, ID, and optional fields
+
+4. **ns_getRecordTypeMetadata**: Get metadata about record types
+   - Returns available fields and their types for any record type
+   - Essential for creating/updating records
+
+### Report Tools
+
+5. **ns_listAllReports**: List all available reports
+
+   - Returns report names, internal IDs, date formats, and period settings
+
+6. **ns_runReport**: Run a NetSuite report
+   - Execute reports and get column values from summary lines
+   - Supports date ranges and fiscal periods
+
+### Saved Search Tools
+
+7. **ns_listSavedSearches**: List all saved searches
+
+   - Optionally filter by name
+
+8. **ns_runSavedSearch**: Execute a saved search
+   - Run searches with optional range parameters
+
+### SuiteQL Tool
+
+9. **ns_runCustomSuiteQL**: Execute custom SuiteQL queries
+   - Most flexible tool for querying NetSuite data
+   - Limited to 5000 rows per query
+   - Use WHERE clauses to filter if limit is reached
+
+> **💡 Note**: Tool availability depends on your NetSuite role permissions. See the Role Configuration section for required permissions for each tool.
 
 View available tools in the **MCP Tools** tab of the configuration panel.
 
@@ -247,46 +419,39 @@ View available tools in the **MCP Tools** tab of the configuration panel.
 - **Secure sessions**: HTTP-only cookies with configurable expiration
 - **Token refresh**: Automatic token renewal
 
-### Production Considerations
+### Session Management
 
-- Use HTTPS in production
-- Implement CSRF protection
-- Add rate limiting
-- Use Redis for session storage
-- Encrypt sensitive data at rest
-- Add request logging and monitoring
+**File-based sessions** provide:
 
-## 💾 Session Persistence
+- 7-day TTL (configurable)
+- Persistent storage (survives server restarts)
+- Secure file permissions
+- Session contents include:
+  - OAuth tokens (never sent to frontend)
+  - AI provider configuration and API keys
+  - Conversation history
 
-The app now **automatically saves and restores** your connection:
-
-### What's Saved (localStorage)
+**What's saved (localStorage):**
 
 - ✅ NetSuite Account ID
 - ✅ OAuth Client ID
 - ✅ Scope preference
 - ✅ AI Provider preference (type only, not API key)
 
-### What's Not Saved (Security)
+**What's NOT saved (Security):**
 
 - ❌ Access tokens (server-side session only)
 - ❌ Refresh tokens (server-side session only)
 - ❌ AI API keys (must re-enter after server restart)
 
-### How It Works
+### Production Considerations
 
-1. **First Connection**: Enter credentials, authenticate via OAuth
-2. **Page Reload**: App checks for active session automatically
-3. **Session Valid**: Reconnects instantly (no re-auth needed)
-4. **Session Expired**: Prompts you to reconnect (credentials pre-filled)
-
-Sessions last **7 days** and survive:
-
-- ✅ Page refreshes
-- ✅ Browser restarts
-- ✅ Tab closes/reopens
-- ✅ **Server restarts** (sessions stored on disk!)
-- ✅ MCP auto-reconnect (tools automatically reload)
+- Use HTTPS in production
+- Implement CSRF protection
+- Add rate limiting
+- Use Redis for session storage (horizontal scaling)
+- Encrypt sensitive data at rest
+- Add request logging and monitoring
 
 ## 🎯 Key Differences from Basic Auth
 
@@ -325,7 +490,7 @@ Sessions last **7 days** and survive:
 - `POST /api/provider/configure` - Configure AI provider
 - `POST /api/provider/models` - Fetch available models
 
-## 📦 Dependencies
+## 📦 Technology Stack
 
 ### Backend
 
@@ -341,9 +506,9 @@ Sessions last **7 days** and survive:
 - `axios` - HTTP client
 - `@modelcontextprotocol/sdk` - MCP SDK
 - `cors` - CORS handling
-- `openai` - OpenAI SDK (used by aiService for model listing)
-- `@anthropic-ai/sdk` - Anthropic SDK (used by aiService for model listing)
-- `@google/generative-ai` - Google AI SDK (used by aiService for model listing)
+- `openai` - OpenAI SDK (used for model listing)
+- `@anthropic-ai/sdk` - Anthropic SDK (used for model listing)
+- `@google/generative-ai` - Google AI SDK (used for model listing)
 
 ### Frontend
 
@@ -358,16 +523,20 @@ Sessions last **7 days** and survive:
 
 ### Environment Variables
 
+For production, update your `server/.env` file with these values:
+
 ```env
 # Production
 NODE_ENV=production
 PORT=3001
-SESSION_SECRET=your-production-secret
+SESSION_SECRET=your-secure-random-production-secret  # CHANGE THIS!
 
-# URLs
+# URLs (update with your actual domains)
 CLIENT_URL=https://your-domain.com
 API_URL=https://api.your-domain.com
 ```
+
+> **⚠️ Important**: Always generate a new, strong `SESSION_SECRET` for production. Never use the example value from `env.example`.
 
 ### Recommended Enhancements
 
@@ -398,6 +567,22 @@ API_URL=https://api.your-domain.com
 
 ## 🐛 Troubleshooting
 
+### Role Configuration Issues
+
+**OAuth fails or MCP tools don't appear:**
+
+- ✅ Verify the user's role has **Log in using OAuth 2.0 Access Tokens** permission
+- ✅ Verify the user's role has **MCP Server Connection** permission
+- ✅ Verify the user's role has **OAuth 2.0 Authorized Applications Management** permission
+- ✅ Check that the role is assigned to the NetSuite user
+- ✅ Log out of NetSuite and log back in after role changes
+
+**Specific MCP tools missing:**
+
+- For record tools (`ns_createRecord`, etc.): Check **REST Web Services** permission is set to **Full**
+- For saved searches: Check **Perform Search** permission is enabled
+- For SuiteQL queries: Check user has view permissions for the tables being queried
+
 ### OAuth Connection Issues
 
 - Verify redirect URI matches NetSuite configuration exactly: `http://localhost:3001/api/auth/callback`
@@ -407,11 +592,16 @@ API_URL=https://api.your-domain.com
 - Ensure **all Token-based Authentication options are unchecked** in NetSuite
 - Check for exact URL match (no trailing slashes, correct protocol http vs https)
 - Verify the integration is in "Enabled" state
+- **Verify the user has the custom role with required OAuth/MCP permissions** (see Role Configuration section)
 
 ### MCP Tools Not Available
 
+- **Expected**: With proper role configuration, you should see **9 MCP tools** in the MCP Tools tab
 - Check server logs for MCP connection errors
 - Ensure access token has proper permissions
+- **Verify the user's role has MCP Server Connection permission**
+- **Check role permissions for specific tools** (see Role Configuration section)
+- If you see fewer than 9 tools, check the specific permissions for missing tools
 - Try disconnecting and reconnecting
 
 ### Session Issues
@@ -419,6 +609,29 @@ API_URL=https://api.your-domain.com
 - Clear browser cookies
 - Check SESSION_SECRET is set
 - Verify CORS configuration matches client URL
+
+### Installation Issues
+
+**Backend won't start:**
+
+1. Check Node version: `node --version` (should be 18+)
+2. Check .env file exists with SESSION_SECRET
+3. Check port 3001 is available
+4. Look for errors in console
+
+**Frontend won't start:**
+
+1. Check Node version: `node --version` (should be 18+)
+2. Check port 5173 is available
+3. Clear Vite cache: `rm -rf node_modules/.vite`
+4. Look for errors in console
+
+**Dependencies won't install:**
+
+1. Clear npm cache: `npm cache clean --force`
+2. Delete node_modules and package-lock.json
+3. Run `npm install` again
+4. Check Node version compatibility
 
 ## 📝 Development Notes
 
@@ -433,6 +646,28 @@ API_URL=https://api.your-domain.com
 - Components are in `client/src/components/`
 - Tailwind classes can be customized in `tailwind.config.js`
 - Icons from `lucide-react` can be swapped as needed
+
+### Hot Reload
+
+Both frontend and backend support hot reload:
+
+- **Frontend**: Vite HMR (instant)
+- **Backend**: Nodemon (restarts on file changes)
+
+### Debugging
+
+**Backend logs** show:
+
+- Session activity
+- MCP tool calls
+- AI provider requests
+- Agent execution steps
+
+**Frontend logs** show:
+
+- Streaming chunks received
+- State updates
+- API calls
 
 ## 🤝 Contributing
 
@@ -463,7 +698,7 @@ For issues or questions:
 1. Check the troubleshooting section
 2. Review NetSuite OAuth documentation
 3. Check MCP server documentation
-4. Open an issue in the repository
+4. Open an issue in the [GitHub repository](https://github.com/devszilla/opensuitemcp)
 
 ---
 
