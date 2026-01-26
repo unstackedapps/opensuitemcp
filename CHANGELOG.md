@@ -5,7 +5,117 @@ All notable changes to OpenSuiteMCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.1.0] - 2025-01-XX
+## [2.0.0] - 2026-01-26
+
+### 🎉 Complete Rewrite
+
+Complete architectural overhaul from LangChain/Express to Next.js with Vercel AI SDK.
+
+### Breaking Changes
+
+⚠️ **This is NOT backward compatible with v1.x**
+
+- Complete rewrite - new codebase
+- New database schema required (PostgreSQL with Drizzle ORM)
+- New authentication flow (NextAuth)
+- New API structure (Next.js App Router)
+
+### Major Changes
+
+#### Architecture
+
+- **Migrated from LangChain/Express to Next.js App Router**
+  - Full-stack Next.js application
+  - Server components and server actions
+  - API routes with streaming support
+
+- **Replaced LangChain with Vercel AI SDK**
+  - Native streaming support
+  - Better tool integration
+  - Provider abstraction
+
+- **Database Migration**
+  - From file-based sessions to PostgreSQL
+  - Drizzle ORM for type-safe queries
+  - User management and chat persistence
+
+#### Authentication
+
+- **NextAuth Integration**
+  - Guest user support
+  - Credentials-based authentication
+  - Session management with JWT
+
+#### AI Providers
+
+- **Multi-Provider Support**
+  - Google Gemini (2.5 Flash, 2.5 Pro)
+  - Anthropic Claude (4.5 Haiku, Sonnet 4)
+  - Reasoning/thinking modes for both providers
+
+- **Model Selection**
+  - Speed mode (fast responses)
+  - Enhanced reasoning mode (deep thinking)
+
+#### Features
+
+- **Chat Management**
+  - Chat history with pagination
+  - Title and summary generation
+  - Public/private visibility
+  - Message voting
+
+- **User Management**
+  - User registration and login
+  - Guest user support
+  - User settings with encrypted API keys
+  - Last login tracking
+
+- **UI/UX**
+  - Complete redesign with shadcn/ui
+  - Modern sidebar navigation
+  - Responsive design
+  - Dark/light theme support
+
+#### License
+
+- **New Sustainable Use License**
+  - Allows internal use and self-hosting
+  - Prohibits commercial redistribution
+  - All commercial rights reserved by Unstacked Apps, LLC
+
+### Technical Stack
+
+**Frontend & Backend:**
+- Next.js 15 (App Router)
+- React 19
+- TypeScript
+- Tailwind CSS
+- shadcn/ui components
+
+**AI & Database:**
+- Vercel AI SDK
+- Drizzle ORM
+- PostgreSQL
+- NextAuth.js
+
+**Tools:**
+- Web search
+- Webpage reading
+- Search domain configuration
+- Current config reporting
+
+### Migration Notes
+
+Users upgrading from v1.x will need to:
+1. Set up new database (PostgreSQL)
+2. Run migrations (`pnpm db:migrate`)
+3. Re-authenticate with NetSuite
+4. Re-configure AI provider settings
+
+---
+
+## [1.1.0] - 2025-10-13
 
 ### 🚀 Enhanced User Experience
 
@@ -120,5 +230,6 @@ First stable release of OpenSuiteMCP - an open source, production-ready NetSuite
 
 ---
 
-[1.1.0]: https://github.com/devszilla/opensuitemcp/releases/tag/v1.1.0
-[1.0.0]: https://github.com/devszilla/opensuitemcp/releases/tag/v1.0.0
+[2.0.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v2.0.0
+[1.1.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v1.1.0
+[1.0.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v1.0.0
