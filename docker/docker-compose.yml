@@ -1,0 +1,67 @@
+# Define persistent volumes for database data and SearXNG configuration
+volumes:
+  postgres_data:
+  searxng_config:
+  searxng_var_cache:
+  redis_data:
+
+services:
+  # 1. PostgreSQL Database Service
+  postgres:
+    container_name: postgres
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      # These use the variables defined in your shell
+      POSTGRES_PASSWORD: ${POSTGRES_PW}
+      POSTGRES_DB: ${PROJECT_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 2. Redis Cache Service
+  redis:
+    container_name: redis
+    image: redis:7-alpine
+    restart: unless-stopped
+    # Use the command to apply the password
+    command: redis-server --requirepass ${REDIS_PW}
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PW}", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 3. SearXNG Search Service
+  searxng:
+    container_name: searxng
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.searxng
+    image: ${PROJECT_NAME}_searxng:latest
+    restart: unless-stopped
+    # Set critical variables using Docker Compose's environment mapping
+    environment:
+      SEARXNG_METHOD: GET
+      SEARXNG_BIND_ADDRESS: 0.0.0.0
+
+    volumes:
+      - searxng_config:/etc/searxng
+      - searxng_var_cache:/var/cache/searxng
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy

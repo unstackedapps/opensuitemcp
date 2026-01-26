@@ -1,0 +1,8 @@
+FROM searxng/searxng:2025.11.14-ba9803043
+
+# Copy custom entrypoint script
+COPY docker/scripts/searxng-entrypoint.sh /usr/local/bin/searxng-custom-entrypoint.sh
+RUN chmod +x /usr/local/bin/searxng-custom-entrypoint.sh
+
+ENTRYPOINT ["/usr/local/bin/searxng-custom-entrypoint.sh"]
+

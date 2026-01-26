@@ -1,21 +1,74 @@
-MIT License
+Sustainable Use License
 
-Copyright (c) 2025 Caleb Moore
+Copyright (c) 2025-present Unstacked Apps, LLC
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+This license applies to the specific implementation, combination, and extensions
+of open source technologies in this codebase. Individual open source components
+used in this project retain their original licenses (see ATTRIBUTION.md).
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+Permission is hereby granted, free of charge, to any person or organization
+obtaining a copy of this software and associated documentation files (the
+"Software"), to use, copy, modify, merge, publish, and distribute the Software,
+subject to the following conditions:
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+IMPORTANT: You may NOT sell, sublicense, or otherwise profit from the Software.
+All commercial rights are reserved by Unstacked Apps, LLC. Only Unstacked Apps, LLC
+may commercialize this Software.
+
+1. INTERNAL USE AND SELF-HOSTING
+   You may use, modify, and run the Software for your own internal business
+   purposes, including:
+   - Self-hosting on your own infrastructure (on-premises or private cloud)
+   - Internal use within your organization
+   - Personal or non-commercial use
+
+2. FREE DISTRIBUTION FOR NON-COMMERCIAL PURPOSES
+   You may distribute the Software or provide it to others only if you do so
+   free of charge and for non-commercial purposes.
+
+3. COMMERCIAL USE AND PROFIT PROHIBITED
+   You may NOT:
+   - Sell, sublicense, or otherwise profit from this Software in any way
+   - Copy this specific codebase, rebrand it, and offer it as a commercial service
+   - White-label this specific implementation and charge people money to access it
+   - Redistribute this specific codebase as part of a commercial product or service
+   - Use this specific implementation to provide commercial services to third parties
+   - Charge fees, subscriptions, or any form of payment for access to this Software
+
+   ALL COMMERCIAL RIGHTS ARE RESERVED BY UNSTACKED APPS, LLC. Only Unstacked Apps, LLC
+   may commercialize, sell, or profit from this Software.
+
+   For questions about commercial licensing or enterprise use, contact:
+   Email: support@unstackedapps.com
+   Website: https://www.unstackedapps.com/
+
+   Note: This restriction applies to this specific codebase and implementation.
+   You are free to build a similar application from scratch using the same open
+   source technologies (Next.js, React, Vercel AI SDK, etc.) according to
+   their respective licenses. However, you may not copy this specific codebase,
+   change the name, and commercialize it.
+
+4. LICENSE PRESERVATION
+   You may not alter, remove, or obscure any licensing, copyright, or other
+   notices in the Software.
+
+5. NO WARRANTY
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+   SOFTWARE.
+
+---
+
+This is an early-phase project. Unstacked Apps, LLC intends to host an official
+version at the opensuitemcp domain when resources and time permit. Until then,
+this license governs the use and distribution of the Software.
+
+## Open Source Component Licenses
+
+This project incorporates open source components that retain their original
+licenses. See ATTRIBUTION.md for a complete list of attributions and license
+information for individual components.

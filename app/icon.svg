@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+  <!-- scale down and center to fit within favicon bounds -->
+  <g transform="translate(0 0) scale(1)">
+    <path fill="#4398bf" d="M8.5 1.5a2 2 0 0 1 2 2v4.5a2 2 0 0 1 -2 2h-2.362l-2.381 1.428a0.5 0.5 0 0 1 -.754 -.371l-.003 -.057v-1h-0.5a2 2 0 0 1 -1.998 -1.9l-.002 -.1v-4a2 2 0 0 1 2 -2z"/>
+    <path fill="#ea580c" transform="translate(4.5 3)" d="M3 1.5a2 2 0 0 0 -2 2v4.5a2 2 0 0 0 2 2h2.362l2.381 1.428a0.5 0.5 0 0 0 .754 -.371l.003 -.057v-1h0.5a2 2 0 0 0 1.998 -1.9l.002 -.1v-4a2 2 0 0 0 -2 -2z"/>
+  </g>
+</svg>
+
