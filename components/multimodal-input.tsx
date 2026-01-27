@@ -180,7 +180,9 @@ function PureMultimodalInput({
         className="rounded-3xl border border-border bg-background p-3 shadow-xs transition-all duration-200 focus-within:border-border hover:border-muted-foreground/50"
         onSubmit={(event) => {
           event.preventDefault();
-          if (status !== "ready") {
+          // Only block if actively streaming - allow ready, error, and submitted states
+          // (submitted after an error means the stream stopped but status hasn't reset yet)
+          if (status === "streaming") {
             toast({
               type: "error",
               description: "Please wait for the model to finish its response!",
@@ -268,7 +270,10 @@ async function fetchSettings() {
   }
   const data = await response.json();
   return {
-    aiProvider: (data.aiProvider || "google") as "google" | "anthropic",
+    aiProvider: (data.aiProvider || "google") as
+      | "google"
+      | "anthropic"
+      | "openai",
   };
 }
 

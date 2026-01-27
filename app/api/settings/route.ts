@@ -7,7 +7,8 @@ import { decrypt, encrypt } from "@/lib/encryption";
 const settingsSchema = z.object({
   googleApiKey: z.string().optional().nullable(),
   anthropicApiKey: z.string().optional().nullable(),
-  aiProvider: z.enum(["google", "anthropic"]).optional().nullable(),
+  openaiApiKey: z.string().optional().nullable(),
+  aiProvider: z.enum(["google", "anthropic", "openai"]).optional().nullable(),
   netsuiteAccountId: z.string().max(64).optional().nullable(),
   netsuiteClientId: z.string().max(128).optional().nullable(),
   timezone: z.string().max(64).optional().nullable(),
@@ -24,10 +25,18 @@ export async function GET() {
   try {
     const settings = await getUserSettings({ userId: session.user.id });
 
+    console.log("[Settings API] Raw settings from DB:", {
+      hasGoogleKey: !!settings?.googleApiKey,
+      hasAnthropicKey: !!settings?.anthropicApiKey,
+      hasOpenAIKey: !!settings?.openaiApiKey,
+      aiProvider: settings?.aiProvider,
+    });
+
     if (!settings) {
       return NextResponse.json({
         googleApiKey: null,
         anthropicApiKey: null,
+        openaiApiKey: null,
         aiProvider: "google",
         netsuiteAccountId: null,
         netsuiteClientId: null,
@@ -41,6 +50,7 @@ export async function GET() {
     if (settings.googleApiKey) {
       try {
         decryptedGoogleKey = decrypt(settings.googleApiKey);
+        console.log("[Settings API] Successfully decrypted Google key");
       } catch (error) {
         console.error(
           "[Settings API] Error decrypting Google API key on GET:",
@@ -48,12 +58,15 @@ export async function GET() {
         );
         decryptedGoogleKey = null;
       }
+    } else {
+      console.log("[Settings API] No Google key in DB");
     }
 
     let decryptedAnthropicKey: string | null = null;
     if (settings.anthropicApiKey) {
       try {
         decryptedAnthropicKey = decrypt(settings.anthropicApiKey);
+        console.log("[Settings API] Successfully decrypted Anthropic key");
       } catch (error) {
         console.error(
           "[Settings API] Error decrypting Anthropic API key on GET:",
@@ -61,23 +74,56 @@ export async function GET() {
         );
         decryptedAnthropicKey = null;
       }
+    } else {
+      console.log("[Settings API] No Anthropic key in DB");
+    }
+
+    let decryptedOpenAIKey: string | null = null;
+    if (settings.openaiApiKey) {
+      try {
+        decryptedOpenAIKey = decrypt(settings.openaiApiKey);
+        console.log("[Settings API] Successfully decrypted OpenAI key");
+      } catch (error) {
+        console.error(
+          "[Settings API] Error decrypting OpenAI API key on GET:",
+          error,
+        );
+        decryptedOpenAIKey = null;
+      }
+    } else {
+      console.log("[Settings API] No OpenAI key in DB");
     }
 
     // Ensure aiProvider is always a valid value
     const provider =
-      settings.aiProvider === "google" || settings.aiProvider === "anthropic"
+      settings.aiProvider === "google" ||
+      settings.aiProvider === "anthropic" ||
+      settings.aiProvider === "openai"
         ? settings.aiProvider
         : "google";
 
-    return NextResponse.json({
+    const response = {
       googleApiKey: decryptedGoogleKey,
       anthropicApiKey: decryptedAnthropicKey,
+      openaiApiKey: decryptedOpenAIKey,
       aiProvider: provider,
       netsuiteAccountId: settings.netsuiteAccountId,
       netsuiteClientId: settings.netsuiteClientId,
       timezone: settings.timezone ?? "UTC",
       searchDomainIds: settings.searchDomainIds ?? [],
+    };
+
+    console.log("[Settings API] Sending response:", {
+      hasGoogleKey: !!response.googleApiKey,
+      hasAnthropicKey: !!response.anthropicApiKey,
+      hasOpenAIKey: !!response.openaiApiKey,
+      aiProvider: response.aiProvider,
+      googleKeyLength: response.googleApiKey?.length ?? 0,
+      anthropicKeyLength: response.anthropicApiKey?.length ?? 0,
+      openaiKeyLength: response.openaiApiKey?.length ?? 0,
     });
+
+    return NextResponse.json(response);
   } catch (error) {
     console.error("[Settings] Error fetching settings:", error);
     return NextResponse.json(
@@ -152,10 +198,35 @@ export async function POST(request: Request) {
       encryptedAnthropicKey = existing.anthropicApiKey;
     }
 
+    // Encrypt OpenAI API key if provided
+    let encryptedOpenAIKey: string | null | undefined;
+    if (validated.openaiApiKey !== undefined) {
+      const trimmedKey = validated.openaiApiKey?.trim();
+      if (trimmedKey) {
+        try {
+          encryptedOpenAIKey = encrypt(trimmedKey);
+        } catch (error) {
+          console.error("[Settings] Error encrypting OpenAI API key:", error);
+          return NextResponse.json(
+            {
+              error:
+                "Failed to encrypt OpenAI API key. Please check ENCRYPTION_KEY environment variable.",
+            },
+            { status: 500 },
+          );
+        }
+      } else {
+        encryptedOpenAIKey = null;
+      }
+    } else if (existing?.openaiApiKey) {
+      encryptedOpenAIKey = existing.openaiApiKey;
+    }
+
     await upsertUserSettings({
       userId: session.user.id,
       googleApiKey: encryptedGoogleKey,
       anthropicApiKey: encryptedAnthropicKey,
+      openaiApiKey: encryptedOpenAIKey,
       aiProvider: validated.aiProvider,
       netsuiteAccountId: validated.netsuiteAccountId,
       netsuiteClientId: validated.netsuiteClientId,

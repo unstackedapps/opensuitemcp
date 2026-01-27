@@ -5,7 +5,7 @@ import { chatModels } from "@/lib/ai/models";
 type GetCurrentConfigOptions = {
   selectedModelId: string;
   resolvedModelId: string;
-  provider: "google" | "anthropic";
+  provider: "google" | "anthropic" | "openai";
   timezone: string;
   enabledSearchDomains: string[];
 };
@@ -16,10 +16,10 @@ export type GetCurrentConfigToolResult = {
     resolvedId: string;
     name: string;
     description: string;
-    provider: "google" | "anthropic";
+    provider: "google" | "anthropic" | "openai";
   };
   configuration: {
-    provider: "google" | "anthropic";
+    provider: "google" | "anthropic" | "openai";
     timezone: string;
     enabledSearchDomains: string[];
   };

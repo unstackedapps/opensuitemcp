@@ -1,59 +1,55 @@
-# OpenSuiteMCP NetSuite AI Assistant
+# <img src="./app/icon.svg" alt="OpenSuiteMCP Icon" width="24" height="24" style="margin-right: 4px; vertical-align: baseline; margin-top: 2px;" /><span style="font-weight: 200;">OpenSuite</span>MCP NetSuite AI Assistant
 
-> **Early Phase Project**: This is an early-phase project. Unstacked Apps, LLC intends to host an official version at the opensuitemcp domain when resources and time permit.
+An AI-powered chat assistant that integrates with NetSuite via MCP (Model Context Protocol), enabling natural language interactions with your NetSuite data. Built with Next.js, Vercel AI SDK, and supporting multiple AI providers (Google Gemini, Anthropic Claude, and OpenAI GPT).
 
-## License & Usage
+<img src="./docs/screenshot.png" alt="OpenSuiteMCP Main UI" width="80%" />
 
-This project is licensed under the **Sustainable Use License**. You may:
+## Quick Start
 
-✅ **Use privately or internally** within your organization  
-✅ **Self-host** on your own infrastructure (on-premises or private cloud)  
-✅ **Modify and extend** for your internal needs  
-✅ **Distribute freely** for non-commercial purposes  
+### Prerequisites
 
-❌ **Commercial use and profit are prohibited**. You may NOT:
-- Sell, sublicense, or profit from this software in any way
-- White-label this software and offer it to customers for money
-- Host this software and charge people money to access it
-- Redistribute as part of a commercial product or service
-- Charge fees, subscriptions, or any form of payment for access
+- Node.js 18+ and pnpm
+- PostgreSQL database
+- Docker (optional, for local development with SearXNG)
 
-**ALL COMMERCIAL RIGHTS ARE RESERVED BY UNSTACKED APPS, LLC.** Only Unstacked Apps, LLC may commercialize, sell, or profit from this software.
+### Setup
 
-For questions about licensing or commercial use, contact:
-- Email: support@unstackedapps.com
-- Website: https://www.unstackedapps.com/
+1. **Install dependencies:**
 
-See [LICENSE](LICENSE) for full terms.
+   ```bash
+   pnpm install
+   ```
 
-## Attribution
+2. **Run automated setup:**
 
-This project is based on the [Next.js AI Chatbot template](https://vercel.com/templates/next.js/nextjs-ai-chatbot) by Vercel. We extend this template with NetSuite-specific integrations and features.
+   ```bash
+   pnpm setup:backend
+   ```
 
-**Important**: While this project uses many open source technologies (Next.js, React, Vercel AI SDK, etc.) that can be used freely according to their licenses, the **specific combination and implementation** in this codebase is protected. You may build a similar app from scratch using the same technologies, but you may not copy this specific codebase, rebrand it, and commercialize it.
+   This generates secrets, creates `.env.local`, and optionally starts Docker containers (PostgreSQL, Redis, and SearXNG).
 
-See [ATTRIBUTION.md](ATTRIBUTION.md) for complete attribution information.
+3. **Run database migrations:**
 
-## Environment Setup
+   ```bash
+   pnpm db:migrate
+   ```
 
-Automate all setup steps by running:
+4. **Start the development server:**
 
-```bash
-pnpm setup:backend
-```
+   ```bash
+   pnpm dev
+   ```
 
-This will generate secrets, create `.env.local`, and optionally start Docker containers (PostgreSQL, Redis, and SearXNG).
+5. **Configure your API key:**
+   - Open the **Settings** modal from the sidebar
+   - Enter your AI provider API key (Google, Anthropic, or OpenAI)
+   - API keys are encrypted and stored securely in your database
 
-## Running locally
+The app will be running at [http://localhost:3000](http://localhost:3000).
 
-```bash
-pnpm install
-pnpm db:migrate # Setup database or apply latest database changes
-pnpm dev
-```
+## Documentation
 
-Your app template should now be running on [localhost:3000](http://localhost:3000).
-
-## Configure Your API Key
-
-Open the **Settings** modal (accessible from the sidebar) and enter your AI provider API key (Google or Anthropic). API keys are encrypted and stored securely in your database. The app supports both Google (Gemini) and Anthropic (Claude) models. Both authenticated users and guests can manage their API keys through the Settings modal.
+- **[LICENSE](LICENSE)** - Full license terms and usage restrictions
+- **[NOTICE.md](NOTICE.md)** - Usage notice and commercial restrictions
+- **[ATTRIBUTION.md](ATTRIBUTION.md)** - Open source attributions and credits
+- **[CHANGELOG.md](CHANGELOG.md)** - Version history and release notes

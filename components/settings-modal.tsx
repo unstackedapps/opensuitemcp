@@ -3,9 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useEffect, useId, useRef, useState } from "react";
-import useSWR from "swr";
+import useSWR, { useSWRConfig } from "swr";
 import {
-  ChevronDownIcon,
   ClockIcon,
   CloudIcon,
   EyeIcon,
@@ -13,6 +12,7 @@ import {
   GlobeIcon,
   LoaderIcon,
   UserIcon,
+  WarningIcon,
 } from "@/components/icons";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -48,7 +48,13 @@ import { toast } from "./toast";
 
 async function fetchSettings() {
   try {
-    const response = await fetch("/api/settings");
+    // Add cache busting to ensure fresh data
+    const response = await fetch("/api/settings", {
+      cache: "no-store",
+      headers: {
+        "Cache-Control": "no-cache",
+      },
+    });
     if (!response.ok) {
       const errorText = await response.text();
       console.error(
@@ -59,10 +65,20 @@ async function fetchSettings() {
       throw new Error(`Failed to fetch settings: ${response.status}`);
     }
     const data = await response.json();
+    console.log("[Settings] Received from API:", {
+      hasGoogleKey: !!data.googleApiKey,
+      hasAnthropicKey: !!data.anthropicApiKey,
+      hasOpenAIKey: !!data.openaiApiKey,
+      aiProvider: data.aiProvider,
+      googleKeyLength: data.googleApiKey?.length ?? 0,
+      anthropicKeyLength: data.anthropicApiKey?.length ?? 0,
+      openaiKeyLength: data.openaiApiKey?.length ?? 0,
+    });
     return data as {
       googleApiKey: string | null;
       anthropicApiKey: string | null;
-      aiProvider: "google" | "anthropic";
+      openaiApiKey: string | null;
+      aiProvider: "google" | "anthropic" | "openai";
       netsuiteAccountId: string | null;
       netsuiteClientId: string | null;
       timezone: string;
@@ -183,16 +199,33 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
     },
   );
   const googleApiKeyId = useId();
+  const anthropicApiKeyId = useId();
+  const openaiApiKeyId = useId();
   const netsuiteAccountIdInputId = useId();
   const netsuiteClientIdInputId = useId();
   const timezoneId = useId();
+  const [settingsCacheKey, setSettingsCacheKey] = useState<string | null>(null);
+  const { mutate: globalMutate } = useSWRConfig();
+
+  // Create new cache key when modal opens to force fresh fetch
+  useEffect(() => {
+    if (open) {
+      setSettingsCacheKey(`settings-${Date.now()}`);
+    } else {
+      setSettingsCacheKey(null);
+    }
+  }, [open]);
+
+  // Fetch settings only when modal is open
   const {
     data: settings,
     mutate: refreshSettings,
     isLoading,
-  } = useSWR(open ? "settings" : null, fetchSettings, {
+  } = useSWR(settingsCacheKey, fetchSettings, {
     revalidateOnFocus: false,
     revalidateOnReconnect: false,
+    dedupeInterval: 0, // Always fetch fresh data, don't dedupe
+    revalidateIfStale: true, // Revalidate if data is stale
   });
   const { data: netsuiteStatus, mutate: refreshNetsuiteStatus } = useSWR(
     open ? "netsuite-status" : null,
@@ -201,11 +234,13 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 
   const [googleApiKey, setGoogleApiKey] = useState("");
   const [anthropicApiKey, setAnthropicApiKey] = useState("");
-  const [aiProvider, setAiProvider] = useState<"google" | "anthropic">(
-    "google",
-  );
+  const [openaiApiKey, setOpenaiApiKey] = useState("");
+  const [aiProvider, setAiProvider] = useState<
+    "google" | "anthropic" | "openai"
+  >("google");
   const [showGoogleApiKey, setShowGoogleApiKey] = useState(false);
   const [showAnthropicApiKey, setShowAnthropicApiKey] = useState(false);
+  const [showOpenaiApiKey, setShowOpenaiApiKey] = useState(false);
   const [netsuiteAccountId, setNetsuiteAccountId] = useState("");
   const [showAccountId, setShowAccountId] = useState(false);
   const [netsuiteClientId, setNetsuiteClientId] = useState("");
@@ -216,11 +251,8 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const [timezoneOpen, setTimezoneOpen] = useState(false);
   const [searchDomainIds, setSearchDomainIds] = useState<string[]>([]);
   const [isConnectingNetSuite, setIsConnectingNetSuite] = useState(false);
-  const [defaultSaveAction, setDefaultSaveAction] = useState<
-    "save" | "save_and_close"
-  >("save_and_close");
-  const [dropdownOpen, setDropdownOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const initializedForThisOpenRef = useRef(false);
   const timezones = getAllTimezones();
 
   // Filter timezones based on search
@@ -237,22 +269,59 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 
   // Tabs removed - no longer needed
 
-  // Populate form when settings load
+  // Reset initialization flag and force fresh fetch when modal opens
+  useEffect(() => {
+    if (open) {
+      initializedForThisOpenRef.current = false;
+      // Force a fresh fetch when modal opens to avoid stale cache
+      void refreshSettings(undefined, { revalidate: true });
+    } else {
+      initializedForThisOpenRef.current = false;
+    }
+  }, [open, refreshSettings]);
+
+  // Populate form when settings load and modal is open
   useEffect(() => {
     if (!open) {
       return;
     }
 
-    if (settings) {
+    if (isLoading) {
+      return;
+    }
+
+    if (!settings) {
+      console.warn("[Settings] Modal open but settings not loaded yet");
+      return;
+    }
+
+    // Only populate once per modal open session
+    if (initializedForThisOpenRef.current) {
+      return;
+    }
+
+    // Populate form when settings are available
+    if (typeof settings === "object" && "aiProvider" in settings) {
       setGoogleApiKey(settings.googleApiKey ?? "");
       setAnthropicApiKey(settings.anthropicApiKey ?? "");
-      setAiProvider(settings.aiProvider);
+      setOpenaiApiKey(settings.openaiApiKey ?? "");
+      // Ensure aiProvider is set correctly - it should always be one of the valid values
+      const provider =
+        settings.aiProvider === "google" ||
+        settings.aiProvider === "anthropic" ||
+        settings.aiProvider === "openai"
+          ? settings.aiProvider
+          : "google";
+      setAiProvider(provider);
       setNetsuiteAccountId(settings.netsuiteAccountId ?? "");
       setNetsuiteClientId(settings.netsuiteClientId ?? "");
       setTimezone(settings.timezone ?? "UTC");
       setSearchDomainIds(settings.searchDomainIds ?? []);
+      initializedForThisOpenRef.current = true;
+    } else {
+      console.warn("[Settings] Settings object invalid:", settings);
     }
-  }, [settings, open]);
+  }, [settings, open, isLoading]);
 
   // Auto-focus search input when dropdown opens
   useEffect(() => {
@@ -264,26 +333,29 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
     }
   }, [timezoneOpen]);
 
-  const handleSave = async (closeModal: boolean) => {
+  const handleSave = async () => {
     setIsSaving(true);
     try {
       // Include all selected domains (both included and premium tiers)
       const effectiveSearchDomainIds = Array.from(new Set(searchDomainIds));
+
+      const payload = {
+        googleApiKey: googleApiKey?.trim() || null,
+        anthropicApiKey: anthropicApiKey?.trim() || null,
+        openaiApiKey: openaiApiKey?.trim() || null,
+        aiProvider: aiProvider,
+        netsuiteAccountId: netsuiteAccountId?.trim() || null,
+        netsuiteClientId: netsuiteClientId?.trim() || null,
+        timezone: timezone?.trim() || "UTC",
+        searchDomainIds: effectiveSearchDomainIds,
+      };
 
       const response = await fetch("/api/settings", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          googleApiKey: googleApiKey?.trim() || null,
-          anthropicApiKey: anthropicApiKey?.trim() || null,
-          aiProvider: aiProvider,
-          netsuiteAccountId: netsuiteAccountId?.trim() || null,
-          netsuiteClientId: netsuiteClientId?.trim() || null,
-          timezone: timezone?.trim() || "UTC",
-          searchDomainIds: effectiveSearchDomainIds,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -297,11 +369,15 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
       });
 
       // Refresh settings after save
-      refreshSettings();
+      const freshData = await fetchSettings();
+      await refreshSettings(freshData, { revalidate: false });
 
-      if (closeModal) {
-        onOpenChange(false); // Close modal only if requested
-      }
+      // Invalidate the "settings" cache key used by model selector components
+      // This ensures they refresh with the new provider
+      await globalMutate("settings");
+
+      // Always close modal after saving
+      onOpenChange(false);
     } catch (error) {
       toast({
         type: "error",
@@ -397,13 +473,13 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   return (
     <Sheet onOpenChange={onOpenChange} open={open}>
       <SheetContent
-        className="w-full! overflow-y-auto focus:outline-none focus:ring-0 focus:ring-offset-0 sm:max-w-[800px]!"
+        className="w-full! flex flex-col focus:outline-none focus:ring-0 focus:ring-offset-0 sm:max-w-[800px]!"
         onOpenAutoFocus={(e) => {
           // Prevent auto-focus on first input when modal opens
           e.preventDefault();
         }}
       >
-        <SheetHeader className="text-left">
+        <SheetHeader className="text-left shrink-0">
           <SheetTitle>Settings</SheetTitle>
           <SheetDescription>
             Manage your API keys, NetSuite configuration, and preferences
@@ -412,11 +488,12 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 
         <form
           autoComplete="off"
+          className="flex flex-col flex-1 min-h-0"
           onSubmit={(e) => {
             e.preventDefault();
           }}
         >
-          <div className="mt-6 space-y-6 max-h-[calc(100vh-200px)] overflow-y-auto">
+          <div className="mt-6 space-y-6 flex-1 overflow-y-auto">
             {/* AI Provider Selection and API Keys */}
             <Card className="bg-background shadow-none">
               <CardHeader className="py-6">
@@ -449,16 +526,21 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                 <div className="space-y-4">
                   {/* Provider Selector */}
                   <div className="space-y-2">
-                    {showSkeletons ? (
+                    {showSkeletons || !settings ? (
                       <>
-                        <Skeleton className="h-10 w-full" />
+                        <div className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 flex items-center">
+                          <Skeleton className="h-4 w-full" />
+                        </div>
                         <Skeleton className="h-4 w-3/4" />
                       </>
                     ) : (
                       <>
                         <Select
+                          key={`provider-${aiProvider}`} // Force re-render when aiProvider changes
                           value={aiProvider}
-                          onValueChange={(value: "google" | "anthropic") => {
+                          onValueChange={(
+                            value: "google" | "anthropic" | "openai",
+                          ) => {
                             setAiProvider(value);
                           }}
                         >
@@ -472,16 +554,49 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                             <SelectItem value="anthropic">
                               Anthropic (Claude)
                             </SelectItem>
+                            <SelectItem value="openai">OpenAI (GPT)</SelectItem>
                           </SelectContent>
                         </Select>
                         <p className="text-muted-foreground text-xs">
                           {aiProvider === "google"
-                            ? "Using Gemini models (2.5 Flash, 2.5 Pro)"
-                            : "Using Claude models (4.5 Haiku, Sonnet 4)"}
+                            ? "Using Gemini models (2.5 Flash for speed, 2.5 Pro for reasoning)"
+                            : aiProvider === "anthropic"
+                              ? "Using Claude models (4.5 Haiku for speed, Sonnet 4 for reasoning)"
+                              : "Using OpenAI models (GPT-5 Mini for speed, O4 Mini for reasoning)"}
                         </p>
                       </>
                     )}
                   </div>
+
+                  {/* OpenAI Organization Verification Notice */}
+                  {aiProvider === "openai" && (
+                    <div className="rounded-lg border border-yellow-500/50 bg-yellow-500/10 p-3">
+                      <div className="flex items-start gap-2">
+                        <div className="mt-0.5 shrink-0 text-yellow-600 dark:text-yellow-500">
+                          <WarningIcon size={16} />
+                        </div>
+                        <div className="flex-1 space-y-1">
+                          <p className="text-sm font-medium text-yellow-900 dark:text-yellow-100">
+                            Organization Verification Required
+                          </p>
+                          <p className="text-xs text-yellow-800 dark:text-yellow-200">
+                            For enhanced reasoning features, you need to verify
+                            your organization at{" "}
+                            <a
+                              className="text-primary underline hover:no-underline"
+                              href="https://platform.openai.com/settings/organization/general"
+                              rel="noopener noreferrer"
+                              target="_blank"
+                            >
+                              platform.openai.com/settings/organization/general
+                            </a>
+                            . If you just verified, it can take up to 15 minutes
+                            for access to propagate.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Google API Key Input - Only shown when Google is selected */}
                   {aiProvider === "google" && (
@@ -500,7 +615,9 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         .
                       </p>
                       {showSkeletons ? (
-                        <Skeleton className="h-10 w-full" />
+                        <div className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 flex items-center">
+                          <Skeleton className="h-4 w-full" />
+                        </div>
                       ) : (
                         <div className="relative">
                           <Input
@@ -539,7 +656,9 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                   {/* Anthropic API Key Input - Only shown when Anthropic is selected */}
                   {aiProvider === "anthropic" && (
                     <div className="space-y-2">
-                      <Label>Anthropic API Key</Label>
+                      <Label htmlFor={anthropicApiKeyId}>
+                        Anthropic API Key
+                      </Label>
                       <p className="text-muted-foreground text-xs">
                         To get an Anthropic API key, visit{" "}
                         <a
@@ -553,7 +672,9 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         .
                       </p>
                       {showSkeletons ? (
-                        <Skeleton className="h-10 w-full" />
+                        <div className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 flex items-center">
+                          <Skeleton className="h-4 w-full" />
+                        </div>
                       ) : (
                         <div className="relative">
                           <Input
@@ -562,6 +683,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                             data-1p-ignore="true"
                             data-form-type="other"
                             data-lpignore="true"
+                            id={anthropicApiKeyId}
                             name="anthropic-api-key"
                             onChange={(e) => setAnthropicApiKey(e.target.value)}
                             placeholder="Enter your Anthropic API key"
@@ -578,6 +700,61 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                             variant="ghost"
                           >
                             {showAnthropicApiKey ? (
+                              <EyeOffIcon size={16} />
+                            ) : (
+                              <EyeIcon size={16} />
+                            )}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* OpenAI API Key Input - Only shown when OpenAI is selected */}
+                  {aiProvider === "openai" && (
+                    <div className="space-y-2">
+                      <Label htmlFor={openaiApiKeyId}>OpenAI API Key</Label>
+                      <p className="text-muted-foreground text-xs">
+                        To get an OpenAI API key, visit{" "}
+                        <a
+                          className="text-primary underline hover:no-underline"
+                          href="https://platform.openai.com/api-keys"
+                          rel="noopener noreferrer"
+                          target="_blank"
+                        >
+                          platform.openai.com/api-keys
+                        </a>
+                        .
+                      </p>
+                      {showSkeletons ? (
+                        <div className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 flex items-center">
+                          <Skeleton className="h-4 w-full" />
+                        </div>
+                      ) : (
+                        <div className="relative">
+                          <Input
+                            autoComplete="off"
+                            className="pr-10"
+                            data-1p-ignore="true"
+                            data-form-type="other"
+                            data-lpignore="true"
+                            id={openaiApiKeyId}
+                            name="openai-api-key"
+                            onChange={(e) => setOpenaiApiKey(e.target.value)}
+                            placeholder="Enter your OpenAI API key"
+                            type={showOpenaiApiKey ? "text" : "password"}
+                            value={openaiApiKey}
+                          />
+                          <Button
+                            className="absolute top-0 right-0 h-full px-3 hover:bg-transparent"
+                            onClick={() =>
+                              setShowOpenaiApiKey(!showOpenaiApiKey)
+                            }
+                            size="icon"
+                            type="button"
+                            variant="ghost"
+                          >
+                            {showOpenaiApiKey ? (
                               <EyeOffIcon size={16} />
                             ) : (
                               <EyeIcon size={16} />
@@ -648,7 +825,9 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         Account ID
                       </Label>
                       {showSkeletons ? (
-                        <Skeleton className="h-10 w-full" />
+                        <div className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 flex items-center">
+                          <Skeleton className="h-4 w-full" />
+                        </div>
                       ) : (
                         <div className="relative">
                           <Input
@@ -685,7 +864,9 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                     <div className="space-y-2">
                       <Label htmlFor={netsuiteClientIdInputId}>Client ID</Label>
                       {showSkeletons ? (
-                        <Skeleton className="h-10 w-full" />
+                        <div className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 flex items-center">
+                          <Skeleton className="h-4 w-full" />
+                        </div>
                       ) : (
                         <div className="relative">
                           <Input
@@ -1020,7 +1201,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
             )}
           </div>
 
-          <div className="flex justify-end gap-2 pt-4">
+          <div className="flex justify-end gap-2 pt-8 shrink-0">
             <Button
               onClick={() => onOpenChange(false)}
               type="button"
@@ -1028,61 +1209,22 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
             >
               Cancel
             </Button>
-            <DropdownMenu onOpenChange={setDropdownOpen} open={dropdownOpen}>
-              <div className="flex">
-                <Button
-                  className="rounded-r-none"
-                  disabled={isSaving || isLoading}
-                  onClick={() =>
-                    handleSave(defaultSaveAction === "save_and_close")
-                  }
-                  type="button"
-                >
-                  {isSaving ? (
-                    <>
-                      <span className="mr-2 inline-block animate-spin">
-                        <LoaderIcon size={16} />
-                      </span>
-                      Saving...
-                    </>
-                  ) : defaultSaveAction === "save_and_close" ? (
-                    "Save & Close"
-                  ) : (
-                    "Save"
-                  )}
-                </Button>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    className="rounded-l-none border-l px-2"
-                    disabled={isSaving || isLoading}
-                    type="button"
-                    variant="default"
-                  >
-                    <ChevronDownIcon size={14} />
-                  </Button>
-                </DropdownMenuTrigger>
-              </div>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  onClick={() => {
-                    setDefaultSaveAction("save");
-                    handleSave(false);
-                    setDropdownOpen(false);
-                  }}
-                >
-                  Save and Edit
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => {
-                    setDefaultSaveAction("save_and_close");
-                    handleSave(true);
-                    setDropdownOpen(false);
-                  }}
-                >
-                  Save & Close
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <Button
+              disabled={isSaving || isLoading}
+              onClick={() => handleSave()}
+              type="button"
+            >
+              {isSaving ? (
+                <>
+                  <span className="mr-2 inline-block animate-spin">
+                    <LoaderIcon size={16} />
+                  </span>
+                  Saving...
+                </>
+              ) : (
+                "Save"
+              )}
+            </Button>
           </div>
         </form>
       </SheetContent>

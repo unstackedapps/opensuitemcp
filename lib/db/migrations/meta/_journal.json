@@ -29,6 +29,13 @@
       "when": 1769429603494,
       "tag": "0003_chief_exodus",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1769449572801,
+      "tag": "0004_tidy_grandmaster",
+      "breakpoints": true
     }
   ]
 }
