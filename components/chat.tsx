@@ -27,7 +27,6 @@ import { fetcher, fetchWithErrorHandlers, generateUUID } from "@/lib/utils";
 import { Messages } from "./messages";
 import { MultimodalInput } from "./multimodal-input";
 import { getChatHistoryPaginationKey } from "./sidebar-history";
-import { toast } from "./toast";
 import type { VisibilityType } from "./visibility-selector";
 
 export function Chat({
@@ -59,6 +58,7 @@ export function Chat({
   const [showCreditCardAlert, setShowCreditCardAlert] = useState(false);
   const [currentModelId, setCurrentModelId] = useState(initialChatModel);
   const currentModelIdRef = useRef(currentModelId);
+  const errorOccurredRef = useRef(false);
 
   // Update refs when values change (these are used inside transport callbacks)
   useEffect(() => {
@@ -115,21 +115,145 @@ export function Chat({
       mutate(unstable_serialize(getChatHistoryPaginationKey));
     },
     onError: (error) => {
+      // Mark that an error occurred
+      errorOccurredRef.current = true;
+
+      // Stop the stream immediately to reset the status
+      stop();
+
+      // Prevent error from propagating to Next.js
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if ((error as any)?.preventDefault) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (error as any).preventDefault();
+      }
+
+      // Extract error message and details
+      let errorMessage = "An error occurred";
+      let errorDetails: string | null = null;
+
+      if (error instanceof Error) {
+        errorMessage = error.message || error.toString();
+
+        // Check if it's an API call error with response body
+        if ("responseBody" in error && typeof error.responseBody === "string") {
+          try {
+            const errorBody = JSON.parse(error.responseBody);
+            if (errorBody?.error?.message) {
+              errorMessage = errorBody.error.message;
+              if (errorBody.error?.param) {
+                errorDetails = `Parameter: ${errorBody.error.param}`;
+              }
+              if (errorBody.error?.code) {
+                errorDetails = errorDetails
+                  ? `${errorDetails}, Code: ${errorBody.error.code}`
+                  : `Code: ${errorBody.error.code}`;
+              }
+            }
+          } catch {
+            errorDetails = error.responseBody;
+          }
+        }
+
+        if ("statusCode" in error && error.statusCode) {
+          errorDetails = errorDetails
+            ? `${errorDetails}, Status: ${error.statusCode}`
+            : `Status: ${error.statusCode}`;
+        }
+      } else {
+        errorMessage = String(error);
+      }
+
+      // Add error as an assistant message in the chat
+      const errorMessageText = errorDetails
+        ? `**Error:** ${errorMessage}\n\n**Details:**\n${errorDetails}`
+        : `**Error:** ${errorMessage}`;
+
+      // Replace any empty assistant message with the error message
+      // This prevents empty messages from appearing
+      setMessages((prevMessages) => {
+        // Find the last assistant message (which is likely the empty one created by the SDK)
+        const lastAssistantIndex = prevMessages.findLastIndex(
+          (msg) => msg.role === "assistant",
+        );
+
+        if (lastAssistantIndex !== -1) {
+          const lastAssistant = prevMessages[lastAssistantIndex];
+          // Check if it's empty (no parts or only empty text)
+          const isEmpty =
+            !lastAssistant.parts ||
+            lastAssistant.parts.length === 0 ||
+            !lastAssistant.parts.some((part) => {
+              if (part.type === "text") {
+                return part.text && part.text.trim().length > 0;
+              }
+              return true; // Non-text parts are considered valid
+            });
+
+          if (isEmpty) {
+            // Replace the empty message with the error message
+            const updatedMessages = [...prevMessages];
+            updatedMessages[lastAssistantIndex] = {
+              ...lastAssistant,
+              parts: [
+                {
+                  type: "text",
+                  text: errorMessageText,
+                },
+              ],
+            };
+            return updatedMessages;
+          }
+        }
+
+        // If no empty assistant message found, add error as new message
+        return [
+          ...prevMessages,
+          {
+            id: generateUUID(),
+            role: "assistant",
+            parts: [
+              {
+                type: "text",
+                text: errorMessageText,
+              },
+            ],
+            createdAt: new Date(),
+          },
+        ];
+      });
+
       if (error instanceof ChatSDKError) {
         // Check if it's a credit card error
         if (
           error.message?.includes("AI Gateway requires a valid credit card")
         ) {
           setShowCreditCardAlert(true);
-        } else {
-          toast({
-            type: "error",
-            description: error.message,
-          });
         }
       }
+
+      // Call stop again after state updates to ensure status resets
+      setTimeout(() => {
+        stop();
+      }, 0);
+
+      // Return false to prevent SDK from re-throwing
+      return false;
     },
   });
+
+  // Reset error flag when a new message is submitted (status becomes "submitted")
+  // This ensures the error state doesn't interfere with the next message
+  useEffect(() => {
+    if (status === "submitted" && errorOccurredRef.current) {
+      // A new message was sent, reset the error flag
+      errorOccurredRef.current = false;
+    }
+    if (status === "ready" && errorOccurredRef.current) {
+      // Also reset when status becomes ready (fallback)
+      errorOccurredRef.current = false;
+    }
+  }, [status]);
 
   const searchParams = useSearchParams();
   const query = searchParams.get("query");
@@ -158,6 +282,116 @@ export function Chat({
     initialMessages,
     resumeStream,
   });
+
+  // Catch unhandled errors that might not be caught by SDK
+  // BUT only catch errors related to chat/stream processing, not general system errors
+  useEffect(() => {
+    const isChatRelatedError = (error: Error | string): boolean => {
+      const errorString =
+        error instanceof Error ? error.stack || error.message : String(error);
+
+      // Check if error is from chat/stream related code
+      const chatRelatedPatterns = [
+        /process-ui-message-stream/i,
+        /chat\.ts/i,
+        /useChat/i,
+        /streamText/i,
+        /toUIMessageStream/i,
+        /ai-sdk/i,
+        /@ai-sdk/i,
+        /\/api\/chat/i,
+        /AI_APICallError/i,
+        /AI_UIMessageStreamError/i,
+        /responseBody/i,
+        /api\.openai\.com/i,
+        /api\.anthropic\.com/i,
+        /generativeai\.googleapis\.com/i,
+      ];
+
+      return chatRelatedPatterns.some((pattern) => pattern.test(errorString));
+    };
+
+    const handleError = (event: ErrorEvent) => {
+      // Only handle chat-related errors
+      if (event.error instanceof Error && isChatRelatedError(event.error)) {
+        // Suppress Next.js error logging for chat errors
+        event.preventDefault();
+
+        const errorMessage = event.error.message;
+        if (errorMessage) {
+          setMessages((prevMessages) => [
+            ...prevMessages,
+            {
+              id: generateUUID(),
+              role: "assistant",
+              parts: [
+                {
+                  type: "text",
+                  text: `**Error:** ${errorMessage}`,
+                },
+              ],
+              createdAt: new Date(),
+            },
+          ]);
+        }
+      }
+      // For non-chat errors, let them propagate normally (don't preventDefault)
+    };
+
+    const handleRejection = (event: PromiseRejectionEvent) => {
+      // Only handle chat-related errors
+      if (event.reason instanceof Error && isChatRelatedError(event.reason)) {
+        // Suppress Next.js error logging for chat errors
+        event.preventDefault();
+
+        const errorMessage = event.reason.message;
+        if (errorMessage) {
+          setMessages((prevMessages) => [
+            ...prevMessages,
+            {
+              id: generateUUID(),
+              role: "assistant",
+              parts: [
+                {
+                  type: "text",
+                  text: `**Error:** ${errorMessage}`,
+                },
+              ],
+              createdAt: new Date(),
+            },
+          ]);
+        }
+      } else if (
+        typeof event.reason === "string" &&
+        isChatRelatedError(event.reason)
+      ) {
+        event.preventDefault();
+        setMessages((prevMessages) => [
+          ...prevMessages,
+          {
+            id: generateUUID(),
+            role: "assistant",
+            parts: [
+              {
+                type: "text",
+                text: `**Error:** ${event.reason}`,
+              },
+            ],
+            createdAt: new Date(),
+          },
+        ]);
+      }
+      // For non-chat errors, let them propagate normally (don't preventDefault)
+    };
+
+    window.addEventListener("error", handleError);
+    window.addEventListener("unhandledrejection", handleRejection);
+
+    return () => {
+      window.removeEventListener("error", handleError);
+      window.removeEventListener("unhandledrejection", handleRejection);
+    };
+  }, [setMessages]);
 
   return (
     <>

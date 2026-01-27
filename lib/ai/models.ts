@@ -4,7 +4,7 @@ export type ChatModel = {
   id: string;
   name: string;
   description: string;
-  provider?: "google" | "anthropic";
+  provider?: "google" | "anthropic" | "openai";
 };
 
 export const chatModels: ChatModel[] = [
@@ -35,5 +35,19 @@ export const chatModels: ChatModel[] = [
     description:
       "Advanced reasoning with extended thinking support for complex agent tasks, chained tool calls, and structured data analysis.",
     provider: "anthropic",
+  },
+  {
+    id: "chat-model",
+    name: "GPT-5 Mini (Speed Mode)",
+    description:
+      "Fast and efficient for quick responses and tool calls. Optimized for low latency and high throughput. Best for simple tasks.",
+    provider: "openai",
+  },
+  {
+    id: "chat-model-reasoning",
+    name: "O4 Mini (Enhanced Reasoning)",
+    description:
+      "Advanced reasoning model for complex agent tasks, chained tool calls, and structured data analysis. Uses OpenAI's o4 reasoning architecture.",
+    provider: "openai",
   },
 ];

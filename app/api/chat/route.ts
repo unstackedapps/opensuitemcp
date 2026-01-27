@@ -115,16 +115,19 @@ export async function POST(request: Request) {
     } else {
       // Get user API key and provider for title generation
       let titleApiKey: string | null = null;
-      let titleProvider: "google" | "anthropic" = "google";
+      let titleProvider: "google" | "anthropic" | "openai" = "google";
       if (session.user?.id) {
         try {
           const settings = await getUserSettings({ userId: session.user.id });
           titleProvider =
-            (settings?.aiProvider as "google" | "anthropic") || "google";
+            (settings?.aiProvider as "google" | "anthropic" | "openai") ||
+            "google";
           const apiKeyField =
             titleProvider === "anthropic"
               ? settings?.anthropicApiKey
-              : settings?.googleApiKey;
+              : titleProvider === "openai"
+                ? settings?.openaiApiKey
+                : settings?.googleApiKey;
           if (apiKeyField) {
             titleApiKey = decrypt(apiKeyField);
           }
@@ -175,342 +178,380 @@ export async function POST(request: Request) {
     await createStreamId({ streamId, chatId: id });
 
     let finalMergedUsage: AppUsage | undefined;
+    let hasErrorOccurred: boolean = false;
 
     const stream = createUIMessageStream({
       execute: async ({ writer: dataStream }) => {
-        // Get user settings (API key, provider, and timezone)
-        let userApiKey: string | null = null;
-        let userProviderType: "google" | "anthropic" = "google";
-        let userTimezone = "UTC";
-        let selectedSearchDomainIds: string[] | undefined;
-        if (session.user?.id) {
-          try {
-            const settings = await getUserSettings({ userId: session.user.id });
-            console.log("[Settings] Loaded settings for user:", {
-              userId: session.user.id,
-              hasSettings: !!settings,
-              provider: settings?.aiProvider,
-              hasGoogleKey: !!settings?.googleApiKey,
-              hasAnthropicKey: !!settings?.anthropicApiKey,
-            });
-            if (settings) {
-              userProviderType =
-                (settings.aiProvider as "google" | "anthropic") || "google";
+        try {
+          // Get user settings (API key, provider, and timezone)
+          let userApiKey: string | null = null;
+          let userProviderType: "google" | "anthropic" | "openai" = "google";
+          let userTimezone = "UTC";
+          let selectedSearchDomainIds: string[] | undefined;
+          if (session.user?.id) {
+            try {
+              const settings = await getUserSettings({
+                userId: session.user.id,
+              });
+              console.log("[Settings] Loaded settings for user:", {
+                userId: session.user.id,
+                hasSettings: !!settings,
+                provider: settings?.aiProvider,
+                hasGoogleKey: !!settings?.googleApiKey,
+                hasAnthropicKey: !!settings?.anthropicApiKey,
+                hasOpenAIKey: !!settings?.openaiApiKey,
+              });
+              if (settings) {
+                userProviderType =
+                  (settings.aiProvider as "google" | "anthropic" | "openai") ||
+                  "google";
 
-              // Get API key based on selected provider
-              const apiKeyField =
-                userProviderType === "anthropic"
-                  ? settings.anthropicApiKey
-                  : settings.googleApiKey;
+                // Get API key based on selected provider
+                const apiKeyField =
+                  userProviderType === "anthropic"
+                    ? settings.anthropicApiKey
+                    : userProviderType === "openai"
+                      ? settings.openaiApiKey
+                      : settings.googleApiKey;
 
-              if (apiKeyField) {
-                try {
-                  userApiKey = decrypt(apiKeyField);
+                if (apiKeyField) {
+                  try {
+                    userApiKey = decrypt(apiKeyField);
+                    console.log(
+                      `[Settings] Successfully decrypted ${userProviderType} API key for user:`,
+                      session.user.id,
+                      "Key length:",
+                      userApiKey?.length,
+                    );
+                  } catch (error) {
+                    console.error(
+                      "[Settings] Error decrypting API key:",
+                      error,
+                    );
+                    // Continue without API key if decryption fails
+                  }
+                } else {
                   console.log(
-                    `[Settings] Successfully decrypted ${userProviderType} API key for user:`,
+                    `[Settings] No encrypted ${userProviderType} API key found in settings for user:`,
                     session.user.id,
-                    "Key length:",
-                    userApiKey?.length,
                   );
-                } catch (error) {
-                  console.error("[Settings] Error decrypting API key:", error);
-                  // Continue without API key if decryption fails
                 }
+                userTimezone = settings.timezone ?? "UTC";
+                selectedSearchDomainIds = settings.searchDomainIds ?? [];
               } else {
                 console.log(
-                  `[Settings] No encrypted ${userProviderType} API key found in settings for user:`,
+                  "[Settings] No settings found for user:",
                   session.user.id,
                 );
               }
-              userTimezone = settings.timezone ?? "UTC";
-              selectedSearchDomainIds = settings.searchDomainIds ?? [];
-            } else {
-              console.log(
-                "[Settings] No settings found for user:",
-                session.user.id,
-              );
+            } catch (error) {
+              console.error("[Settings] Error loading user settings:", error);
+              // Continue with defaults
             }
-          } catch (error) {
-            console.error("[Settings] Error loading user settings:", error);
-            // Continue with defaults
           }
-        }
 
-        // Create provider with user's API key and provider type
-        console.log("[Settings] Creating provider:", {
-          provider: userProviderType,
-          hasUserApiKey: !!userApiKey,
-          userApiKeyLength: userApiKey?.length,
-        });
-        let userProvider: ReturnType<typeof getUserProvider>;
-        try {
-          userProvider = getUserProvider(userApiKey, userProviderType);
-          console.log("[Settings] Provider created successfully");
-        } catch (error) {
-          // If no API key is configured, return an error to the user
-          const providerName =
-            userProviderType === "anthropic" ? "Anthropic" : "Google";
-          const errorMessage =
-            error instanceof Error
-              ? error.message
-              : `${providerName} API key is required`;
-          console.error("[Settings] Failed to create provider:", errorMessage);
-          dataStream.write({
-            type: "error",
-            errorText: errorMessage,
-          });
-          return;
-        }
-
-        const searchConfig = buildSearchConfig({
-          selectedDomainIds: selectedSearchDomainIds,
-          environment: process.env.NODE_ENV,
-        });
-
-        // Load NetSuite MCP tools if user is authenticated
-        let netsuiteTools: Record<string, unknown> = {};
-        if (session.user?.id) {
-          try {
-            netsuiteTools = await loadNetSuiteMCPTools(session.user.id);
-            if (Object.keys(netsuiteTools).length > 0) {
-              console.log(
-                `[NetSuite] Loaded ${Object.keys(netsuiteTools).length} tools:`,
-                Object.keys(netsuiteTools),
-              );
-            } else {
-              console.log(
-                "[NetSuite] No tools loaded - user may not be connected or no tools available",
-              );
-            }
-          } catch (error) {
-            console.error("[NetSuite] Error loading tools:", error);
-            // Continue without NetSuite tools if there's an error
-          }
-        }
-
-        // Merge base tools with NetSuite tools
-        const allTools = {
-          webSearch: createWebSearchTool({
-            selectedDomainIds: selectedSearchDomainIds,
-            environment: process.env.NODE_ENV,
-          }),
-          readWebpage: createReadWebpageTool(),
-          listSearchDomains: createListSearchDomainsTool({
-            selectedDomainIds: selectedSearchDomainIds,
-            environment: process.env.NODE_ENV,
-          }),
-          ...netsuiteTools,
-        };
-
-        // Build active tools list (tools are enabled in both standard and reasoning modes)
-        const netsuiteToolNames = Object.keys(netsuiteTools);
-        const baseToolNames = [
-          "webSearch",
-          "readWebpage",
-          "listSearchDomains",
-          "getCurrentConfig",
-        ];
-        console.log(
-          `[NetSuite] Active NetSuite tools (${netsuiteToolNames.length}):`,
-          netsuiteToolNames,
-        );
-        console.log("[Tools] All available tools:", Object.keys(allTools));
-        const activeTools: string[] = [...baseToolNames, ...netsuiteToolNames];
-
-        const systemPromptText = systemPrompt({
-          selectedChatModel,
-          requestHints,
-          netsuiteTools: netsuiteToolNames,
-          timezone: userTimezone,
-          searchDomains: searchConfig.enabledDomains.map((domain) => ({
-            label: domain.label,
-            url: getSearchDomainUrl(domain),
-            tier: domain.tier,
-          })),
-        });
-        console.log(
-          `[NetSuite] System prompt includes ${netsuiteToolNames.length} NetSuite tools`,
-        );
-
-        // Both providers use the same model keys (chat-model, chat-model-reasoning, title-model)
-        const modelId = selectedChatModel;
-
-        // Add getCurrentConfig tool with resolved model information
-        const allToolsWithConfig = {
-          ...allTools,
-          getCurrentConfig: createGetCurrentConfigTool({
-            selectedModelId: selectedChatModel,
-            resolvedModelId: modelId,
+          // Create provider with user's API key and provider type
+          console.log("[Settings] Creating provider:", {
             provider: userProviderType,
-            timezone: userTimezone,
-            enabledSearchDomains: searchConfig.enabledDomains.map(
-              (d) => d.label,
-            ),
-          }),
-        };
+            hasUserApiKey: !!userApiKey,
+            userApiKeyLength: userApiKey?.length,
+          });
+          let userProvider: ReturnType<typeof getUserProvider>;
+          try {
+            userProvider = getUserProvider(userApiKey, userProviderType);
+            console.log("[Settings] Provider created successfully");
+          } catch (error) {
+            // If no API key is configured, return an error to the user
+            const providerName =
+              userProviderType === "anthropic" ? "Anthropic" : "Google";
+            const errorMessage =
+              error instanceof Error
+                ? error.message
+                : `${providerName} API key is required`;
+            console.error(
+              "[Settings] Failed to create provider:",
+              errorMessage,
+            );
+            // Throw error so SDK can handle it
+            throw new Error(errorMessage);
+          }
 
-        // Verify the model exists before calling streamText
-        let languageModel: LanguageModel;
-        try {
-          languageModel = userProvider.languageModel(modelId);
-          console.log("[Chat] Model resolved:", {
+          const searchConfig = buildSearchConfig({
+            selectedDomainIds: selectedSearchDomainIds,
+            environment: process.env.NODE_ENV,
+          });
+
+          // Load NetSuite MCP tools if user is authenticated
+          let netsuiteTools: Record<string, unknown> = {};
+          if (session.user?.id) {
+            try {
+              netsuiteTools = await loadNetSuiteMCPTools(session.user.id);
+              if (Object.keys(netsuiteTools).length > 0) {
+                console.log(
+                  `[NetSuite] Loaded ${Object.keys(netsuiteTools).length} tools:`,
+                  Object.keys(netsuiteTools),
+                );
+              } else {
+                console.log(
+                  "[NetSuite] No tools loaded - user may not be connected or no tools available",
+                );
+              }
+            } catch (error) {
+              console.error("[NetSuite] Error loading tools:", error);
+              // Continue without NetSuite tools if there's an error
+            }
+          }
+
+          // Merge base tools with NetSuite tools
+          const allTools = {
+            webSearch: createWebSearchTool({
+              selectedDomainIds: selectedSearchDomainIds,
+              environment: process.env.NODE_ENV,
+            }),
+            readWebpage: createReadWebpageTool(),
+            listSearchDomains: createListSearchDomainsTool({
+              selectedDomainIds: selectedSearchDomainIds,
+              environment: process.env.NODE_ENV,
+            }),
+            ...netsuiteTools,
+          };
+
+          // Build active tools list (tools are enabled in both standard and reasoning modes)
+          const netsuiteToolNames = Object.keys(netsuiteTools);
+          const baseToolNames = [
+            "webSearch",
+            "readWebpage",
+            "listSearchDomains",
+            "getCurrentConfig",
+          ];
+          console.log(
+            `[NetSuite] Active NetSuite tools (${netsuiteToolNames.length}):`,
+            netsuiteToolNames,
+          );
+          console.log("[Tools] All available tools:", Object.keys(allTools));
+          const activeTools: string[] = [
+            ...baseToolNames,
+            ...netsuiteToolNames,
+          ];
+
+          const systemPromptText = systemPrompt({
+            selectedChatModel,
+            requestHints,
+            netsuiteTools: netsuiteToolNames,
+            timezone: userTimezone,
+            searchDomains: searchConfig.enabledDomains.map((domain) => ({
+              label: domain.label,
+              url: getSearchDomainUrl(domain),
+              tier: domain.tier,
+            })),
+          });
+          console.log(
+            `[NetSuite] System prompt includes ${netsuiteToolNames.length} NetSuite tools`,
+          );
+
+          // Both providers use the same model keys (chat-model, chat-model-reasoning, title-model)
+          const modelId = selectedChatModel;
+
+          // Add getCurrentConfig tool with resolved model information
+          const allToolsWithConfig = {
+            ...allTools,
+            getCurrentConfig: createGetCurrentConfigTool({
+              selectedModelId: selectedChatModel,
+              resolvedModelId: modelId,
+              provider: userProviderType,
+              timezone: userTimezone,
+              enabledSearchDomains: searchConfig.enabledDomains.map(
+                (d) => d.label,
+              ),
+            }),
+          };
+
+          // Verify the model exists before calling streamText
+          let languageModel: LanguageModel;
+          try {
+            languageModel = userProvider.languageModel(modelId);
+            console.log("[Chat] Model resolved:", {
+              provider: userProviderType,
+              modelId,
+              selectedChatModel,
+              resolvedModelId: languageModel.modelId,
+            });
+          } catch (modelError) {
+            console.error("[Chat] Error resolving model:", modelError);
+            const errorMessage =
+              modelError instanceof Error
+                ? modelError.message
+                : `Model ${modelId} not found for ${userProviderType} provider`;
+            // Throw error so SDK can handle it
+            throw new Error(errorMessage);
+          }
+
+          // Log model and provider info before calling streamText
+          console.log("[Chat] Starting streamText:", {
             provider: userProviderType,
             modelId,
             selectedChatModel,
-            resolvedModelId: languageModel.modelId,
+            hasProvider: !!userProvider,
           });
-        } catch (modelError) {
-          console.error("[Chat] Error resolving model:", modelError);
-          const errorMessage =
-            modelError instanceof Error
-              ? modelError.message
-              : `Model ${modelId} not found for ${userProviderType} provider`;
-          dataStream.write({
-            type: "error",
-            errorText: errorMessage,
-          });
-          return;
-        }
 
-        // Log model and provider info before calling streamText
-        console.log("[Chat] Starting streamText:", {
-          provider: userProviderType,
-          modelId,
-          selectedChatModel,
-          hasProvider: !!userProvider,
-        });
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          let result: any;
+          try {
+            // AI SDK 6: convertToModelMessages is now async
+            const modelMessages = await convertToModelMessages(uiMessages);
+            result = streamText({
+              model: languageModel,
+              system: systemPromptText,
+              messages: modelMessages,
+              stopWhen: stepCountIs(5),
+              experimental_activeTools: activeTools as never,
+              experimental_transform: smoothStream({ chunking: "word" }),
+              tools: allToolsWithConfig,
+              // Apply reasoning/thinking config based on provider
+              // Both use similar token budgets (4K) for thinking/reasoning
+              ...(modelId === "chat-model-reasoning" && {
+                providerOptions:
+                  userProviderType === "google"
+                    ? {
+                        google: {
+                          thinkingConfig: {
+                            thinkingBudget: 4096, // Allocates 4K tokens for thought
+                            includeThoughts: true,
+                          },
+                        },
+                      }
+                    : userProviderType === "anthropic"
+                      ? {
+                          anthropic: {
+                            thinking: {
+                              type: "enabled",
+                              budgetTokens: 4096, // Matches Google's 4K token budget
+                            },
+                          },
+                        }
+                      : {
+                          // OpenAI reasoning configuration for o4-mini
+                          openai: {
+                            reasoningEffort: "high", // Equivalent to adjusting thinking budget
+                            reasoningSummary: "detailed", // Show thought process in UI
+                          },
+                        },
+              }),
+              experimental_telemetry: {
+                isEnabled: isProductionEnvironment,
+                functionId: "stream-text",
+              },
+              onFinish: async ({ usage }) => {
+                try {
+                  const providers = await getTokenlensCatalog();
+                  const resolvedModelId =
+                    userProvider.languageModel(modelId).modelId;
+                  if (!resolvedModelId) {
+                    finalMergedUsage = usage;
+                    dataStream.write({
+                      type: "data-usage",
+                      data: finalMergedUsage,
+                    });
+                    return;
+                  }
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let result: any;
-        try {
-          result = streamText({
-            model: languageModel,
-            system: systemPromptText,
-            messages: convertToModelMessages(uiMessages),
-            stopWhen: stepCountIs(5),
-            experimental_activeTools: activeTools as never,
-            experimental_transform: smoothStream({ chunking: "word" }),
-            tools: allToolsWithConfig,
-            // Apply reasoning/thinking config based on provider
-            // Both use similar token budgets (4K) for thinking/reasoning
-            ...(modelId === "chat-model-reasoning" && {
-              providerOptions:
-                userProviderType === "google"
-                  ? {
-                      google: {
-                        thinkingConfig: {
-                          thinkingBudget: 4096, // Allocates 4K tokens for thought
-                          includeThoughts: true,
-                        },
-                      },
-                    }
-                  : {
-                      anthropic: {
-                        thinking: {
-                          type: "enabled",
-                          budgetTokens: 4096, // Matches Google's 4K token budget
-                        },
-                      },
-                    },
-            }),
-            experimental_telemetry: {
-              isEnabled: isProductionEnvironment,
-              functionId: "stream-text",
-            },
-            onFinish: async ({ usage }) => {
-              try {
-                const providers = await getTokenlensCatalog();
-                const resolvedModelId =
-                  userProvider.languageModel(modelId).modelId;
-                if (!resolvedModelId) {
+                  if (!providers) {
+                    finalMergedUsage = usage;
+                    dataStream.write({
+                      type: "data-usage",
+                      data: finalMergedUsage,
+                    });
+                    return;
+                  }
+
+                  const summary = getUsage({
+                    modelId: resolvedModelId,
+                    usage,
+                    providers,
+                  });
+                  finalMergedUsage = {
+                    ...usage,
+                    ...summary,
+                    modelId: resolvedModelId,
+                  } as AppUsage;
+                  dataStream.write({
+                    type: "data-usage",
+                    data: finalMergedUsage,
+                  });
+                } catch (err) {
+                  console.warn("TokenLens enrichment failed", err);
                   finalMergedUsage = usage;
                   dataStream.write({
                     type: "data-usage",
                     data: finalMergedUsage,
                   });
-                  return;
                 }
+              },
+            });
+            console.log("[Chat] streamText created successfully");
+          } catch (streamError) {
+            console.error("[Chat] Error creating streamText:", streamError);
+            // Re-throw error so SDK can handle it
+            throw streamError;
+          }
 
-                if (!providers) {
-                  finalMergedUsage = usage;
-                  dataStream.write({
-                    type: "data-usage",
-                    data: finalMergedUsage,
-                  });
-                  return;
-                }
-
-                const summary = getUsage({
-                  modelId: resolvedModelId,
-                  usage,
-                  providers,
-                });
-                finalMergedUsage = {
-                  ...usage,
-                  ...summary,
-                  modelId: resolvedModelId,
-                } as AppUsage;
-                dataStream.write({
-                  type: "data-usage",
-                  data: finalMergedUsage,
-                });
-              } catch (err) {
-                console.warn("TokenLens enrichment failed", err);
-                finalMergedUsage = usage;
-                dataStream.write({
-                  type: "data-usage",
-                  data: finalMergedUsage,
-                });
-              }
-            },
-          });
-          console.log("[Chat] streamText created successfully");
-        } catch (streamError) {
-          console.error("[Chat] Error creating streamText:", streamError);
-          const errorMessage =
-            streamError instanceof Error
-              ? streamError.message
-              : "Failed to start AI response";
-          dataStream.write({
-            type: "error",
-            errorText: errorMessage,
-          });
-          return;
-        }
-
-        try {
           result.consumeStream();
-
+          // Send reasoning for providers that support it
+          // OpenAI reasoning comes through as 'reasoning' parts in the stream when reasoningSummary is enabled
+          const supportsReasoning =
+            userProviderType === "google" ||
+            userProviderType === "anthropic" ||
+            (userProviderType === "openai" &&
+              modelId === "chat-model-reasoning");
           dataStream.merge(
             result.toUIMessageStream({
-              sendReasoning: true,
+              sendReasoning: supportsReasoning,
             }),
           );
           console.log("[Chat] Stream merged successfully");
-        } catch (mergeError) {
-          console.error("[Chat] Error merging stream:", mergeError);
-          const errorMessage =
-            mergeError instanceof Error
-              ? mergeError.message
-              : "Failed to process AI response";
-          dataStream.write({
-            type: "error",
-            errorText: errorMessage,
-          });
-          return;
+        } catch (unhandledError) {
+          // Re-throw any unhandled errors so SDK can handle them
+          console.error("[Chat] Unhandled error in execute:", unhandledError);
+          throw unhandledError;
         }
       },
       generateId: generateUUID,
       onFinish: async ({ messages }) => {
-        await saveMessages({
-          messages: messages.map((currentMessage) => ({
+        // Don't save messages if an error occurred - error is already saved in onError
+        if (hasErrorOccurred) {
+          console.log("[Chat] Skipping onFinish save - error occurred");
+          return;
+        }
+
+        // Filter out empty messages (messages with no parts or empty text parts)
+        const validMessages = messages
+          .filter((currentMessage) => {
+            // Check if message has parts
+            if (!currentMessage.parts || currentMessage.parts.length === 0) {
+              return false;
+            }
+            // Check if at least one part has content
+            return currentMessage.parts.some((part) => {
+              if (part.type === "text") {
+                return part.text && part.text.trim().length > 0;
+              }
+              return true; // Non-text parts are considered valid
+            });
+          })
+          .map((currentMessage) => ({
             id: currentMessage.id,
             role: currentMessage.role,
             parts: currentMessage.parts,
             createdAt: new Date(),
             chatId: id,
-          })),
-        });
+          }));
+
+        // Only save if there are valid messages
+        if (validMessages.length > 0) {
+          await saveMessages({
+            messages: validMessages,
+          });
+        }
 
         if (finalMergedUsage) {
           try {
@@ -523,8 +564,82 @@ export async function POST(request: Request) {
           }
         }
       },
-      onError: () => {
-        return "Oops, an error occurred!";
+      onError: (error: unknown) => {
+        // Mark that an error occurred to prevent onFinish from saving empty messages
+        hasErrorOccurred = true;
+
+        // Log error for debugging - SDK will handle propagation to client
+        console.error("[Chat] Error in onError handler:", error);
+
+        // Extract error message and details
+        let errorMessage = "An error occurred";
+        let errorDetails: string | null = null;
+
+        if (error instanceof Error) {
+          errorMessage = error.message || error.toString();
+
+          // Check if it's an API call error with response body
+          if (
+            "responseBody" in error &&
+            typeof error.responseBody === "string"
+          ) {
+            try {
+              const errorBody = JSON.parse(error.responseBody);
+              if (errorBody?.error?.message) {
+                errorMessage = errorBody.error.message;
+                if (errorBody.error?.param) {
+                  errorDetails = `Parameter: ${errorBody.error.param}`;
+                }
+                if (errorBody.error?.code) {
+                  errorDetails = errorDetails
+                    ? `${errorDetails}, Code: ${errorBody.error.code}`
+                    : `Code: ${errorBody.error.code}`;
+                }
+              }
+            } catch {
+              errorDetails = error.responseBody;
+            }
+          }
+
+          if ("statusCode" in error && error.statusCode) {
+            errorDetails = errorDetails
+              ? `${errorDetails}, Status: ${error.statusCode}`
+              : `Status: ${error.statusCode}`;
+          }
+        }
+
+        // Format error message
+        const errorMessageText = errorDetails
+          ? `**Error:** ${errorMessage}\n\n**Details:**\n${errorDetails}`
+          : `**Error:** ${errorMessage}`;
+
+        // Save error message to database so it persists across page reloads
+        // Fire-and-forget - don't block the error handler
+        void saveMessages({
+          messages: [
+            {
+              chatId: id,
+              id: generateUUID(),
+              role: "assistant",
+              parts: [
+                {
+                  type: "text",
+                  text: errorMessageText,
+                },
+              ],
+              createdAt: new Date(),
+            },
+          ],
+        }).catch((saveError) => {
+          console.error(
+            "[Chat] Failed to save error message to database:",
+            saveError,
+          );
+          // Continue even if save fails - error will still be shown via SDK
+        });
+
+        // Return error message for SDK to display
+        return errorMessage;
       },
     });
 

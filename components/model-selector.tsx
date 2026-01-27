@@ -23,7 +23,10 @@ async function fetchSettings() {
   }
   const data = await response.json();
   return {
-    aiProvider: (data.aiProvider || "google") as "google" | "anthropic",
+    aiProvider: (data.aiProvider || "google") as
+      | "google"
+      | "anthropic"
+      | "openai",
   };
 }
 

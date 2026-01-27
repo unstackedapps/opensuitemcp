@@ -89,6 +89,73 @@ const PurePreviewMessage = ({
             }
 
             if (type === "text") {
+              // Check if text content is an error message (starts with **Error:**)
+              const textContent = part.text || "";
+              const isError = textContent.trim().startsWith("**Error:**");
+
+              if (isError && message.role === "assistant") {
+                // Extract error message and details
+                // Remove **Error:** prefix first
+                const remainingText = textContent.replace(
+                  /^\*\*Error:\*\*\s*/,
+                  "",
+                );
+
+                // Check if there's a **Details:** section
+                const detailsMatch = remainingText.match(
+                  /\n\n\*\*Details:\*\*\n(.+)$/s,
+                );
+                const errorDetails = detailsMatch?.[1]?.trim();
+
+                // Get the error message (everything before **Details:** or the whole thing)
+                let errorMessage = remainingText;
+                if (detailsMatch) {
+                  errorMessage = remainingText
+                    .substring(0, detailsMatch.index)
+                    .trim();
+                } else {
+                  errorMessage = remainingText.trim();
+                }
+
+                // Fallback if extraction failed
+                if (!errorMessage || errorMessage.length === 0) {
+                  errorMessage = textContent
+                    .replace(/\*\*Error:\*\*\s*/, "")
+                    .trim();
+                }
+
+                return (
+                  <Card
+                    className="w-full border-destructive/50 bg-destructive/10 dark:bg-destructive/20"
+                    key={key}
+                  >
+                    <CardContent className="p-4">
+                      <div className="mb-2 flex items-center gap-2">
+                        <h4 className="font-semibold text-destructive dark:text-red-400">
+                          Error
+                        </h4>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="wrap-break-word text-sm text-destructive dark:text-red-300">
+                          {errorMessage}
+                        </div>
+                        {errorDetails && (
+                          <details className="mt-2">
+                            <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                              Show details
+                            </summary>
+                            <pre className="mt-2 wrap-break-word whitespace-pre-wrap text-xs text-destructive/90 dark:text-red-200">
+                              {errorDetails}
+                            </pre>
+                          </details>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              }
+
+              // Regular text rendering
               if (mode === "view") {
                 if (message.role === "user") {
                   return (
