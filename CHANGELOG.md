@@ -5,6 +5,61 @@ All notable changes to OpenSuiteMCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-01-27
+
+### ✨ Added
+
+- **OpenAI Provider Support**
+  - Added OpenAI as a third AI provider option
+  - GPT-5 Mini for speed mode (fast responses and tool calls)
+  - O4 Mini for enhanced reasoning mode (complex agent tasks and structured data analysis)
+  - OpenAI API key storage and encryption in user settings
+  - Organization verification notice for reasoning features
+
+- **Error Handling**
+  - Custom streaming error handling with persistent error messages in chat UI
+  - Error cards with improved dark mode styling and text wrapping
+  - Error message persistence across page reloads
+  - Chat-related error filtering to prevent general system errors from appearing in chat
+
+### 🐛 Fixed
+
+- **Settings Modal**
+  - Fixed intermittent form clearing issues (empty fields after save/reopen)
+  - Fixed provider dropdown display when switching providers
+  - Fixed skeleton loading states to match input field dimensions
+  - Fixed spacing and layout (removed double scrollbar)
+
+- **Error Recovery**
+  - Fixed status reset after errors to allow follow-up messages
+  - Fixed empty message prevention after errors
+  - Fixed stream interference when sending messages after errors
+
+### 🎨 Changed
+
+- **UI/UX Improvements**
+  - Simplified settings save mechanism (removed 'Save and Edit' dropdown)
+  - Updated model descriptions to match actual models used
+  - Improved error card legibility in dark mode
+  - Better spacing between header, form content, and action buttons in settings modal
+
+- **Documentation**
+  - Simplified README to focus on purpose and quick start
+  - Added documentation table of contents linking to LICENSE, NOTICE, ATTRIBUTION, CHANGELOG
+  - Added app screenshot and icon to README
+  - Removed redundant license/attribution content from README
+
+### 🔧 Technical
+
+- Upgraded `@ai-sdk/anthropic` from ^2.0.57 to ^3.0.23
+- Upgraded `@ai-sdk/google` from ^2.0.26 to ^3.0.13
+- Resolved compatibility warnings for reasoning features
+- Added comprehensive error handling with chat-related error filtering
+- Implemented error flag management to prevent stream interference
+- Added proper status management for error recovery
+- Improved type safety in provider configuration
+- Added database migration for OpenAI API key storage
+
 ## [2.0.0] - 2026-01-26
 
 ### 🎉 Complete Rewrite
