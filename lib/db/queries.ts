@@ -419,6 +419,28 @@ export async function updateChatLastContextById({
   }
 }
 
+export async function updateChatMaxIterationsReached({
+  chatId,
+  maxIterationsReached,
+}: {
+  chatId: string;
+  maxIterationsReached: boolean;
+}) {
+  try {
+    return await db
+      .update(chat)
+      .set({ maxIterationsReached })
+      .where(eq(chat.id, chatId));
+  } catch (error) {
+    console.warn(
+      "Failed to update maxIterationsReached for chat",
+      chatId,
+      error,
+    );
+    return;
+  }
+}
+
 export async function getMessageCountByUserId({
   id,
   differenceInHours,
@@ -521,6 +543,7 @@ export async function upsertUserSettings({
   netsuiteClientId,
   timezone,
   searchDomainIds,
+  maxIterations,
 }: {
   userId: string;
   googleApiKey?: string | null;
@@ -531,6 +554,7 @@ export async function upsertUserSettings({
   netsuiteClientId?: string | null;
   timezone?: string | null;
   searchDomainIds?: string[] | null;
+  maxIterations?: string | null;
 }): Promise<UserSettings> {
   try {
     const now = new Date();
@@ -570,6 +594,10 @@ export async function upsertUserSettings({
             searchDomainIds !== undefined
               ? (searchDomainIds ?? [])
               : (existing.searchDomainIds ?? []),
+          maxIterations:
+            maxIterations !== undefined
+              ? maxIterations
+              : (existing.maxIterations ?? "10"),
           updatedAt: now,
         })
         .where(eq(userSettings.userId, userId))
@@ -591,6 +619,7 @@ export async function upsertUserSettings({
         netsuiteClientId: netsuiteClientId ?? null,
         timezone: timezone ?? "UTC",
         searchDomainIds: searchDomainIds ?? [],
+        maxIterations: maxIterations ?? "10",
         createdAt: now,
         updatedAt: now,
       })

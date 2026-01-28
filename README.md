@@ -1,8 +1,18 @@
-# <img src="./app/icon.svg" alt="OpenSuiteMCP Icon" width="24" height="24" style="margin-right: 4px; vertical-align: baseline; margin-top: 2px;" /><span style="font-weight: 200;">OpenSuite</span>MCP NetSuite AI Assistant
+# <img src="./app/icon.svg" alt="OpenSuiteMCP Icon" width="24" height="24" /><span style="font-weight: 200;"> OpenSuite</span>MCP NetSuite AI Assistant
 
 An AI-powered chat assistant that integrates with NetSuite via MCP (Model Context Protocol), enabling natural language interactions with your NetSuite data. Built with Next.js, Vercel AI SDK, and supporting multiple AI providers (Google Gemini, Anthropic Claude, and OpenAI GPT).
 
-<img src="./docs/screenshot.png" alt="OpenSuiteMCP Main UI" width="80%" />
+<img src="./docs/screenshot1.png" alt="OpenSuiteMCP Main UI" width="100%" />
+
+*Chat interface in dark mode showing the welcome prompt and main UI.*
+
+### NetSuite MCP Tool Integration
+
+The assistant seamlessly integrates with NetSuite's MCP tools to execute complex queries and retrieve real-time data directly from your NetSuite instance.
+
+<img src="./docs/screenshot2.png" alt="NetSuite MCP Tool Usage" width="100%" />
+
+*Example query requesting the top ten customers by sales order count, demonstrating the power of NetSuite MCP tool usage in the app.*
 
 ## Quick Start
 

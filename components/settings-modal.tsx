@@ -11,6 +11,7 @@ import {
   EyeOffIcon,
   GlobeIcon,
   LoaderIcon,
+  SparklesIcon,
   UserIcon,
   WarningIcon,
 } from "@/components/icons";
@@ -83,6 +84,7 @@ async function fetchSettings() {
       netsuiteClientId: string | null;
       timezone: string;
       searchDomainIds: string[];
+      maxIterations: string;
     };
   } catch (error) {
     console.error("[Settings] Error in fetchSettings:", error);
@@ -250,6 +252,8 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const [timezoneSearch, setTimezoneSearch] = useState("");
   const [timezoneOpen, setTimezoneOpen] = useState(false);
   const [searchDomainIds, setSearchDomainIds] = useState<string[]>([]);
+  const [maxIterations, setMaxIterations] = useState("10");
+  const maxIterationsId = useId();
   const [isConnectingNetSuite, setIsConnectingNetSuite] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const initializedForThisOpenRef = useRef(false);
@@ -317,6 +321,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
       setNetsuiteClientId(settings.netsuiteClientId ?? "");
       setTimezone(settings.timezone ?? "UTC");
       setSearchDomainIds(settings.searchDomainIds ?? []);
+      setMaxIterations(settings.maxIterations ?? "10");
       initializedForThisOpenRef.current = true;
     } else {
       console.warn("[Settings] Settings object invalid:", settings);
@@ -348,6 +353,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
         netsuiteClientId: netsuiteClientId?.trim() || null,
         timezone: timezone?.trim() || "UTC",
         searchDomainIds: effectiveSearchDomainIds,
+        maxIterations: maxIterations?.trim() || "10",
       };
 
       const response = await fetch("/api/settings", {
@@ -511,7 +517,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         "mt-0.5",
                       )}
                     >
-                      <CloudIcon size={20} />
+                      <SparklesIcon size={20} />
                     </div>
                     <div>
                       <CardTitle className="text-base">AI Provider</CardTitle>
@@ -764,6 +770,46 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                       )}
                     </div>
                   )}
+
+                  {/* Max Reasoning Steps - Shown for all providers */}
+                  <div className="space-y-2 border-t pt-4">
+                    <Label htmlFor={maxIterationsId}>Max Reasoning Steps</Label>
+                    <p className="text-muted-foreground text-xs">
+                      Maximum number of reasoning steps the assistant can take
+                      before stopping (1-20). Higher values allow more complex
+                      reasoning but may increase costs.
+                    </p>
+                    {showSkeletons ? (
+                      <div className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 flex items-center">
+                        <Skeleton className="h-4 w-full" />
+                      </div>
+                    ) : (
+                      <>
+                        <Input
+                          id={maxIterationsId}
+                          max={20}
+                          min={1}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            // Only allow numbers
+                            if (value === "" || /^\d+$/.test(value)) {
+                              const num = Number.parseInt(value, 10);
+                              // Clamp between 1 and 20
+                              if (value === "" || (num >= 1 && num <= 20)) {
+                                setMaxIterations(value);
+                              }
+                            }
+                          }}
+                          placeholder="10"
+                          type="number"
+                          value={maxIterations}
+                        />
+                        <p className="text-muted-foreground text-xs">
+                          Current value: {maxIterations} steps
+                        </p>
+                      </>
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>

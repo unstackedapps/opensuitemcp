@@ -5,6 +5,24 @@ All notable changes to OpenSuiteMCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-01-28
+
+### ✨ Added
+
+- **Iteration Management System and Workflow**
+  - Flag-based max reasoning steps handling (no in-thread message injection)
+  - Database flag `maxIterationsReached` on Chat to lock thread until user chooses an option
+  - User-configurable max reasoning steps (1–20) in Settings → AI Provider, default 10
+  - Info card above input when max steps reached, with three actions:
+    - "Check NetSuite KB and continue" — clears flag and sends auto message to search NetSuite web resources
+    - "No, I'm fine" — clears flag and unlocks thread
+    - "Brute force it" — clears flag and sends auto message to continue
+  - Thread stays locked (input disabled) until an option is chosen; card persists on reload
+  - API: `GET /api/chat/[id]` returns `maxIterationsReached`; `POST /api/chat/[id]/max-iterations` clears the flag
+  - Single combined migration for `UserSettings.maxIterations` (default `'10'`) and `Chat.maxIterationsReached` (default `false`)
+
+---
+
 ## [2.1.0] - 2026-01-27
 
 ### ✨ Added
@@ -59,6 +77,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added proper status management for error recovery
 - Improved type safety in provider configuration
 - Added database migration for OpenAI API key storage
+
+---
 
 ## [2.0.0] - 2026-01-26
 
@@ -142,6 +162,7 @@ Complete architectural overhaul from LangChain/Express to Next.js with Vercel AI
 ### Technical Stack
 
 **Frontend & Backend:**
+
 - Next.js 15 (App Router)
 - React 19
 - TypeScript
@@ -149,12 +170,14 @@ Complete architectural overhaul from LangChain/Express to Next.js with Vercel AI
 - shadcn/ui components
 
 **AI & Database:**
+
 - Vercel AI SDK
 - Drizzle ORM
 - PostgreSQL
 - NextAuth.js
 
 **Tools:**
+
 - Web search
 - Webpage reading
 - Search domain configuration
@@ -163,6 +186,7 @@ Complete architectural overhaul from LangChain/Express to Next.js with Vercel AI
 ### Migration Notes
 
 Users upgrading from v1.x will need to:
+
 1. Set up new database (PostgreSQL)
 2. Run migrations (`pnpm db:migrate`)
 3. Re-authenticate with NetSuite
@@ -285,6 +309,8 @@ First stable release of OpenSuiteMCP - an open source, production-ready NetSuite
 
 ---
 
+[2.2.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v2.2.0
+[2.1.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v2.1.0
 [2.0.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v2.0.0
 [1.1.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v1.1.0
 [1.0.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v1.0.0

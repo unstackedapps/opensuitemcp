@@ -13,6 +13,16 @@ const settingsSchema = z.object({
   netsuiteClientId: z.string().max(128).optional().nullable(),
   timezone: z.string().max(64).optional().nullable(),
   searchDomainIds: z.array(z.string()).max(16).optional().nullable(),
+  maxIterations: z
+    .string()
+    .regex(/^\d+$/)
+    .transform((val) => {
+      const num = Number.parseInt(val, 10);
+      // Clamp between 1 and 20
+      return Math.max(1, Math.min(20, num)).toString();
+    })
+    .optional()
+    .nullable(),
 });
 
 export async function GET() {
@@ -42,6 +52,7 @@ export async function GET() {
         netsuiteClientId: null,
         timezone: "UTC",
         searchDomainIds: [],
+        maxIterations: "10",
       });
     }
 
@@ -111,6 +122,7 @@ export async function GET() {
       netsuiteClientId: settings.netsuiteClientId,
       timezone: settings.timezone ?? "UTC",
       searchDomainIds: settings.searchDomainIds ?? [],
+      maxIterations: settings.maxIterations ?? "10",
     };
 
     console.log("[Settings API] Sending response:", {
@@ -235,6 +247,7 @@ export async function POST(request: Request) {
         validated.searchDomainIds !== undefined
           ? (validated.searchDomainIds ?? [])
           : undefined,
+      maxIterations: validated.maxIterations,
     });
 
     return NextResponse.json({

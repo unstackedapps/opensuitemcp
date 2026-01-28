@@ -35,6 +35,9 @@ export const chat = pgTable("Chat", {
     .notNull()
     .default("private"),
   lastContext: jsonb("lastContext").$type<AppUsage | null>(),
+  maxIterationsReached: boolean("maxIterationsReached")
+    .notNull()
+    .default(false),
 });
 
 export type Chat = InferSelectModel<typeof chat>;
@@ -123,6 +126,7 @@ export const userSettings = pgTable("UserSettings", {
     .$type<string[]>()
     .notNull()
     .default(sql`'[]'::jsonb`),
+  maxIterations: text("maxIterations").default("10"), // Max reasoning steps (1-20)
   createdAt: timestamp("createdAt").notNull(),
   updatedAt: timestamp("updatedAt").notNull(),
 });
