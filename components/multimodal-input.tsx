@@ -57,6 +57,7 @@ function PureMultimodalInput({
   selectedModelId,
   onModelChange,
   usage,
+  disabled = false,
 }: {
   chatId: string;
   input: string;
@@ -70,6 +71,7 @@ function PureMultimodalInput({
   selectedModelId: string;
   onModelChange?: (modelId: string) => void;
   usage?: AppUsage;
+  disabled?: boolean;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { width } = useWindowSize();
@@ -198,6 +200,7 @@ function PureMultimodalInput({
             className="grow resize-none border-0! border-none! bg-transparent p-2 text-sm outline-none ring-0 [-ms-overflow-style:none] [scrollbar-width:none] placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 [&::-webkit-scrollbar]:hidden"
             data-testid="multimodal-input"
             disableAutoResize={true}
+            disabled={disabled}
             maxHeight={200}
             minHeight={44}
             onChange={handleInput}
@@ -230,7 +233,7 @@ function PureMultimodalInput({
               <PromptInputSubmit
                 className="size-8 rounded-full bg-primary text-primary-foreground transition-colors duration-200 hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground"
                 data-testid="send-button"
-                disabled={!input.trim()}
+                disabled={disabled || !input.trim()}
                 status={status}
               >
                 <ArrowUpIcon size={14} />
@@ -256,6 +259,9 @@ export const MultimodalInput = memo(
       return false;
     }
     if (prevProps.selectedModelId !== nextProps.selectedModelId) {
+      return false;
+    }
+    if (prevProps.disabled !== nextProps.disabled) {
       return false;
     }
 

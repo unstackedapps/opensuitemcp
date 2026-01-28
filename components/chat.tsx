@@ -24,9 +24,12 @@ import { ChatSDKError } from "@/lib/errors";
 import type { ChatMessage } from "@/lib/types";
 import type { AppUsage } from "@/lib/usage";
 import { fetcher, fetchWithErrorHandlers, generateUUID } from "@/lib/utils";
+import { InfoIcon } from "./icons";
 import { Messages } from "./messages";
 import { MultimodalInput } from "./multimodal-input";
 import { getChatHistoryPaginationKey } from "./sidebar-history";
+import { Button } from "./ui/button";
+import { Card, CardContent } from "./ui/card";
 import type { VisibilityType } from "./visibility-selector";
 
 export function Chat({
@@ -37,6 +40,7 @@ export function Chat({
   isReadonly,
   autoResume,
   initialLastContext,
+  initialMaxIterationsReached = false,
 }: {
   id: string;
   initialMessages: ChatMessage[];
@@ -45,6 +49,7 @@ export function Chat({
   isReadonly: boolean;
   autoResume: boolean;
   initialLastContext?: AppUsage;
+  initialMaxIterationsReached?: boolean;
 }) {
   const { visibilityType } = useChatVisibility({
     chatId: id,
@@ -57,6 +62,9 @@ export function Chat({
   const [usage, setUsage] = useState<AppUsage | undefined>(initialLastContext);
   const [showCreditCardAlert, setShowCreditCardAlert] = useState(false);
   const [currentModelId, setCurrentModelId] = useState(initialChatModel);
+  const [maxIterationsReached, setMaxIterationsReached] = useState(
+    initialMaxIterationsReached,
+  );
   const currentModelIdRef = useRef(currentModelId);
   const errorOccurredRef = useRef(false);
 
@@ -111,8 +119,25 @@ export function Chat({
         setUsage(dataPart.data);
       }
     },
-    onFinish: () => {
+    onFinish: async () => {
       mutate(unstable_serialize(getChatHistoryPaginationKey));
+      // Check if maxIterationsReached flag was set after stream completes.
+      // Brief delay so server's onFinish has time to write the flag (avoids race).
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        const response = await fetch(`/api/chat/${id}`);
+        if (response.ok) {
+          const chatData = await response.json();
+          if (chatData?.maxIterationsReached) {
+            setMaxIterationsReached(true);
+          }
+        }
+      } catch (error) {
+        console.warn(
+          "[Chat] Failed to check maxIterationsReached flag:",
+          error,
+        );
+      }
     },
     onError: (error) => {
       // Mark that an error occurred
@@ -261,16 +286,24 @@ export function Chat({
   const [hasAppendedQuery, setHasAppendedQuery] = useState(false);
 
   useEffect(() => {
-    if (query && !hasAppendedQuery) {
-      sendMessage({
-        role: "user" as const,
-        parts: [{ type: "text", text: query }],
-      });
-
+    if (!query || hasAppendedQuery) return;
+    // Do not send query-param message when thread is locked or stream is active
+    if (
+      maxIterationsReached ||
+      status === "streaming" ||
+      status === "submitted"
+    ) {
       setHasAppendedQuery(true);
       window.history.replaceState({}, "", `/chat/${id}`);
+      return;
     }
-  }, [query, sendMessage, hasAppendedQuery, id]);
+    sendMessage({
+      role: "user" as const,
+      parts: [{ type: "text", text: query }],
+    });
+    setHasAppendedQuery(true);
+    window.history.replaceState({}, "", `/chat/${id}`);
+  }, [query, sendMessage, hasAppendedQuery, id, maxIterationsReached, status]);
 
   const { data: votes } = useSWR<Vote[]>(
     messages.length >= 2 ? `/api/vote?chatId=${id}` : null,
@@ -408,6 +441,7 @@ export function Chat({
             !isReadonly && messages.length === 0 ? (
               <MultimodalInput
                 chatId={id}
+                disabled={maxIterationsReached}
                 input={input}
                 key={id}
                 onModelChange={setCurrentModelId}
@@ -432,10 +466,96 @@ export function Chat({
         />
 
         {messages.length > 0 && (
-          <div className="sticky bottom-0 z-1 mx-auto flex w-full max-w-4xl gap-2 border-t-0 bg-background px-2 pb-3 md:px-4 md:pb-4">
+          <div className="sticky bottom-0 z-1 mx-auto flex w-full max-w-4xl flex-col gap-2 border-t-0 bg-background px-2 pb-3 md:px-4 md:pb-4">
+            {maxIterationsReached && !isReadonly && (
+              <Card className="w-full border-blue-500/50 bg-blue-500/10 dark:bg-blue-500/20">
+                <CardContent className="p-4">
+                  <div className="mb-2 flex items-center gap-2">
+                    <div className="text-blue-600 dark:text-blue-400">
+                      <InfoIcon size={16} />
+                    </div>
+                    <h4 className="font-semibold text-blue-600 dark:text-blue-400">
+                      Information
+                    </h4>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="wrap-break-word text-sm text-blue-700 dark:text-blue-300">
+                      I've reached the maximum number of reasoning steps allowed
+                      for this response. What would you like to do?
+                    </div>
+                    <div className="flex flex-wrap gap-2 pt-2">
+                      <Button
+                        onClick={async () => {
+                          // Clear the flag
+                          await fetch(`/api/chat/${id}/max-iterations`, {
+                            method: "POST",
+                          });
+                          setMaxIterationsReached(false);
+                          // Send auto message
+                          sendMessage({
+                            role: "user",
+                            parts: [
+                              {
+                                type: "text",
+                                text: "Please search NetSuite web resources to help you better understand the steps to take, then please try again.",
+                              },
+                            ],
+                          });
+                        }}
+                        size="sm"
+                        variant="default"
+                      >
+                        Check NetSuite KB and continue
+                      </Button>
+                      <Button
+                        onClick={async () => {
+                          // Clear the flag
+                          await fetch(`/api/chat/${id}/max-iterations`, {
+                            method: "POST",
+                          });
+                          setMaxIterationsReached(false);
+                        }}
+                        size="sm"
+                        variant="outline"
+                      >
+                        No, I'm fine
+                      </Button>
+                      <Button
+                        onClick={async () => {
+                          // Clear the flag
+                          await fetch(`/api/chat/${id}/max-iterations`, {
+                            method: "POST",
+                          });
+                          setMaxIterationsReached(false);
+                          // Send auto message
+                          sendMessage({
+                            role: "user",
+                            parts: [
+                              {
+                                type: "text",
+                                text: "Please continue and try to answer my question.",
+                              },
+                            ],
+                          });
+                        }}
+                        size="sm"
+                        variant="secondary"
+                      >
+                        Brute force it
+                      </Button>
+                    </div>
+                    <p className="text-xs text-blue-600/80 dark:text-blue-400/80">
+                      You can change this limit in Settings under AI Provider →
+                      Max Reasoning Steps.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
             {!isReadonly && (
               <MultimodalInput
                 chatId={id}
+                disabled={maxIterationsReached}
                 input={input}
                 onModelChange={setCurrentModelId}
                 selectedModelId={currentModelId}

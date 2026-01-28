@@ -35,6 +35,7 @@ import {
   saveChat,
   saveMessages,
   updateChatLastContextById,
+  updateChatMaxIterationsReached,
 } from "@/lib/db/queries";
 import type { DBMessage } from "@/lib/db/schema";
 import { decrypt } from "@/lib/encryption";
@@ -183,10 +184,11 @@ export async function POST(request: Request) {
     const stream = createUIMessageStream({
       execute: async ({ writer: dataStream }) => {
         try {
-          // Get user settings (API key, provider, and timezone)
+          // Get user settings (API key, provider, timezone, and maxIterations)
           let userApiKey: string | null = null;
           let userProviderType: "google" | "anthropic" | "openai" = "google";
           let userTimezone = "UTC";
+          let userMaxIterations = 10; // Default to 10
           let selectedSearchDomainIds: string[] | undefined;
           if (session.user?.id) {
             try {
@@ -200,11 +202,22 @@ export async function POST(request: Request) {
                 hasGoogleKey: !!settings?.googleApiKey,
                 hasAnthropicKey: !!settings?.anthropicApiKey,
                 hasOpenAIKey: !!settings?.openaiApiKey,
+                maxIterations: settings?.maxIterations,
               });
               if (settings) {
                 userProviderType =
                   (settings.aiProvider as "google" | "anthropic" | "openai") ||
                   "google";
+                // Parse maxIterations, default to 10 if invalid
+                const maxIterationsValue = settings.maxIterations
+                  ? Number.parseInt(settings.maxIterations, 10)
+                  : 10;
+                userMaxIterations =
+                  Number.isNaN(maxIterationsValue) ||
+                  maxIterationsValue < 1 ||
+                  maxIterationsValue > 20
+                    ? 10
+                    : maxIterationsValue;
 
                 // Get API key based on selected provider
                 const apiKeyField =
@@ -386,6 +399,13 @@ export async function POST(request: Request) {
             throw new Error(errorMessage);
           }
 
+          // Clear maxIterationsReached at start of each request so we never show
+          // the card for a response that didn't hit the limit (avoids stale flag).
+          await updateChatMaxIterationsReached({
+            chatId: id,
+            maxIterationsReached: false,
+          });
+
           // Log model and provider info before calling streamText
           console.log("[Chat] Starting streamText:", {
             provider: userProviderType,
@@ -403,7 +423,7 @@ export async function POST(request: Request) {
               model: languageModel,
               system: systemPromptText,
               messages: modelMessages,
-              stopWhen: stepCountIs(5),
+              stopWhen: stepCountIs(userMaxIterations),
               experimental_activeTools: activeTools as never,
               experimental_transform: smoothStream({ chunking: "word" }),
               tools: allToolsWithConfig,
@@ -441,7 +461,27 @@ export async function POST(request: Request) {
                 isEnabled: isProductionEnvironment,
                 functionId: "stream-text",
               },
-              onFinish: async ({ usage }) => {
+              onFinish: async ({ usage, steps }) => {
+                // Check if we hit the max iterations limit (exactly equals, not >=)
+                const stepCount = steps?.length ?? 0;
+                console.log(
+                  "[Chat] Stream finished, step count:",
+                  stepCount,
+                  "max:",
+                  userMaxIterations,
+                );
+
+                if (stepCount === userMaxIterations) {
+                  console.log("[Chat] Max steps reached, setting flag");
+
+                  // Set the maxIterationsReached flag on the chat
+                  // This will lock the thread until user chooses an option
+                  await updateChatMaxIterationsReached({
+                    chatId: id,
+                    maxIterationsReached: true,
+                  });
+                }
+
                 try {
                   const providers = await getTokenlensCatalog();
                   const resolvedModelId =
@@ -503,6 +543,8 @@ export async function POST(request: Request) {
             userProviderType === "anthropic" ||
             (userProviderType === "openai" &&
               modelId === "chat-model-reasoning");
+
+          // Merge the UI message stream directly - max steps detection happens in onFinish callback
           dataStream.merge(
             result.toUIMessageStream({
               sendReasoning: supportsReasoning,
