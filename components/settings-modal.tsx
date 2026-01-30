@@ -985,7 +985,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                   </CardContent>
                 </Card>
 
-                {/* Web Resources Section */}
+                {/* Custom web search tools */}
                 <Card className="bg-background shadow-none">
                   <CardHeader className="py-6">
                     <div className="flex items-start justify-between gap-3">
@@ -1006,11 +1006,12 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         </div>
                         <div>
                           <CardTitle className="text-base">
-                            Web Resources
+                            Custom Web Search Tools
                           </CardTitle>
                           <p className="text-muted-foreground text-sm">
-                            Expand Ava&apos;s browsing to trusted NetSuite blogs
-                            and resources.
+                            Turn on which search tools Ava can use: NetSuite
+                            docs, Tim Dietrich, or Folio3. Only enabled tools
+                            are available in chat.
                           </p>
                         </div>
                       </div>

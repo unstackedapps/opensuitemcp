@@ -1,13 +1,11 @@
 "use client";
-import type { UseChatHelpers } from "@ai-sdk/react";
 import equal from "fast-deep-equal";
 import { motion } from "framer-motion";
 import { memo, useState } from "react";
 import { useSidebar } from "@/components/ui/sidebar";
 import type { GetCurrentConfigToolResult } from "@/lib/ai/tools/get-current-config";
-import type { ListSearchDomainsToolResult } from "@/lib/ai/tools/list-search-domains";
 import type { ReadWebpageToolResult } from "@/lib/ai/tools/read-webpage";
-import type { WebSearchToolResult } from "@/lib/ai/tools/web-search";
+import type { WebSearchToolResult } from "@/lib/ai/web-search";
 import type { Vote } from "@/lib/db/schema";
 import type { ChatMessage } from "@/lib/types";
 import { cn, sanitizeText } from "@/lib/utils";
@@ -18,10 +16,14 @@ import { Response } from "./message-elements/response";
 import { MessageReasoning } from "./message-reasoning";
 import { MessageTool } from "./message-tool";
 import { GetCurrentConfigToolOutput } from "./tool-outputs/get-current-config-tool-output";
-import { ListSearchDomainsToolOutput } from "./tool-outputs/list-search-domains-tool-output";
 import { ReadWebpageToolOutput } from "./tool-outputs/read-webpage-tool-output";
 import { WebSearchToolOutput } from "./tool-outputs/web-search-tool-output";
 import { Card, CardContent } from "./ui/card";
+
+type SetMessagesFn = (
+  messages: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[]),
+) => void;
+type RegenerateFn = () => Promise<void>;
 
 const PurePreviewMessage = ({
   chatId,
@@ -36,8 +38,8 @@ const PurePreviewMessage = ({
   message: ChatMessage;
   vote: Vote | undefined;
   isLoading: boolean;
-  setMessages: UseChatHelpers<ChatMessage>["setMessages"];
-  regenerate: UseChatHelpers<ChatMessage>["regenerate"];
+  setMessages: SetMessagesFn;
+  regenerate: RegenerateFn;
   isReadonly: boolean;
 }) => {
   const [mode, setMode] = useState<"view" | "edit">("view");
@@ -210,51 +212,16 @@ const PurePreviewMessage = ({
               }
             }
 
-            if (type === "tool-listSearchDomains") {
+            if (
+              type === "tool-searchNetsuiteDocs" ||
+              type === "tool-searchTimDietrich" ||
+              type === "tool-searchFolio3"
+            ) {
               const toolPart = part as Extract<
                 ChatMessage["parts"][number],
-                { type: "tool-listSearchDomains" }
-              >;
-              const { toolCallId, state } = toolPart;
-
-              const hasError =
-                toolPart.output &&
-                typeof toolPart.output === "object" &&
-                toolPart.output !== null &&
-                "error" in toolPart.output;
-
-              return (
-                <MessageTool
-                  errorText={
-                    hasError
-                      ? String(
-                          (toolPart.output as unknown as { error: unknown })
-                            .error,
-                        )
-                      : undefined
-                  }
-                  input={toolPart.input}
-                  key={toolCallId}
-                  output={
-                    !hasError &&
-                    toolPart.output &&
-                    typeof toolPart.output === "object" ? (
-                      <ListSearchDomainsToolOutput
-                        result={toolPart.output as ListSearchDomainsToolResult}
-                      />
-                    ) : null
-                  }
-                  state={state}
-                  toolCallId={toolCallId}
-                  type="tool-listSearchDomains"
-                />
-              );
-            }
-
-            if (type === "tool-webSearch") {
-              const toolPart = part as Extract<
-                ChatMessage["parts"][number],
-                { type: "tool-webSearch" }
+                | { type: "tool-searchNetsuiteDocs" }
+                | { type: "tool-searchTimDietrich" }
+                | { type: "tool-searchFolio3" }
               >;
               const { toolCallId, state } = toolPart;
 
@@ -287,7 +254,7 @@ const PurePreviewMessage = ({
                   }
                   state={state}
                   toolCallId={toolCallId}
-                  type="tool-webSearch"
+                  type={type}
                 />
               );
             }

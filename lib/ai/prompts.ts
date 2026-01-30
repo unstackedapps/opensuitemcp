@@ -193,22 +193,76 @@ IMPORTANT: Always use the current date and time above when:
 When users ask about time-based data, use the current date/time to calculate the appropriate date ranges and periods.
 `;
 
+const SEARCH_TRIAGE_ROWS: Record<string, { intent: string; why: string }> = {
+  searchNetsuiteDocs: {
+    intent: "Native setup",
+    why: "Official documentation is the safest for core security.",
+  },
+  searchTimDietrich: {
+    intent: "Data / SQL queries",
+    why: "Better SuiteQL schemas and optimized script snippets.",
+  },
+  searchFolio3: {
+    intent: "AI / MCP setup",
+    why: "Master of bridging NetSuite to LLMs via MCP.",
+  },
+};
+
+const SEARCH_TOOL_DESCRIPTIONS: Record<string, string> = {
+  searchNetsuiteDocs:
+    "Oracle NetSuite Help Center (official docs, UI, permissions, SuiteScript API, security).",
+  searchTimDietrich:
+    "Tim Dietrich Knowledge Base (SuiteQL, SuiteScript debugging, custom reports, Silent Filter Inheritance, MCP auth).",
+  searchFolio3:
+    "Folio3 blog (MCP setup, connecting Claude/ChatGPT to NetSuite, API workflows, reconciliation, conversational data analysis).",
+};
+
+function buildSearchPrompt(enabledSearchToolNames: string[]): string {
+  if (enabledSearchToolNames.length === 0) {
+    return "";
+  }
+  const triageRows = enabledSearchToolNames
+    .filter((name) => SEARCH_TRIAGE_ROWS[name])
+    .map(
+      (name) =>
+        `| ${SEARCH_TRIAGE_ROWS[name].intent} | \`${name}\` | ${SEARCH_TRIAGE_ROWS[name].why} |`,
+    )
+    .join("\n");
+  const toolList = enabledSearchToolNames
+    .filter((name) => SEARCH_TOOL_DESCRIPTIONS[name])
+    .map((name) => `- \`${name}\` — ${SEARCH_TOOL_DESCRIPTIONS[name]}`)
+    .join("\n");
+  return `
+**Triage: Search Tool Selection**
+Use exactly one of your available search tools based on user intent. Do not call multiple search tools for the same question unless the user explicitly asks for multiple sources.
+
+| User intent           | Preferred tool           | Why |
+|-----------------------|--------------------------|-----|
+${triageRows}
+
+**Web Search (domain-specific tools)**
+You have the following search tools, each restricted to a single high-authority source:
+${toolList}
+
+Follow the triage table above to choose the right tool. When you use any search tool, always cite at least one URL from the results in your response and make clear which source each statement came from.
+`;
+}
+
 export const systemPrompt = ({
   selectedChatModel,
   requestHints,
   netsuiteTools = [],
   timezone = "UTC",
-  searchDomains,
+  enabledSearchToolNames = [],
 }: {
   selectedChatModel: string;
   requestHints: RequestHints;
   netsuiteTools?: string[];
   timezone?: string;
-  searchDomains?: { label: string; url: string; tier?: string }[];
+  enabledSearchToolNames?: string[];
 }) => {
   const requestPrompt = getRequestPromptFromHints(requestHints, timezone);
   let netsuitePrompt = "";
-  let searchPrompt = "";
 
   if (netsuiteTools.length > 0) {
     netsuitePrompt = `\n\n**NetSuite Integration:**
@@ -218,21 +272,6 @@ You have access to NetSuite MCP tools that allow you to interact with the user's
 When users ask about NetSuite data, operations, or information, use the appropriate NetSuite tool to help them. The tools are dynamically loaded from the user's NetSuite account and may vary based on their setup.
 
 If a user asks about NetSuite capabilities or what you can do with their NetSuite account, you should mention that you have access to these NetSuite tools and can help them with NetSuite-related tasks.`;
-  }
-
-  if (searchDomains && searchDomains.length > 0) {
-    const domainList = searchDomains
-      .map((domain) => `- ${domain.label} (${domain.url})`)
-      .join("\n");
-    searchPrompt = `\n\n**Web Search Access:**
-You can run web searches limited to curated NetSuite sources. Available domains:
-${domainList}
-
-Use the \`list_search_domains\` tool to review which domains are currently enabled. Web search is only available when at least one domain is enabled in the user's settings.
-
-When you use \`web_search\`, always cite at least one URL from the tool results in your response. Make the final answer clear about which source each statement came from.
-
-If a user references a specific author or site (for example, "Tim Dietrich"), ensure you run \`web_search\` against that domain by passing the correct domain id. Call \`list_search_domains\` first if you need to confirm which domains are enabled.`;
   }
 
   const configPrompt = `\n\n**Configuration Information:**
@@ -245,11 +284,14 @@ You have access to the \`get_current_config\` tool that provides information abo
 
 This tool helps build user confidence by providing transparent information about their current setup.`;
 
+  const searchPromptBlock = buildSearchPrompt(enabledSearchToolNames);
+  const searchPrompt = searchPromptBlock ? `\n\n${searchPromptBlock}` : "";
+
   if (selectedChatModel === "chat-model-reasoning") {
-    return `${regularPrompt()}\n\n${requestPrompt}${netsuitePrompt}${searchPrompt}${configPrompt}`;
+    return `${regularPrompt()}\n\n${requestPrompt}${searchPrompt}${netsuitePrompt}${configPrompt}`;
   }
 
-  return `${regularPrompt()}\n\n${responseGuidelinesPrompt}\n\n${requestPrompt}${netsuitePrompt}${searchPrompt}${configPrompt}`;
+  return `${regularPrompt()}\n\n${responseGuidelinesPrompt}\n\n${requestPrompt}${searchPrompt}${netsuitePrompt}${configPrompt}`;
 };
 
 export const summaryPrompt = `Generate a concise summary of this conversation based on the user's first message.

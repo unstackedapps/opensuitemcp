@@ -5,6 +5,41 @@ All notable changes to OpenSuiteMCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-01-26
+
+### ✨ Added
+
+- **Custom Web Search Tools**
+  - Three domain-specific search tools (NetSuite docs, Tim Dietrich blog, Folio3 Knowledge Base) replace the single web search + list-search-domains flow
+  - Settings → "Custom Web Search Tools": per-domain toggles control which search tools Ava can use in chat
+  - System prompt triage table guides model on when to use each search tool
+  - Optional Redis-backed search cache (7-day TTL) for repeated queries per domain
+
+### 🐛 Fixed
+
+- **Migrations**
+  - Migration `0005_dark_the_order` uses `IF NOT EXISTS` for `maxIterationsReached` and `maxIterations` columns for safe re-runs
+
+### 🎨 Changed
+
+- **Settings**
+  - "Web Resources" renamed to "Custom Web Search Tools" with clearer description (NetSuite docs, Tim Dietrich, Folio3; only enabled tools available in chat)
+- **Tool UI**
+  - Tool status badges support new states: "Approval requested", "Approval responded", "Denied"
+  - Get current config tool output shows OpenAI provider with emerald styling
+- **Types & API**
+  - Shared web search types and helpers moved to `lib/ai/web-search.ts`; domain catalog simplified in `lib/ai/search-domains.ts`
+  - Chat tools type: `searchNetsuiteDocs`, `searchTimDietrich`, `searchFolio3` replace `webSearch` and `listSearchDomains`
+
+### 🔧 Technical
+
+- Upgraded `@ai-sdk/react` from 2.0.26 to ^3.0.26 (ai@6.0.50 via pnpm overrides)
+- Removed `list-search-domains` tool and ListSearchDomainsToolOutput component
+- Simplified `getTrailingMessageId` and message types (no CoreAssistantMessage/CoreToolMessage)
+- OpenAI added to GetCurrentConfigToolOutput provider labels
+
+---
+
 ## [2.2.0] - 2026-01-28
 
 ### ✨ Added
@@ -309,6 +344,7 @@ First stable release of OpenSuiteMCP - an open source, production-ready NetSuite
 
 ---
 
+[2.3.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v2.3.0
 [2.2.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v2.2.0
 [2.1.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v2.1.0
 [2.0.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v2.0.0
