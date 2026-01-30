@@ -19,11 +19,12 @@ import { entitlementsByUserType } from "@/lib/ai/entitlements";
 import type { ChatModel } from "@/lib/ai/models";
 import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
 import { getUserProvider } from "@/lib/ai/providers";
-import { buildSearchConfig, getSearchDomainUrl } from "@/lib/ai/search-domains";
+import { searchDomains } from "@/lib/ai/search-domains";
 import { createGetCurrentConfigTool } from "@/lib/ai/tools/get-current-config";
-import { createListSearchDomainsTool } from "@/lib/ai/tools/list-search-domains";
 import { createReadWebpageTool } from "@/lib/ai/tools/read-webpage";
-import { createWebSearchTool } from "@/lib/ai/tools/web-search";
+import { createSearchFolio3Tool } from "@/lib/ai/tools/search-folio3";
+import { createSearchNetsuiteDocsTool } from "@/lib/ai/tools/search-netsuite-docs";
+import { createSearchTimDietrichTool } from "@/lib/ai/tools/search-tim-dietrich";
 import { isProductionEnvironment } from "@/lib/constants";
 import {
   createStreamId,
@@ -189,7 +190,7 @@ export async function POST(request: Request) {
           let userProviderType: "google" | "anthropic" | "openai" = "google";
           let userTimezone = "UTC";
           let userMaxIterations = 10; // Default to 10
-          let selectedSearchDomainIds: string[] | undefined;
+          let selectedSearchDomainIds: string[] = [];
           if (session.user?.id) {
             try {
               const settings = await getUserSettings({
@@ -289,11 +290,6 @@ export async function POST(request: Request) {
             throw new Error(errorMessage);
           }
 
-          const searchConfig = buildSearchConfig({
-            selectedDomainIds: selectedSearchDomainIds,
-            environment: process.env.NODE_ENV,
-          });
-
           // Load NetSuite MCP tools if user is authenticated
           let netsuiteTools: Record<string, unknown> = {};
           if (session.user?.id) {
@@ -315,26 +311,38 @@ export async function POST(request: Request) {
             }
           }
 
+          // Custom web search tools: only register tools for domains enabled in settings
+          const enabledSearchDomainIds = new Set(selectedSearchDomainIds);
+          const searchToolEntries: [string, unknown][] = [];
+          if (enabledSearchDomainIds.has("oracle-netsuite-help")) {
+            searchToolEntries.push([
+              "searchNetsuiteDocs",
+              createSearchNetsuiteDocsTool(),
+            ]);
+          }
+          if (enabledSearchDomainIds.has("tim-dietrich-blog")) {
+            searchToolEntries.push([
+              "searchTimDietrich",
+              createSearchTimDietrichTool(),
+            ]);
+          }
+          if (enabledSearchDomainIds.has("folio3-netsuite-blog")) {
+            searchToolEntries.push(["searchFolio3", createSearchFolio3Tool()]);
+          }
+          const searchTools = Object.fromEntries(searchToolEntries);
+
           // Merge base tools with NetSuite tools
           const allTools = {
-            webSearch: createWebSearchTool({
-              selectedDomainIds: selectedSearchDomainIds,
-              environment: process.env.NODE_ENV,
-            }),
+            ...searchTools,
             readWebpage: createReadWebpageTool(),
-            listSearchDomains: createListSearchDomainsTool({
-              selectedDomainIds: selectedSearchDomainIds,
-              environment: process.env.NODE_ENV,
-            }),
             ...netsuiteTools,
           };
 
           // Build active tools list (tools are enabled in both standard and reasoning modes)
           const netsuiteToolNames = Object.keys(netsuiteTools);
           const baseToolNames = [
-            "webSearch",
+            ...Object.keys(searchTools),
             "readWebpage",
-            "listSearchDomains",
             "getCurrentConfig",
           ];
           console.log(
@@ -352,11 +360,7 @@ export async function POST(request: Request) {
             requestHints,
             netsuiteTools: netsuiteToolNames,
             timezone: userTimezone,
-            searchDomains: searchConfig.enabledDomains.map((domain) => ({
-              label: domain.label,
-              url: getSearchDomainUrl(domain),
-              tier: domain.tier,
-            })),
+            enabledSearchToolNames: Object.keys(searchTools),
           });
           console.log(
             `[NetSuite] System prompt includes ${netsuiteToolNames.length} NetSuite tools`,
@@ -373,9 +377,9 @@ export async function POST(request: Request) {
               resolvedModelId: modelId,
               provider: userProviderType,
               timezone: userTimezone,
-              enabledSearchDomains: searchConfig.enabledDomains.map(
-                (d) => d.label,
-              ),
+              enabledSearchDomains: searchDomains
+                .filter((d) => enabledSearchDomainIds.has(d.id))
+                .map((d) => d.label),
             }),
           };
 

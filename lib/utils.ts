@@ -1,9 +1,4 @@
-import type {
-  CoreAssistantMessage,
-  CoreToolMessage,
-  UIMessage,
-  UIMessagePart,
-} from 'ai';
+import type { UIMessage, UIMessagePart } from "ai";
 import { type ClassValue, clsx } from 'clsx';
 import { formatISO } from 'date-fns';
 import { twMerge } from 'tailwind-merge';
@@ -63,9 +58,6 @@ export function generateUUID(): string {
   });
 }
 
-type ResponseMessageWithoutId = CoreToolMessage | CoreAssistantMessage;
-type ResponseMessage = ResponseMessageWithoutId & { id: string };
-
 export function getMostRecentUserMessage(messages: UIMessage[]) {
   const userMessages = messages.filter((message) => message.role === 'user');
   return userMessages.at(-1);
@@ -74,7 +66,7 @@ export function getMostRecentUserMessage(messages: UIMessage[]) {
 export function getTrailingMessageId({
   messages,
 }: {
-  messages: ResponseMessage[];
+  messages: Array<{ id: string }>;
 }): string | null {
   const trailingMessage = messages.at(-1);
 

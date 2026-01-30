@@ -9,9 +9,10 @@ type GetCurrentConfigToolOutputProps = {
   result: GetCurrentConfigToolResult;
 };
 
-const PROVIDER_LABELS: Record<"google" | "anthropic", string> = {
+const PROVIDER_LABELS: Record<"google" | "anthropic" | "openai", string> = {
   google: "Google (Gemini)",
   anthropic: "Anthropic (Claude)",
+  openai: "OpenAI",
 };
 
 export function GetCurrentConfigToolOutput({
@@ -40,6 +41,8 @@ export function GetCurrentConfigToolOutput({
               className={cn(
                 isAnthropic &&
                   "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
+                configuration.provider === "openai" &&
+                  "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200",
               )}
             >
               {PROVIDER_LABELS[configuration.provider]}

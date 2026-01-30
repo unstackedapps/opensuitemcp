@@ -1,7 +1,7 @@
 "use client";
 
 import { ExternalLinkIcon, SearchIcon } from "@/components/icons";
-import type { WebSearchToolResult } from "@/lib/ai/tools/web-search";
+import type { WebSearchToolResult } from "@/lib/ai/web-search";
 import { cn } from "@/lib/utils";
 
 type WebSearchToolOutputProps = {
