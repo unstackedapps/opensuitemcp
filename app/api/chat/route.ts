@@ -117,19 +117,25 @@ export async function POST(request: Request) {
     } else {
       // Get user API key and provider for title generation
       let titleApiKey: string | null = null;
-      let titleProvider: "google" | "anthropic" | "openai" = "google";
+      let titleProvider: "google" | "anthropic" | "openai" | "inception" =
+        "google";
       if (session.user?.id) {
         try {
           const settings = await getUserSettings({ userId: session.user.id });
           titleProvider =
-            (settings?.aiProvider as "google" | "anthropic" | "openai") ||
-            "google";
+            (settings?.aiProvider as
+              | "google"
+              | "anthropic"
+              | "openai"
+              | "inception") || "google";
           const apiKeyField =
             titleProvider === "anthropic"
               ? settings?.anthropicApiKey
               : titleProvider === "openai"
                 ? settings?.openaiApiKey
-                : settings?.googleApiKey;
+                : titleProvider === "inception"
+                  ? settings?.inceptionApiKey
+                  : settings?.googleApiKey;
           if (apiKeyField) {
             titleApiKey = decrypt(apiKeyField);
           }
@@ -187,7 +193,11 @@ export async function POST(request: Request) {
         try {
           // Get user settings (API key, provider, timezone, and maxIterations)
           let userApiKey: string | null = null;
-          let userProviderType: "google" | "anthropic" | "openai" = "google";
+          let userProviderType:
+            | "google"
+            | "anthropic"
+            | "openai"
+            | "inception" = "google";
           let userTimezone = "UTC";
           let userMaxIterations = 10; // Default to 10
           let selectedSearchDomainIds: string[] = [];
@@ -203,12 +213,16 @@ export async function POST(request: Request) {
                 hasGoogleKey: !!settings?.googleApiKey,
                 hasAnthropicKey: !!settings?.anthropicApiKey,
                 hasOpenAIKey: !!settings?.openaiApiKey,
+                hasInceptionKey: !!settings?.inceptionApiKey,
                 maxIterations: settings?.maxIterations,
               });
               if (settings) {
                 userProviderType =
-                  (settings.aiProvider as "google" | "anthropic" | "openai") ||
-                  "google";
+                  (settings.aiProvider as
+                    | "google"
+                    | "anthropic"
+                    | "openai"
+                    | "inception") || "google";
                 // Parse maxIterations, default to 10 if invalid
                 const maxIterationsValue = settings.maxIterations
                   ? Number.parseInt(settings.maxIterations, 10)
@@ -226,7 +240,9 @@ export async function POST(request: Request) {
                     ? settings.anthropicApiKey
                     : userProviderType === "openai"
                       ? settings.openaiApiKey
-                      : settings.googleApiKey;
+                      : userProviderType === "inception"
+                        ? settings.inceptionApiKey
+                        : settings.googleApiKey;
 
                 if (apiKeyField) {
                   try {
@@ -277,7 +293,13 @@ export async function POST(request: Request) {
           } catch (error) {
             // If no API key is configured, return an error to the user
             const providerName =
-              userProviderType === "anthropic" ? "Anthropic" : "Google";
+              userProviderType === "anthropic"
+                ? "Anthropic"
+                : userProviderType === "openai"
+                  ? "OpenAI"
+                  : userProviderType === "inception"
+                    ? "Inception Labs"
+                    : "Google";
             const errorMessage =
               error instanceof Error
                 ? error.message
@@ -433,34 +455,51 @@ export async function POST(request: Request) {
               tools: allToolsWithConfig,
               // Apply reasoning/thinking config based on provider
               // Both use similar token budgets (4K) for thinking/reasoning
-              ...(modelId === "chat-model-reasoning" && {
-                providerOptions:
-                  userProviderType === "google"
-                    ? {
+              ...(modelId === "chat-model-reasoning" &&
+                (userProviderType === "google"
+                  ? {
+                      providerOptions: {
                         google: {
                           thinkingConfig: {
                             thinkingBudget: 4096, // Allocates 4K tokens for thought
                             includeThoughts: true,
                           },
                         },
-                      }
-                    : userProviderType === "anthropic"
-                      ? {
+                      },
+                    }
+                  : userProviderType === "anthropic"
+                    ? {
+                        providerOptions: {
                           anthropic: {
                             thinking: {
                               type: "enabled",
                               budgetTokens: 4096, // Matches Google's 4K token budget
                             },
                           },
-                        }
-                      : {
-                          // OpenAI reasoning configuration for o4-mini
-                          openai: {
-                            reasoningEffort: "high", // Equivalent to adjusting thinking budget
-                            reasoningSummary: "detailed", // Show thought process in UI
-                          },
                         },
-              }),
+                      }
+                    : userProviderType === "openai"
+                      ? {
+                          providerOptions: {
+                            // OpenAI reasoning configuration for o4-mini
+                            openai: {
+                              reasoningEffort: "high", // Equivalent to adjusting thinking budget
+                              reasoningSummary: "detailed", // Show thought process in UI
+                            },
+                          },
+                        }
+                      : userProviderType === "inception"
+                        ? {
+                            providerOptions: {
+                              // Inception Labs reasoning configuration for Mercury 2
+                              inception: {
+                                reasoningEffort: "high",
+                                reasoning_summary: true,
+                                reasoning_summary_wait: false,
+                              },
+                            },
+                          }
+                        : {})),
               experimental_telemetry: {
                 isEnabled: isProductionEnvironment,
                 functionId: "stream-text",

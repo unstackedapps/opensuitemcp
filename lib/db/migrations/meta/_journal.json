@@ -43,6 +43,13 @@
       "when": 1769566601773,
       "tag": "0005_dark_the_order",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1772330547751,
+      "tag": "0006_high_kang",
+      "breakpoints": true
     }
   ]
 }

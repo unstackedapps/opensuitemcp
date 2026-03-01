@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://chat.vercel.ai"),
   title: "OpenSuiteMCP",
   description:
-    "OpenSuiteMCP NetSuite AI Assistant, powered by Gemini and Next.js",
+    "OpenSuiteMCP NetSuite AI Assistant, powered by Gemini, Claude, GPT, and Mercury",
 };
 
 export const viewport = {

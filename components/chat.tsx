@@ -338,6 +338,7 @@ export function Chat({
         /responseBody/i,
         /api\.openai\.com/i,
         /api\.anthropic\.com/i,
+        /api\.inceptionlabs\.ai/i,
         /generativeai\.googleapis\.com/i,
       ];
 

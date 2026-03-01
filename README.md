@@ -1,10 +1,10 @@
 # <img src="./app/icon.svg" alt="OpenSuiteMCP Icon" width="24" height="24" /><span style="font-weight: 200;"> OpenSuite</span>MCP NetSuite AI Assistant
 
-An AI-powered chat assistant that integrates with NetSuite via MCP (Model Context Protocol), enabling natural language interactions with your NetSuite data. Built with Next.js, Vercel AI SDK, and supporting multiple AI providers (Google Gemini, Anthropic Claude, and OpenAI GPT).
+An AI-powered chat assistant that integrates with NetSuite via MCP (Model Context Protocol), enabling natural language interactions with your NetSuite data. Built with Next.js, Vercel AI SDK, and supporting multiple AI providers (Google Gemini, Anthropic Claude, OpenAI GPT, and Inception Labs Mercury).
 
 <img src="./docs/screenshot1.png" alt="OpenSuiteMCP Main UI" width="100%" />
 
-*Chat interface in dark mode showing the welcome prompt and main UI.*
+_Chat interface in dark mode showing the welcome prompt and main UI._
 
 ### NetSuite MCP Tool Integration
 
@@ -12,7 +12,7 @@ The assistant seamlessly integrates with NetSuite's MCP tools to execute complex
 
 <img src="./docs/screenshot2.png" alt="NetSuite MCP Tool Usage" width="100%" />
 
-*Example query requesting the top ten customers by sales order count, demonstrating the power of NetSuite MCP tool usage in the app.*
+_Example query requesting the top ten customers by sales order count, demonstrating the power of NetSuite MCP tool usage in the app._
 
 ## Quick Start
 
@@ -52,8 +52,9 @@ The assistant seamlessly integrates with NetSuite's MCP tools to execute complex
 
 5. **Configure your API key:**
    - Open the **Settings** modal from the sidebar
-   - Enter your AI provider API key (Google, Anthropic, or OpenAI)
-   - API keys are encrypted and stored securely in your database
+
+- Enter your AI provider API key (Google, Anthropic, OpenAI, or Inception Labs)
+- API keys are encrypted and stored securely in your database
 
 The app will be running at [http://localhost:3000](http://localhost:3000).
 

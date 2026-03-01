@@ -22,8 +22,9 @@ export type EnhancedToolMetadata = {
 async function enhanceSingleTool(
   tool: MCPTool,
   userApiKey: string,
+  provider: "google" | "anthropic" | "openai" | "inception",
 ): Promise<EnhancedToolMetadata> {
-  const provider = getUserProvider(userApiKey);
+  const providerInstance = getUserProvider(userApiKey, provider);
 
   const prompt = `You are helping to create user-friendly metadata for a NetSuite MCP tool.
 
@@ -51,7 +52,7 @@ Return your response as JSON with this exact structure:
 
   try {
     const result = await generateText({
-      model: provider.languageModel("chat-model"),
+      model: providerInstance.languageModel("chat-model"),
       prompt,
       system:
         "You are a technical writer specializing in making complex tools accessible to business users. Generate clear, concise metadata.",
@@ -106,15 +107,25 @@ export async function enhanceMCPToolsWithAI(
 ): Promise<EnhancedToolMetadata[]> {
   // Get user's API key
   const settings = await getUserSettings({ userId });
-  if (!settings?.googleApiKey) {
+  const provider = settings?.aiProvider ?? ("google" as const);
+  const apiKeyField =
+    provider === "anthropic"
+      ? settings?.anthropicApiKey
+      : provider === "openai"
+        ? settings?.openaiApiKey
+        : provider === "inception"
+          ? settings?.inceptionApiKey
+          : settings?.googleApiKey;
+
+  if (!apiKeyField) {
     throw new Error(
-      "Google API key is required for tool enhancement. Please set it in Settings.",
+      "An AI provider API key is required for tool enhancement. Please set it in Settings.",
     );
   }
 
   let userApiKey: string;
   try {
-    userApiKey = decrypt(settings.googleApiKey);
+    userApiKey = decrypt(apiKeyField);
   } catch (error) {
     throw new Error(
       `Failed to decrypt API key: ${
@@ -134,7 +145,7 @@ export async function enhanceMCPToolsWithAI(
     );
 
     const batchResults = await Promise.all(
-      batch.map((tool) => enhanceSingleTool(tool, userApiKey)),
+      batch.map((tool) => enhanceSingleTool(tool, userApiKey, provider)),
     );
     enhanced.push(...batchResults);
   }

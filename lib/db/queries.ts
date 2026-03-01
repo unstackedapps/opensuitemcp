@@ -538,6 +538,7 @@ export async function upsertUserSettings({
   googleApiKey,
   anthropicApiKey,
   openaiApiKey,
+  inceptionApiKey,
   aiProvider,
   netsuiteAccountId,
   netsuiteClientId,
@@ -549,7 +550,8 @@ export async function upsertUserSettings({
   googleApiKey?: string | null;
   anthropicApiKey?: string | null;
   openaiApiKey?: string | null;
-  aiProvider?: "google" | "anthropic" | "openai" | null;
+  inceptionApiKey?: string | null;
+  aiProvider?: "google" | "anthropic" | "openai" | "inception" | null;
   netsuiteAccountId?: string | null;
   netsuiteClientId?: string | null;
   timezone?: string | null;
@@ -579,6 +581,10 @@ export async function upsertUserSettings({
               : existing.anthropicApiKey,
           openaiApiKey:
             openaiApiKey !== undefined ? openaiApiKey : existing.openaiApiKey,
+          inceptionApiKey:
+            inceptionApiKey !== undefined
+              ? inceptionApiKey
+              : existing.inceptionApiKey,
           aiProvider:
             aiProvider !== undefined ? aiProvider : existing.aiProvider,
           netsuiteAccountId:
@@ -614,6 +620,7 @@ export async function upsertUserSettings({
         googleApiKey: googleApiKey ?? null,
         anthropicApiKey: anthropicApiKey ?? null,
         openaiApiKey: openaiApiKey ?? null,
+        inceptionApiKey: inceptionApiKey ?? null,
         aiProvider: aiProvider ?? "google",
         netsuiteAccountId: netsuiteAccountId ?? null,
         netsuiteClientId: netsuiteClientId ?? null,
