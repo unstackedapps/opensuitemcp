@@ -279,7 +279,8 @@ async function fetchSettings() {
     aiProvider: (data.aiProvider || "google") as
       | "google"
       | "anthropic"
-      | "openai",
+      | "openai"
+      | "inception",
   };
 }
 

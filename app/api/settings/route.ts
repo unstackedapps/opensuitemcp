@@ -8,7 +8,11 @@ const settingsSchema = z.object({
   googleApiKey: z.string().optional().nullable(),
   anthropicApiKey: z.string().optional().nullable(),
   openaiApiKey: z.string().optional().nullable(),
-  aiProvider: z.enum(["google", "anthropic", "openai"]).optional().nullable(),
+  inceptionApiKey: z.string().optional().nullable(),
+  aiProvider: z
+    .enum(["google", "anthropic", "openai", "inception"])
+    .optional()
+    .nullable(),
   netsuiteAccountId: z.string().max(64).optional().nullable(),
   netsuiteClientId: z.string().max(128).optional().nullable(),
   timezone: z.string().max(64).optional().nullable(),
@@ -39,6 +43,7 @@ export async function GET() {
       hasGoogleKey: !!settings?.googleApiKey,
       hasAnthropicKey: !!settings?.anthropicApiKey,
       hasOpenAIKey: !!settings?.openaiApiKey,
+      hasInceptionKey: !!settings?.inceptionApiKey,
       aiProvider: settings?.aiProvider,
     });
 
@@ -47,6 +52,7 @@ export async function GET() {
         googleApiKey: null,
         anthropicApiKey: null,
         openaiApiKey: null,
+        inceptionApiKey: null,
         aiProvider: "google",
         netsuiteAccountId: null,
         netsuiteClientId: null,
@@ -105,11 +111,28 @@ export async function GET() {
       console.log("[Settings API] No OpenAI key in DB");
     }
 
+    let decryptedInceptionKey: string | null = null;
+    if (settings.inceptionApiKey) {
+      try {
+        decryptedInceptionKey = decrypt(settings.inceptionApiKey);
+        console.log("[Settings API] Successfully decrypted Inception key");
+      } catch (error) {
+        console.error(
+          "[Settings API] Error decrypting Inception API key on GET:",
+          error,
+        );
+        decryptedInceptionKey = null;
+      }
+    } else {
+      console.log("[Settings API] No Inception key in DB");
+    }
+
     // Ensure aiProvider is always a valid value
     const provider =
       settings.aiProvider === "google" ||
       settings.aiProvider === "anthropic" ||
-      settings.aiProvider === "openai"
+      settings.aiProvider === "openai" ||
+      settings.aiProvider === "inception"
         ? settings.aiProvider
         : "google";
 
@@ -117,6 +140,7 @@ export async function GET() {
       googleApiKey: decryptedGoogleKey,
       anthropicApiKey: decryptedAnthropicKey,
       openaiApiKey: decryptedOpenAIKey,
+      inceptionApiKey: decryptedInceptionKey,
       aiProvider: provider,
       netsuiteAccountId: settings.netsuiteAccountId,
       netsuiteClientId: settings.netsuiteClientId,
@@ -129,10 +153,12 @@ export async function GET() {
       hasGoogleKey: !!response.googleApiKey,
       hasAnthropicKey: !!response.anthropicApiKey,
       hasOpenAIKey: !!response.openaiApiKey,
+      hasInceptionKey: !!response.inceptionApiKey,
       aiProvider: response.aiProvider,
       googleKeyLength: response.googleApiKey?.length ?? 0,
       anthropicKeyLength: response.anthropicApiKey?.length ?? 0,
       openaiKeyLength: response.openaiApiKey?.length ?? 0,
+      inceptionKeyLength: response.inceptionApiKey?.length ?? 0,
     });
 
     return NextResponse.json(response);
@@ -234,11 +260,39 @@ export async function POST(request: Request) {
       encryptedOpenAIKey = existing.openaiApiKey;
     }
 
+    // Encrypt Inception API key if provided
+    let encryptedInceptionKey: string | null | undefined;
+    if (validated.inceptionApiKey !== undefined) {
+      const trimmedKey = validated.inceptionApiKey?.trim();
+      if (trimmedKey) {
+        try {
+          encryptedInceptionKey = encrypt(trimmedKey);
+        } catch (error) {
+          console.error(
+            "[Settings] Error encrypting Inception API key:",
+            error,
+          );
+          return NextResponse.json(
+            {
+              error:
+                "Failed to encrypt Inception API key. Please check ENCRYPTION_KEY environment variable.",
+            },
+            { status: 500 },
+          );
+        }
+      } else {
+        encryptedInceptionKey = null;
+      }
+    } else if (existing?.inceptionApiKey) {
+      encryptedInceptionKey = existing.inceptionApiKey;
+    }
+
     await upsertUserSettings({
       userId: session.user.id,
       googleApiKey: encryptedGoogleKey,
       anthropicApiKey: encryptedAnthropicKey,
       openaiApiKey: encryptedOpenAIKey,
+      inceptionApiKey: encryptedInceptionKey,
       aiProvider: validated.aiProvider,
       netsuiteAccountId: validated.netsuiteAccountId,
       netsuiteClientId: validated.netsuiteClientId,

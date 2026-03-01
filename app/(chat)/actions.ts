@@ -43,7 +43,7 @@ export async function generateTitleFromUserMessage({
 }: {
   message: UIMessage;
   apiKey?: string | null;
-  provider?: "google" | "anthropic" | "openai";
+  provider?: "google" | "anthropic" | "openai" | "inception";
 }): Promise<{ title: string; summary: string | null }> {
   const text = getTextFromMessage(message);
 

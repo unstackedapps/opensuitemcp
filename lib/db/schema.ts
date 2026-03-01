@@ -115,9 +115,10 @@ export const userSettings = pgTable("UserSettings", {
   googleApiKey: text("googleApiKey"), // Encrypted
   anthropicApiKey: text("anthropicApiKey"), // Encrypted
   openaiApiKey: text("openaiApiKey"), // Encrypted
+  inceptionApiKey: text("inceptionApiKey"), // Encrypted
   aiProvider: varchar("aiProvider", {
     length: 20,
-    enum: ["google", "anthropic", "openai"],
+    enum: ["google", "anthropic", "openai", "inception"],
   }).default("google"),
   netsuiteAccountId: varchar("netsuiteAccountId", { length: 64 }),
   netsuiteClientId: varchar("netsuiteClientId", { length: 128 }),

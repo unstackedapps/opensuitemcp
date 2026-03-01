@@ -70,16 +70,19 @@ async function fetchSettings() {
       hasGoogleKey: !!data.googleApiKey,
       hasAnthropicKey: !!data.anthropicApiKey,
       hasOpenAIKey: !!data.openaiApiKey,
+      hasInceptionKey: !!data.inceptionApiKey,
       aiProvider: data.aiProvider,
       googleKeyLength: data.googleApiKey?.length ?? 0,
       anthropicKeyLength: data.anthropicApiKey?.length ?? 0,
       openaiKeyLength: data.openaiApiKey?.length ?? 0,
+      inceptionKeyLength: data.inceptionApiKey?.length ?? 0,
     });
     return data as {
       googleApiKey: string | null;
       anthropicApiKey: string | null;
       openaiApiKey: string | null;
-      aiProvider: "google" | "anthropic" | "openai";
+      inceptionApiKey: string | null;
+      aiProvider: "google" | "anthropic" | "openai" | "inception";
       netsuiteAccountId: string | null;
       netsuiteClientId: string | null;
       timezone: string;
@@ -203,6 +206,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const googleApiKeyId = useId();
   const anthropicApiKeyId = useId();
   const openaiApiKeyId = useId();
+  const inceptionApiKeyId = useId();
   const netsuiteAccountIdInputId = useId();
   const netsuiteClientIdInputId = useId();
   const timezoneId = useId();
@@ -237,12 +241,14 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const [googleApiKey, setGoogleApiKey] = useState("");
   const [anthropicApiKey, setAnthropicApiKey] = useState("");
   const [openaiApiKey, setOpenaiApiKey] = useState("");
+  const [inceptionApiKey, setInceptionApiKey] = useState("");
   const [aiProvider, setAiProvider] = useState<
-    "google" | "anthropic" | "openai"
+    "google" | "anthropic" | "openai" | "inception"
   >("google");
   const [showGoogleApiKey, setShowGoogleApiKey] = useState(false);
   const [showAnthropicApiKey, setShowAnthropicApiKey] = useState(false);
   const [showOpenaiApiKey, setShowOpenaiApiKey] = useState(false);
+  const [showInceptionApiKey, setShowInceptionApiKey] = useState(false);
   const [netsuiteAccountId, setNetsuiteAccountId] = useState("");
   const [showAccountId, setShowAccountId] = useState(false);
   const [netsuiteClientId, setNetsuiteClientId] = useState("");
@@ -309,11 +315,13 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
       setGoogleApiKey(settings.googleApiKey ?? "");
       setAnthropicApiKey(settings.anthropicApiKey ?? "");
       setOpenaiApiKey(settings.openaiApiKey ?? "");
+      setInceptionApiKey(settings.inceptionApiKey ?? "");
       // Ensure aiProvider is set correctly - it should always be one of the valid values
       const provider =
         settings.aiProvider === "google" ||
         settings.aiProvider === "anthropic" ||
-        settings.aiProvider === "openai"
+        settings.aiProvider === "openai" ||
+        settings.aiProvider === "inception"
           ? settings.aiProvider
           : "google";
       setAiProvider(provider);
@@ -348,6 +356,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
         googleApiKey: googleApiKey?.trim() || null,
         anthropicApiKey: anthropicApiKey?.trim() || null,
         openaiApiKey: openaiApiKey?.trim() || null,
+        inceptionApiKey: inceptionApiKey?.trim() || null,
         aiProvider: aiProvider,
         netsuiteAccountId: netsuiteAccountId?.trim() || null,
         netsuiteClientId: netsuiteClientId?.trim() || null,
@@ -545,7 +554,11 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                           key={`provider-${aiProvider}`} // Force re-render when aiProvider changes
                           value={aiProvider}
                           onValueChange={(
-                            value: "google" | "anthropic" | "openai",
+                            value:
+                              | "google"
+                              | "anthropic"
+                              | "openai"
+                              | "inception",
                           ) => {
                             setAiProvider(value);
                           }}
@@ -561,6 +574,9 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                               Anthropic (Claude)
                             </SelectItem>
                             <SelectItem value="openai">OpenAI (GPT)</SelectItem>
+                            <SelectItem value="inception">
+                              Inception Labs (Mercury)
+                            </SelectItem>
                           </SelectContent>
                         </Select>
                         <p className="text-muted-foreground text-xs">
@@ -568,7 +584,9 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                             ? "Using Gemini models (2.5 Flash for speed, 2.5 Pro for reasoning)"
                             : aiProvider === "anthropic"
                               ? "Using Claude models (4.5 Haiku for speed, Sonnet 4 for reasoning)"
-                              : "Using OpenAI models (GPT-5 Mini for speed, O4 Mini for reasoning)"}
+                              : aiProvider === "openai"
+                                ? "Using OpenAI models (GPT-5 Mini for speed, O4 Mini for reasoning)"
+                                : "Using Inception Labs Mercury 2 for both speed and reasoning"}
                         </p>
                       </>
                     )}
@@ -761,6 +779,63 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                             variant="ghost"
                           >
                             {showOpenaiApiKey ? (
+                              <EyeOffIcon size={16} />
+                            ) : (
+                              <EyeIcon size={16} />
+                            )}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Inception API Key Input - Only shown when Inception is selected */}
+                  {aiProvider === "inception" && (
+                    <div className="space-y-2">
+                      <Label htmlFor={inceptionApiKeyId}>
+                        Inception API Key
+                      </Label>
+                      <p className="text-muted-foreground text-xs">
+                        To get an Inception Labs API key, visit{" "}
+                        <a
+                          className="text-primary underline hover:no-underline"
+                          href="https://platform.inceptionlabs.ai/dashboard/api-keys"
+                          rel="noopener noreferrer"
+                          target="_blank"
+                        >
+                          platform.inceptionlabs.ai/dashboard/api-keys
+                        </a>
+                        .
+                      </p>
+                      {showSkeletons ? (
+                        <div className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 flex items-center">
+                          <Skeleton className="h-4 w-full" />
+                        </div>
+                      ) : (
+                        <div className="relative">
+                          <Input
+                            autoComplete="off"
+                            className="pr-10"
+                            data-1p-ignore="true"
+                            data-form-type="other"
+                            data-lpignore="true"
+                            id={inceptionApiKeyId}
+                            name="inception-api-key"
+                            onChange={(e) => setInceptionApiKey(e.target.value)}
+                            placeholder="Enter your Inception API key"
+                            type={showInceptionApiKey ? "text" : "password"}
+                            value={inceptionApiKey}
+                          />
+                          <Button
+                            className="absolute top-0 right-0 h-full px-3 hover:bg-transparent"
+                            onClick={() =>
+                              setShowInceptionApiKey(!showInceptionApiKey)
+                            }
+                            size="icon"
+                            type="button"
+                            variant="ghost"
+                          >
+                            {showInceptionApiKey ? (
                               <EyeOffIcon size={16} />
                             ) : (
                               <EyeIcon size={16} />

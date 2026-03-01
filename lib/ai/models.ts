@@ -4,7 +4,7 @@ export type ChatModel = {
   id: string;
   name: string;
   description: string;
-  provider?: "google" | "anthropic" | "openai";
+  provider?: "google" | "anthropic" | "openai" | "inception";
 };
 
 export const chatModels: ChatModel[] = [
@@ -49,5 +49,19 @@ export const chatModels: ChatModel[] = [
     description:
       "Advanced reasoning model for complex agent tasks, chained tool calls, and structured data analysis. Uses OpenAI's o4 reasoning architecture.",
     provider: "openai",
+  },
+  {
+    id: "chat-model",
+    name: "Mercury 2 (Speed Mode)",
+    description:
+      "Ultra-fast responses with strong general reasoning. Uses Inception Labs Mercury 2.",
+    provider: "inception",
+  },
+  {
+    id: "chat-model-reasoning",
+    name: "Mercury 2 (Enhanced Reasoning)",
+    description:
+      "Mercury 2 tuned for deeper multi-step reasoning and tool usage. Uses Inception Labs Mercury 2.",
+    provider: "inception",
   },
 ];
