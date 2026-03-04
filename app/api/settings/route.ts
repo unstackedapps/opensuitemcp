@@ -27,6 +27,7 @@ const settingsSchema = z.object({
     })
     .optional()
     .nullable(),
+  customInstructions: z.string().max(32_000).optional().nullable(),
 });
 
 export async function GET() {
@@ -59,6 +60,7 @@ export async function GET() {
         timezone: "UTC",
         searchDomainIds: [],
         maxIterations: "10",
+        customInstructions: null,
       });
     }
 
@@ -147,6 +149,7 @@ export async function GET() {
       timezone: settings.timezone ?? "UTC",
       searchDomainIds: settings.searchDomainIds ?? [],
       maxIterations: settings.maxIterations ?? "10",
+      customInstructions: settings.customInstructions ?? null,
     };
 
     console.log("[Settings API] Sending response:", {
@@ -302,6 +305,7 @@ export async function POST(request: Request) {
           ? (validated.searchDomainIds ?? [])
           : undefined,
       maxIterations: validated.maxIterations,
+      customInstructions: validated.customInstructions,
     });
 
     return NextResponse.json({

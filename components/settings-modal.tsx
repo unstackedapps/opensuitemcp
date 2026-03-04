@@ -9,6 +9,7 @@ import {
   CloudIcon,
   EyeIcon,
   EyeOffIcon,
+  FileIcon,
   GlobeIcon,
   LoaderIcon,
   SparklesIcon,
@@ -41,6 +42,7 @@ import {
 } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 // Tabs removed - consolidated into single pane
 import { getSearchDomainUrl, searchDomains } from "@/lib/ai/search-domains";
 import { guestRegex } from "@/lib/constants";
@@ -88,6 +90,7 @@ async function fetchSettings() {
       timezone: string;
       searchDomainIds: string[];
       maxIterations: string;
+      customInstructions: string | null;
     };
   } catch (error) {
     console.error("[Settings] Error in fetchSettings:", error);
@@ -260,6 +263,9 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const [searchDomainIds, setSearchDomainIds] = useState<string[]>([]);
   const [maxIterations, setMaxIterations] = useState("10");
   const maxIterationsId = useId();
+  const [customInstructions, setCustomInstructions] = useState("");
+  const customInstructionsFileInputId = useId();
+  const customInstructionsTextareaId = useId();
   const [isConnectingNetSuite, setIsConnectingNetSuite] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const initializedForThisOpenRef = useRef(false);
@@ -330,6 +336,10 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
       setTimezone(settings.timezone ?? "UTC");
       setSearchDomainIds(settings.searchDomainIds ?? []);
       setMaxIterations(settings.maxIterations ?? "10");
+      setCustomInstructions(
+        (settings as { customInstructions?: string | null })
+          ?.customInstructions ?? "",
+      );
       initializedForThisOpenRef.current = true;
     } else {
       console.warn("[Settings] Settings object invalid:", settings);
@@ -363,6 +373,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
         timezone: timezone?.trim() || "UTC",
         searchDomainIds: effectiveSearchDomainIds,
         maxIterations: maxIterations?.trim() || "10",
+        customInstructions: customInstructions?.trim() || null,
       };
 
       const response = await fetch("/api/settings", {
@@ -1068,6 +1079,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         <div
                           className={cn(
                             "flex",
+                            "shrink-0",
                             "items-center",
                             "justify-center",
                             "rounded-md",
@@ -1139,6 +1151,111 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                             </div>
                           );
                         })}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Custom Instructions */}
+                <Card className="bg-background shadow-none">
+                  <CardHeader className="py-6">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3">
+                        <div
+                          className={cn(
+                            "flex",
+                            "shrink-0",
+                            "items-center",
+                            "justify-center",
+                            "rounded-md",
+                            "bg-muted",
+                            "text-primary",
+                            "size-10",
+                            "mt-0.5",
+                          )}
+                        >
+                          <FileIcon size={20} />
+                        </div>
+                        <div>
+                          <CardTitle className="text-base">
+                            Custom Instructions
+                          </CardTitle>
+                          <p className="text-muted-foreground text-sm">
+                            Add your own instructions (e.g. from{" "}
+                            <code className="rounded bg-muted px-1 py-0.5 text-xs">
+                              instructions.md
+                            </code>
+                            ) to tailor how Ava responds. These are appended to
+                            the system prompt as additional user instructions.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    {showSkeletons ? (
+                      <Skeleton className="h-32 w-full" />
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Label
+                            className="sr-only"
+                            htmlFor={customInstructionsFileInputId}
+                          >
+                            Import instructions.md file
+                          </Label>
+                          <Input
+                            accept=".md"
+                            aria-label="Import instructions.md file"
+                            className="hidden"
+                            id={customInstructionsFileInputId}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              const reader = new FileReader();
+                              reader.onload = () => {
+                                const text = reader.result;
+                                if (typeof text === "string") {
+                                  setCustomInstructions(text);
+                                  toast({
+                                    type: "success",
+                                    description: `Imported ${file.name}`,
+                                  });
+                                }
+                              };
+                              reader.readAsText(file, "UTF-8");
+                              e.target.value = "";
+                            }}
+                            type="file"
+                          />
+                          <Button
+                            onClick={() =>
+                              document
+                                .getElementById(customInstructionsFileInputId)
+                                ?.click()
+                            }
+                            type="button"
+                            variant="outline"
+                          >
+                            Import instructions.md
+                          </Button>
+                        </div>
+                        <Label
+                          className="sr-only"
+                          htmlFor={customInstructionsTextareaId}
+                        >
+                          Custom instructions content
+                        </Label>
+                        <Textarea
+                          aria-label="Custom instructions content"
+                          className="min-h-[120px] font-mono text-sm"
+                          id={customInstructionsTextareaId}
+                          onChange={(e) =>
+                            setCustomInstructions(e.target.value)
+                          }
+                          placeholder="Paste or import your custom instructions (Markdown supported)..."
+                          value={customInstructions}
+                        />
                       </div>
                     )}
                   </CardContent>

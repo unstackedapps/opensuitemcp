@@ -274,6 +274,7 @@ export const RouteIcon = ({ size = 16 }: { size?: number }) => {
 export const FileIcon = ({ size = 16 }: { size?: number }) => {
   return (
     <svg
+      data-testid="geist-icon"
       height={size}
       strokeLinejoin="round"
       style={{ color: "currentcolor" }}
