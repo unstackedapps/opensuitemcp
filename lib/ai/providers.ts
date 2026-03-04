@@ -1,9 +1,9 @@
 import { anthropic, createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogleGenerativeAI, google } from "@ai-sdk/google";
 import { createOpenAI, openai } from "@ai-sdk/openai";
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { customProvider } from "ai";
 import { isTestEnvironment } from "../constants";
+import { createInceptionProvider } from "./custom-providers/inception";
 
 function createGoogleProvider(apiKey?: string) {
   // Create a custom Google provider instance with the API key if provided
@@ -101,49 +101,6 @@ function createOpenAIProvider(apiKey?: string) {
       // Model for generating chat titles (using GPT-5-mini for fast title generation)
       // Uses responses API for v3 model support
       "title-model": openaiProvider("gpt-5-mini") as never,
-    },
-  });
-}
-
-function createInceptionProvider(apiKey?: string) {
-  // Inception Labs is OpenAI-compatible and uses chat completions
-  const inceptionProvider = createOpenAICompatible({
-    apiKey,
-    baseURL: "https://api.inceptionlabs.ai/v1",
-    includeUsage: true,
-    transformRequestBody: (body) => {
-      const providerOptions = body?.providerOptions?.inception as
-        | {
-            reasoningEffort?: string;
-            reasoning_effort?: string;
-          }
-        | undefined;
-      const reasoningEffort =
-        providerOptions?.reasoningEffort ?? providerOptions?.reasoning_effort;
-      return reasoningEffort && !body.reasoning_effort
-        ? { ...body, reasoning_effort: reasoningEffort }
-        : body;
-    },
-    name: "inception",
-  });
-
-  if (apiKey) {
-    console.log(
-      "[Provider] Creating Inception provider with API key, length:",
-      apiKey.length,
-    );
-  } else {
-    console.log(
-      "[Provider] Creating Inception provider without API key (using env var)",
-    );
-  }
-
-  return customProvider({
-    languageModels: {
-      // Mercury 2 is used for both speed and reasoning
-      "chat-model": inceptionProvider.chatModel("mercury-2") as never,
-      "chat-model-reasoning": inceptionProvider.chatModel("mercury-2") as never,
-      "title-model": inceptionProvider.chatModel("mercury-2") as never,
     },
   });
 }

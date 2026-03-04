@@ -9,7 +9,58 @@ import type { Vote } from "@/lib/db/schema";
 import type { ChatMessage } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Greeting } from "./greeting";
-import { PreviewMessage, ThinkingMessage } from "./message";
+import { DiffusionMessage, PreviewMessage, ThinkingMessage } from "./message";
+
+const TOOL_TYPE_LABELS: Record<string, string> = {
+  "tool-searchNetsuiteDocs": "Search NetSuite Docs",
+  "tool-searchTimDietrich": "Search Tim Dietrich",
+  "tool-searchFolio3": "Search Folio3",
+  "tool-readWebpage": "Read Webpage",
+  "tool-getCurrentConfig": "Get Current Config",
+};
+
+function getDiffusionPlaceholder(message: ChatMessage): string {
+  const parts = message.parts ?? [];
+  const inProgressStates = ["input-streaming", "input-available"] as const;
+
+  for (const part of parts) {
+    const partWithState = part as { type?: string; state?: string };
+    if (
+      partWithState.type?.startsWith("tool-") &&
+      inProgressStates.includes(
+        partWithState.state as (typeof inProgressStates)[number],
+      )
+    ) {
+      const label =
+        TOOL_TYPE_LABELS[partWithState.type] ??
+        partWithState.type
+          .replace(/^tool-/, "")
+          .replace(/([A-Z])/g, " $1")
+          .trim()
+          .replace(/^./, (c) => c.toUpperCase());
+      return `Running ${label}…`;
+    }
+  }
+
+  const hasCompletedTools = parts.some(
+    (p) =>
+      (p as { type?: string; state?: string }).type?.startsWith("tool-") &&
+      (p as { type?: string; state?: string }).state === "output-available",
+  );
+  if (hasCompletedTools) {
+    return "Processing tool results…";
+  }
+
+  const hasReasoning = parts.some(
+    (p) => (p as { type?: string }).type === "reasoning",
+  );
+  if (hasReasoning) {
+    return "Reasoning…";
+  }
+
+  return "Mercury is thinking, diffusion will begin soon…";
+}
+
 import {
   Conversation,
   ConversationContent,
@@ -17,6 +68,9 @@ import {
 
 type MessagesProps = {
   chatId: string;
+  diffusionActive?: boolean;
+  diffusionText?: string;
+  onDiffusionComplete?: (duration: number) => void;
   status: UseChatHelpers<ChatMessage>["status"];
   votes: Vote[] | undefined;
   messages: ChatMessage[];
@@ -29,6 +83,9 @@ type MessagesProps = {
 
 function PureMessages({
   chatId,
+  diffusionActive,
+  diffusionText,
+  onDiffusionComplete,
   status,
   votes,
   messages,
@@ -38,6 +95,8 @@ function PureMessages({
   selectedModelId: _selectedModelId,
   inputComponent,
 }: MessagesProps) {
+  const hasDiffusion = Boolean(diffusionActive);
+  const hasDiffusionText = Boolean(diffusionText?.trim().length);
   const {
     containerRef: messagesContainerRef,
     endRef: messagesEndRef,
@@ -160,24 +219,55 @@ function PureMessages({
         >
           {messages.length === 0 && <Greeting>{inputComponent}</Greeting>}
 
-          {messages.map((message, index) => (
-            <PreviewMessage
-              chatId={chatId}
-              isLoading={
-                status === "streaming" && messages.length - 1 === index
-              }
-              isReadonly={isReadonly}
-              key={message.id}
-              message={message}
-              regenerate={regenerate}
-              setMessages={setMessages}
-              vote={
-                votes
-                  ? votes.find((vote) => vote.messageId === message.id)
-                  : undefined
-              }
-            />
-          ))}
+          {messages.map((message, index) => {
+            const isLastMessage = index === messages.length - 1;
+            const isLastAssistant =
+              isLastMessage && message.role === "assistant";
+            const hideWhileDiffusing =
+              hasDiffusion &&
+              (status === "streaming" || status === "submitted") &&
+              isLastMessage &&
+              message.role === "assistant";
+
+            const wrapperClassName =
+              hasDiffusion && isLastAssistant
+                ? "flex flex-col gap-2"
+                : undefined;
+
+            return (
+              <div className={wrapperClassName} key={message.id}>
+                {hasDiffusion && isLastAssistant && (
+                  <DiffusionMessage
+                    isStreaming={
+                      status === "streaming" || status === "submitted"
+                    }
+                    timerActive={hasDiffusionText}
+                    onCompleted={onDiffusionComplete}
+                    open={status === "streaming" || status === "submitted"}
+                    placeholder={getDiffusionPlaceholder(message)}
+                    text={diffusionText}
+                  />
+                )}
+                {!hideWhileDiffusing && (
+                  <PreviewMessage
+                    chatId={chatId}
+                    isLoading={
+                      status === "streaming" && messages.length - 1 === index
+                    }
+                    isReadonly={isReadonly}
+                    message={message}
+                    regenerate={regenerate}
+                    setMessages={setMessages}
+                    vote={
+                      votes
+                        ? votes.find((vote) => vote.messageId === message.id)
+                        : undefined
+                    }
+                  />
+                )}
+              </div>
+            );
+          })}
 
           <div
             className="min-h-[24px] min-w-[24px] shrink-0"
@@ -224,22 +314,34 @@ function PureMessages({
   );
 }
 
-export const Messages = memo(PureMessages, (prevProps, nextProps) => {
-  if (prevProps.status !== nextProps.status) {
-    return false;
-  }
-  if (prevProps.selectedModelId !== nextProps.selectedModelId) {
-    return false;
-  }
-  if (prevProps.messages.length !== nextProps.messages.length) {
-    return false;
-  }
-  if (!equal(prevProps.messages, nextProps.messages)) {
-    return false;
-  }
-  if (!equal(prevProps.votes, nextProps.votes)) {
-    return false;
-  }
+export const Messages = memo<MessagesProps>(
+  PureMessages,
+  (prevProps, nextProps) => {
+    if (prevProps.status !== nextProps.status) {
+      return false;
+    }
+    if (prevProps.selectedModelId !== nextProps.selectedModelId) {
+      return false;
+    }
+    if (prevProps.messages.length !== nextProps.messages.length) {
+      return false;
+    }
+    if (!equal(prevProps.messages, nextProps.messages)) {
+      return false;
+    }
+    if (!equal(prevProps.votes, nextProps.votes)) {
+      return false;
+    }
+    if (prevProps.diffusionActive !== nextProps.diffusionActive) {
+      return false;
+    }
+    if (prevProps.diffusionText !== nextProps.diffusionText) {
+      return false;
+    }
+    if (prevProps.onDiffusionComplete !== nextProps.onDiffusionComplete) {
+      return false;
+    }
 
-  return false;
-});
+    return false;
+  },
+);

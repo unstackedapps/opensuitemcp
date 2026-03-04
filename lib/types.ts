@@ -37,6 +37,7 @@ export type ChatTools = {
 
 export type CustomUIDataTypes = {
   appendMessage: string;
+  diffusion: { text: string };
   usage: AppUsage;
 };
 

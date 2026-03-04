@@ -15,6 +15,7 @@ import { getUsage } from "tokenlens/helpers";
 import { auth, type UserType } from "@/app/(auth)/auth";
 import { generateTitleFromUserMessage } from "@/app/(chat)/actions";
 import type { VisibilityType } from "@/components/visibility-selector";
+import { extractDiffusionContent } from "@/lib/ai/custom-providers/inception";
 import { entitlementsByUserType } from "@/lib/ai/entitlements";
 import type { ChatModel } from "@/lib/ai/models";
 import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
@@ -48,6 +49,41 @@ import { convertToUIMessages, generateUUID } from "@/lib/utils";
 import { type PostRequestBody, postRequestBodySchema } from "./schema";
 
 export const maxDuration = 60;
+
+const isInceptionReasoningModel = (
+  provider: string,
+  modelId: string,
+): boolean => provider === "inception" && modelId === "chat-model-reasoning";
+
+function injectDiffusionIntoLastAssistantMessage<
+  T extends { role: string; parts?: Array<{ type?: string }> },
+>(messages: T[], lastDiffusionText: string): T[] {
+  return messages.map((currentMessage, index) => {
+    const isLastMessage = index === messages.length - 1;
+    const isAssistant = currentMessage.role === "assistant";
+    if (!isLastMessage || !isAssistant) {
+      return currentMessage;
+    }
+
+    const hasDiffusionPart = currentMessage.parts?.some(
+      (part) => part.type === "diffusion",
+    );
+    const nonTextParts =
+      currentMessage.parts?.filter((part) => part.type !== "text") ?? [];
+    const diffusionParts = hasDiffusionPart
+      ? []
+      : [{ type: "diffusion", text: lastDiffusionText }];
+
+    return {
+      ...currentMessage,
+      parts: [
+        ...diffusionParts,
+        ...nonTextParts,
+        { type: "text", text: lastDiffusionText },
+      ],
+    } as T;
+  });
+}
 
 const getTokenlensCatalog = cache(
   async (): Promise<ModelCatalog | undefined> => {
@@ -188,6 +224,7 @@ export async function POST(request: Request) {
     let finalMergedUsage: AppUsage | undefined;
     let hasErrorOccurred: boolean = false;
 
+    let lastDiffusionText: string | undefined;
     const stream = createUIMessageStream({
       execute: async ({ writer: dataStream }) => {
         try {
@@ -432,7 +469,6 @@ export async function POST(request: Request) {
             maxIterationsReached: false,
           });
 
-          // Log model and provider info before calling streamText
           console.log("[Chat] Starting streamText:", {
             provider: userProviderType,
             modelId,
@@ -445,6 +481,12 @@ export async function POST(request: Request) {
           try {
             // AI SDK 6: convertToModelMessages is now async
             const modelMessages = await convertToModelMessages(uiMessages);
+            if (isInceptionReasoningModel(userProviderType, modelId)) {
+              dataStream.write({
+                type: "data-diffusion",
+                data: { text: "" },
+              });
+            }
             result = streamText({
               model: languageModel,
               system: systemPromptText,
@@ -452,6 +494,10 @@ export async function POST(request: Request) {
               stopWhen: stepCountIs(userMaxIterations),
               experimental_activeTools: activeTools as never,
               experimental_transform: smoothStream({ chunking: "word" }),
+              includeRawChunks: isInceptionReasoningModel(
+                userProviderType,
+                modelId,
+              ),
               tools: allToolsWithConfig,
               // Apply reasoning/thinking config based on provider
               // Both use similar token budgets (4K) for thinking/reasoning
@@ -493,8 +539,10 @@ export async function POST(request: Request) {
                             providerOptions: {
                               // Inception Labs reasoning configuration for Mercury 2
                               inception: {
+                                diffusing: true,
                                 reasoningEffort: "high",
                                 reasoning_summary: true,
+                                // false = stream diffusion/reasoning as it’s produced; true = wait until complete (adds latency)
                                 reasoning_summary_wait: false,
                               },
                             },
@@ -504,7 +552,59 @@ export async function POST(request: Request) {
                 isEnabled: isProductionEnvironment,
                 functionId: "stream-text",
               },
+              onChunk: isInceptionReasoningModel(userProviderType, modelId)
+                ? ({ chunk }) => {
+                    if (chunk.type !== "raw") {
+                      return;
+                    }
+
+                    const nextDiffusionText = extractDiffusionContent(
+                      chunk.rawValue,
+                    );
+                    if (!nextDiffusionText) {
+                      return;
+                    }
+
+                    lastDiffusionText = nextDiffusionText;
+                    dataStream.write({
+                      type: "data-diffusion",
+                      data: { text: nextDiffusionText },
+                    });
+                  }
+                : undefined,
               onFinish: async ({ usage, steps }) => {
+                const lastStep = steps?.at(-1);
+                const inceptionReasoningSummary = isInceptionReasoningModel(
+                  userProviderType,
+                  modelId,
+                )
+                  ? (
+                      lastStep?.providerMetadata as
+                        | {
+                            inception?: { reasoningSummary?: string };
+                          }
+                        | undefined
+                    )?.inception?.reasoningSummary
+                  : undefined;
+                const hasReasoning = Boolean(lastStep?.reasoningText);
+
+                if (inceptionReasoningSummary && !hasReasoning) {
+                  const reasoningId = generateUUID();
+                  dataStream.write({
+                    type: "reasoning-start",
+                    id: reasoningId,
+                  });
+                  dataStream.write({
+                    type: "reasoning-delta",
+                    id: reasoningId,
+                    delta: inceptionReasoningSummary,
+                  });
+                  dataStream.write({
+                    type: "reasoning-end",
+                    id: reasoningId,
+                  });
+                }
+
                 // Check if we hit the max iterations limit (exactly equals, not >=)
                 const stepCount = steps?.length ?? 0;
                 console.log(
@@ -585,7 +685,8 @@ export async function POST(request: Request) {
             userProviderType === "google" ||
             userProviderType === "anthropic" ||
             (userProviderType === "openai" &&
-              modelId === "chat-model-reasoning");
+              modelId === "chat-model-reasoning") ||
+            isInceptionReasoningModel(userProviderType, modelId);
 
           // Merge the UI message stream directly - max steps detection happens in onFinish callback
           dataStream.merge(
@@ -608,8 +709,12 @@ export async function POST(request: Request) {
           return;
         }
 
+        const messagesWithDiffusion = lastDiffusionText?.trim().length
+          ? injectDiffusionIntoLastAssistantMessage(messages, lastDiffusionText)
+          : messages;
+
         // Filter out empty messages (messages with no parts or empty text parts)
-        const validMessages = messages
+        const validMessages = messagesWithDiffusion
           .filter((currentMessage) => {
             // Check if message has parts
             if (!currentMessage.parts || currentMessage.parts.length === 0) {
