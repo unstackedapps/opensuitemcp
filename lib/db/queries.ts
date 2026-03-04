@@ -545,6 +545,7 @@ export async function upsertUserSettings({
   timezone,
   searchDomainIds,
   maxIterations,
+  customInstructions,
 }: {
   userId: string;
   googleApiKey?: string | null;
@@ -557,6 +558,7 @@ export async function upsertUserSettings({
   timezone?: string | null;
   searchDomainIds?: string[] | null;
   maxIterations?: string | null;
+  customInstructions?: string | null;
 }): Promise<UserSettings> {
   try {
     const now = new Date();
@@ -604,6 +606,10 @@ export async function upsertUserSettings({
             maxIterations !== undefined
               ? maxIterations
               : (existing.maxIterations ?? "10"),
+          customInstructions:
+            customInstructions !== undefined
+              ? customInstructions
+              : existing.customInstructions,
           updatedAt: now,
         })
         .where(eq(userSettings.userId, userId))
@@ -627,6 +633,7 @@ export async function upsertUserSettings({
         timezone: timezone ?? "UTC",
         searchDomainIds: searchDomainIds ?? [],
         maxIterations: maxIterations ?? "10",
+        customInstructions: customInstructions ?? null,
         createdAt: now,
         updatedAt: now,
       })

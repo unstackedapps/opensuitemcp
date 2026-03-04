@@ -5,6 +5,42 @@ All notable changes to OpenSuiteMCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0] - 2026-03-04
+
+### ✨ Added
+
+- **Custom Instructions (instructions.md)**
+  - Settings → Custom Instructions: import an `instructions.md` file or paste content to add user-specific directives
+  - Custom instructions are appended to the system prompt as "Additional User Instructions"
+  - Protected core directives (tool completion, no fabrication, orchestration rules, Ava identity) cannot be overridden by user instructions
+
+- **System prompt enhancements**
+  - Refactored prompts for clearer identity, response rules, search triage, and tool orchestration
+  - Intent-based search triage (by user need) instead of fixed priority
+  - Step budget clarified: "Do not stop early unless the objective is satisfied" to reduce artificial tool usage
+  - Search scaling: prefer 1–2 targeted searches; additional searches only when they address clearly distinct sub-topics and stay within the step budget
+  - Fiscal/quarter-based queries: explicit guidance to derive period from provided date/time
+
+- **Robust tool orchestration**
+  - Resolution model (Fully Resolved, Partially Resolved, Blocked) with clearer decision sequencing
+  - MCP rules: max 3 consecutive calls before alternating with search; alternating resets the count
+  - Completion condition: stop only when objective satisfied, NetSuite operation completes, or system ends turn
+  - Protected directives block user instructions from overriding safety and orchestration rules
+
+### 🐛 Fixed
+
+- **Migrations (inceptionApiKey)**
+  - 2.4.0 added `inceptionApiKey` to the schema and journal but the migration file was never committed
+  - 2.5.0 did not address this; users on 2.4.0/2.5.0 could encounter "column already exists" or missing-column errors
+  - Migration `0006_illegal_sunfire` adds `inceptionApiKey` and `customInstructions` with `IF NOT EXISTS` for reliable fresh installs and upgrades
+
+### 🧰 Technical
+
+- New `customInstructions` column in UserSettings for user-provided prompt additions
+- `PROTECTED_DIRECTIVES` in prompts.ts enforces non-overridable core rules when custom instructions are present
+
+---
+
 ## [2.5.0] - 2026-03-03
 
 ### ✨ Added
@@ -375,6 +411,7 @@ First stable release of OpenSuiteMCP - an open source, production-ready NetSuite
 
 ---
 
+[2.6.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v2.6.0
 [2.5.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v2.5.0
 [2.4.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v2.4.0
 [2.3.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v2.3.0

@@ -128,6 +128,7 @@ export const userSettings = pgTable("UserSettings", {
     .notNull()
     .default(sql`'[]'::jsonb`),
   maxIterations: text("maxIterations").default("10"), // Max reasoning steps (1-20)
+  customInstructions: text("customInstructions"),
   createdAt: timestamp("createdAt").notNull(),
   updatedAt: timestamp("updatedAt").notNull(),
 });

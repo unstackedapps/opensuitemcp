@@ -238,6 +238,7 @@ export async function POST(request: Request) {
           let userTimezone = "UTC";
           let userMaxIterations = 10; // Default to 10
           let selectedSearchDomainIds: string[] = [];
+          let customInstructions: string | null = null;
           if (session.user?.id) {
             try {
               const settings = await getUserSettings({
@@ -305,6 +306,9 @@ export async function POST(request: Request) {
                 }
                 userTimezone = settings.timezone ?? "UTC";
                 selectedSearchDomainIds = settings.searchDomainIds ?? [];
+                if (settings.customInstructions?.trim()) {
+                  customInstructions = settings.customInstructions;
+                }
               } else {
                 console.log(
                   "[Settings] No settings found for user:",
@@ -420,6 +424,8 @@ export async function POST(request: Request) {
             netsuiteTools: netsuiteToolNames,
             timezone: userTimezone,
             enabledSearchToolNames: Object.keys(searchTools),
+            maxSteps: userMaxIterations,
+            additionalInstructions: customInstructions,
           });
           console.log(
             `[NetSuite] System prompt includes ${netsuiteToolNames.length} NetSuite tools`,
