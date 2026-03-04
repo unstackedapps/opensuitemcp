@@ -42,11 +42,14 @@ const useReasoning = () => {
 
 export type ReasoningProps = ComponentProps<typeof Collapsible> & {
   isStreaming?: boolean;
+  /** When false, show "X for 0s" but don't run the timer. Used for diffusion pre-processing. Defaults to isStreaming. */
+  timerActive?: boolean;
   open?: boolean;
   defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
   duration?: number;
   reasoningText?: string;
+  onCompleted?: (duration: number) => void;
 };
 
 const MS_IN_S = 1000;
@@ -78,14 +81,18 @@ function extractLatestStepHeader(reasoningText: string): string | null {
 export const Reasoning = ({
   className,
   isStreaming = false,
+  timerActive,
   open,
   defaultOpen = true,
   onOpenChange,
   duration: durationProp,
   reasoningText = "",
+  onCompleted,
   children,
   ...props
 }: ReasoningProps) => {
+  const runTimer = timerActive ?? isStreaming;
+
   const [isOpen, setIsOpen] = useControllableState({
     prop: open,
     defaultProp: defaultOpen,
@@ -101,23 +108,28 @@ export const Reasoning = ({
 
   // Track duration when streaming starts and ends
   useEffect(() => {
-    if (isStreaming) {
+    if (isStreaming && runTimer) {
       if (streamStartRef.current === null) {
         streamStartRef.current = Date.now();
         setElapsedSeconds(0);
       }
-    } else if (streamStartRef.current !== null) {
-      setCompletedDuration(
-        Math.round((Date.now() - streamStartRef.current) / MS_IN_S),
-      );
+    } else if (!runTimer && streamStartRef.current !== null) {
       streamStartRef.current = null;
       setElapsedSeconds(0);
+    } else if (!isStreaming && streamStartRef.current !== null) {
+      const duration = Math.round(
+        (Date.now() - streamStartRef.current) / MS_IN_S,
+      );
+      setCompletedDuration(duration);
+      streamStartRef.current = null;
+      setElapsedSeconds(0);
+      onCompleted?.(duration);
     }
-  }, [isStreaming, setCompletedDuration]);
+  }, [isStreaming, runTimer, setCompletedDuration, onCompleted]);
 
-  // Update elapsed time while streaming
+  // Update elapsed time while streaming (only when timer is active)
   useEffect(() => {
-    if (!isStreaming) {
+    if (!isStreaming || !runTimer) {
       return;
     }
 
@@ -140,7 +152,7 @@ export const Reasoning = ({
     return () => {
       window.clearInterval(intervalId);
     };
-  }, [isStreaming]);
+  }, [isStreaming, runTimer]);
 
   // Don't auto-open/close - let user control it manually
 
@@ -182,10 +194,21 @@ export const Reasoning = ({
   );
 };
 
-export type ReasoningTriggerProps = ComponentProps<typeof CollapsibleTrigger>;
+export type ReasoningTriggerProps = ComponentProps<
+  typeof CollapsibleTrigger
+> & {
+  icon?: React.ReactNode;
+  label?: string;
+  completedLabel?: string;
+  showHeaderBadge?: boolean;
+};
 
 export const ReasoningTrigger = ({
   className,
+  icon,
+  label,
+  completedLabel,
+  showHeaderBadge = true,
   children,
   ...props
 }: ReasoningTriggerProps) => {
@@ -210,12 +233,23 @@ export const ReasoningTrigger = ({
     >
       {children ?? (
         <>
-          {isStreaming && !latestStepHeader && <BrainIcon className="size-4" />}
+          <span
+            className={cn(
+              "inline-flex shrink-0 transition-transform duration-300",
+              icon && !isStreaming && "rotate-100",
+            )}
+          >
+            {icon ?? <BrainIcon className="size-4" />}
+          </span>
           <div className="flex items-center gap-2">
             {isStreaming ? (
               <>
-                <p>Thinking for {elapsedSeconds}s</p>
-                {latestStepHeader && (
+                <p>
+                  {label
+                    ? `${label} for ${elapsedSeconds}s`
+                    : `Thinking for ${elapsedSeconds}s`}
+                </p>
+                {showHeaderBadge && latestStepHeader && (
                   <>
                     <span className="text-muted-foreground">•</span>
                     <Badge
@@ -229,14 +263,20 @@ export const ReasoningTrigger = ({
               </>
             ) : (
               <>
-                {completedDuration > 0 ? (
+                {label ? (
+                  <p>
+                    {completedDuration > 0
+                      ? `${completedLabel ?? label} in ${completedDuration}s`
+                      : (completedLabel ?? label)}
+                  </p>
+                ) : completedDuration > 0 ? (
                   <p>Thought for {completedDuration}s</p>
                 ) : (
                   <p>
                     {thoughtCount} Thought{thoughtCount === 1 ? "" : "s"}
                   </p>
                 )}
-                {latestStepHeader && (
+                {showHeaderBadge && latestStepHeader && (
                   <>
                     <span className="text-muted-foreground">•</span>
                     <Badge
@@ -266,10 +306,16 @@ export type ReasoningContentProps = ComponentProps<
   typeof CollapsibleContent
 > & {
   children: string;
+  isPlainText?: boolean;
 };
 
 export const ReasoningContent = memo(
-  ({ className, children, ...props }: ReasoningContentProps) => (
+  ({
+    className,
+    children,
+    isPlainText = false,
+    ...props
+  }: ReasoningContentProps) => (
     <CollapsibleContent
       className={cn(
         "mt-2 text-muted-foreground text-xs",
@@ -278,7 +324,15 @@ export const ReasoningContent = memo(
       )}
       {...props}
     >
-      <Response className="grid gap-2">{children}</Response>
+      {isPlainText ? (
+        <div className="max-h-[200px] overflow-y-auto whitespace-pre-wrap">
+          {children}
+        </div>
+      ) : (
+        <div className="max-h-[200px] overflow-y-auto">
+          <Response className="grid gap-2">{children}</Response>
+        </div>
+      )}
     </CollapsibleContent>
   ),
 );

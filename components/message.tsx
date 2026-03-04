@@ -9,9 +9,15 @@ import type { WebSearchToolResult } from "@/lib/ai/web-search";
 import type { Vote } from "@/lib/db/schema";
 import type { ChatMessage } from "@/lib/types";
 import { cn, sanitizeText } from "@/lib/utils";
+import { BeakerFlaskIcon } from "./icons";
 import { MessageActions } from "./message-actions";
 import { MessageEditor } from "./message-editor";
 import { MessageContent } from "./message-elements/message";
+import {
+  Reasoning,
+  ReasoningContent,
+  ReasoningTrigger,
+} from "./message-elements/reasoning";
 import { Response } from "./message-elements/response";
 import { MessageReasoning } from "./message-reasoning";
 import { MessageTool } from "./message-tool";
@@ -86,6 +92,22 @@ const PurePreviewMessage = ({
                   isLoading={isReasoningStreaming}
                   key={key}
                   reasoning={part.text}
+                />
+              );
+            }
+
+            if ((part as { type?: string }).type === "diffusion") {
+              const diffusionPart = part as unknown as {
+                type: "diffusion";
+                text: string;
+                duration?: number;
+              };
+              return (
+                <DiffusionMessage
+                  duration={diffusionPart.duration}
+                  isStreaming={false}
+                  key={key}
+                  text={diffusionPart.text}
                 />
               );
             }
@@ -170,7 +192,9 @@ const PurePreviewMessage = ({
                           className="wrap-break-word text-left"
                           data-testid="message-content"
                         >
-                          <Response>{sanitizeText(part.text)}</Response>
+                          <div className="whitespace-pre-wrap">
+                            {sanitizeText(part.text)}
+                          </div>
                         </MessageContent>
                       </CardContent>
                     </Card>
@@ -449,6 +473,49 @@ export const PreviewMessage = memo(
     return false;
   },
 );
+
+export const DiffusionMessage = ({
+  text,
+  placeholder = "Diffusing output…",
+  isStreaming,
+  timerActive,
+  duration,
+  onCompleted,
+  open: openProp,
+}: {
+  text?: string;
+  /** Shown when waiting for diffusion (e.g. tool runs, reasoning). Timer only starts once actual diffusion begins. */
+  placeholder?: string;
+  isStreaming: boolean;
+  /** When false, show "Diffusing for 0s" but don't run the timer (pre-processing). Defaults to isStreaming. */
+  timerActive?: boolean;
+  duration?: number;
+  onCompleted?: (duration: number) => void;
+  /** When provided, controls open state (live streaming). When omitted, uses defaultOpen=false (persisted). */
+  open?: boolean;
+}) => {
+  const displayText = text && text.trim().length > 0 ? text : placeholder;
+
+  return (
+    <Reasoning
+      defaultOpen={false}
+      duration={duration}
+      isStreaming={isStreaming}
+      timerActive={timerActive}
+      onCompleted={onCompleted}
+      open={openProp}
+      reasoningText={displayText}
+    >
+      <ReasoningTrigger
+        completedLabel="Diffused Output"
+        icon={<BeakerFlaskIcon />}
+        label="Diffusing Output"
+        showHeaderBadge={false}
+      />
+      <ReasoningContent isPlainText>{displayText}</ReasoningContent>
+    </Reasoning>
+  );
+};
 
 export const ThinkingMessage = () => {
   const { state: sidebarState, isMobile } = useSidebar();

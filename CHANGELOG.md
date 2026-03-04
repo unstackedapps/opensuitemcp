@@ -5,6 +5,21 @@ All notable changes to OpenSuiteMCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2026-03-03
+
+### ✨ Added
+
+- **Inception Labs provider enhancements**
+  - Custom Inception provider (`lib/ai/custom-providers/inception.ts`) with reasoning summary extraction for Mercury 2
+  - Diffusion streaming for reasoning mode (live refinement display)
+  - Reasoning effort, summary, and diffusing options forwarded for Mercury 2 model
+
+### 🧰 Technical
+
+- Added `@ai-sdk/openai-compatible` as explicit dependency for Inception Labs (Mercury 2) integration
+
+---
+
 ## [2.4.0] - 2026-02-28
 
 ### ✨ Added
@@ -360,6 +375,7 @@ First stable release of OpenSuiteMCP - an open source, production-ready NetSuite
 
 ---
 
+[2.5.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v2.5.0
 [2.4.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v2.4.0
 [2.3.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v2.3.0
 [2.2.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v2.2.0
