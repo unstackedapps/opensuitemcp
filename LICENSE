@@ -63,9 +63,11 @@ may commercialize this Software.
 
 ---
 
-This is an early-phase project. Unstacked Apps, LLC intends to host an official
-version at the opensuitemcp domain when resources and time permit. Until then,
-this license governs the use and distribution of the Software.
+An official hosted version is available at https://opensuitemcp.com. The public
+repository remains the source of truth for self-hosting. This license governs
+use and distribution of the Software (including self-hosted and unmodified
+copies). Unstacked Apps, LLC’s commercialization of the hosted service is
+reserved under section 3.
 
 ## Open Source Component Licenses
 
