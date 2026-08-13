@@ -1,6 +1,14 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
+import {
+  legacyColumnsFromConfig,
+  parseAiProviderConfig,
+} from "@/lib/ai/provider-entries";
+import {
+  decryptProviderConfig,
+  persistProviderConfig,
+} from "@/lib/ai/provider-settings";
 import { normalizeUserSkillSettings } from "@/lib/ai/skills/catalog";
 import { getUserSettings, upsertUserSettings } from "@/lib/db/queries";
 import { decrypt, encrypt } from "@/lib/encryption";
@@ -8,13 +16,51 @@ import {
   normalizeNetSuiteAccountId,
   resolveNetSuiteAccounts,
 } from "@/lib/netsuite/accounts";
+import {
+  mergeNetsuiteMcpToolSettings,
+  parseNetsuiteMcpToolSettings,
+} from "@/lib/netsuite/mcp-tool-settings";
 
 const aiProviderSchema = z.enum(["google", "anthropic", "openai"]);
+const aiProviderTypeSchema = z.enum([
+  "google",
+  "anthropic",
+  "openai",
+  "custom",
+]);
+
+const aiProviderEntrySchema = z.object({
+  id: z.string().min(1).max(64),
+  label: z.string().min(1).max(64),
+  type: aiProviderTypeSchema,
+  apiKey: z.string().max(4096).optional().nullable(),
+  maxIterations: z.string().max(8).optional(),
+  baseUrl: z.string().max(512).optional(),
+  speedModelId: z.string().max(256).optional(),
+  reasoningModelId: z.string().max(256).optional(),
+});
+
+const aiProviderConfigSchema = z.object({
+  defaultId: z.string().max(64).nullable(),
+  providers: z.array(aiProviderEntrySchema).max(10),
+});
 
 const netsuiteAccountSchema = z.object({
   accountId: z.string().min(1).max(64),
   label: z.string().max(64),
   clientId: z.string().max(128).optional().nullable(),
+});
+
+const netsuiteMcpToolsSchema = z.object({
+  byAccount: z
+    .record(
+      z.string().max(64),
+      z.object({
+        disabledNames: z.array(z.string().min(1).max(256)).max(256),
+      }),
+    )
+    .optional()
+    .default({}),
 });
 
 const customSkillSchema = z.object({
@@ -52,6 +98,8 @@ const settingsSchema = z.object({
   customInstructions: z.string().max(32_000).optional().nullable(),
   enabledSkillIds: z.array(z.string().max(128)).max(64).optional().nullable(),
   customSkills: z.array(customSkillSchema).max(32).optional().nullable(),
+  aiProviders: aiProviderConfigSchema.optional().nullable(),
+  netsuiteMcpTools: netsuiteMcpToolsSchema.optional().nullable(),
 });
 
 function normalizeAiProvider(
@@ -130,6 +178,8 @@ export async function GET() {
         customInstructions: null,
         enabledSkillIds: emptySkills.enabledSkillIds,
         customSkills: emptySkills.customSkills,
+        aiProviders: { defaultId: null, providers: [] },
+        netsuiteMcpTools: { byAccount: {} },
       });
     }
 
@@ -223,6 +273,8 @@ export async function GET() {
       customInstructions: settings.customInstructions ?? null,
       enabledSkillIds: skillSettings.enabledSkillIds,
       customSkills: skillSettings.customSkills,
+      aiProviders: decryptProviderConfig(settings.aiProviders),
+      netsuiteMcpTools: parseNetsuiteMcpToolSettings(settings.netsuiteMcpTools),
     };
 
     console.log("[Settings API] Sending response:", {
@@ -393,14 +445,58 @@ export async function POST(request: Request) {
           }).enabledSkillIds
         : undefined;
 
+    let nextAiProviders:
+      | Awaited<ReturnType<typeof persistProviderConfig>>
+      | undefined;
+    if (validated.aiProviders !== undefined) {
+      try {
+        nextAiProviders = await persistProviderConfig({
+          incoming: validated.aiProviders,
+          existingConfig: parseAiProviderConfig(existing?.aiProviders),
+          legacy: {
+            googleApiKey: encryptedGoogleKey || existing?.googleApiKey,
+            anthropicApiKey: encryptedAnthropicKey || existing?.anthropicApiKey,
+            openaiApiKey: encryptedOpenAIKey || existing?.openaiApiKey,
+            aiProvider: nextProvider ?? existing?.aiProvider,
+            maxIterations: validated.maxIterations ?? existing?.maxIterations,
+          },
+        });
+      } catch (error) {
+        return NextResponse.json(
+          {
+            error:
+              error instanceof Error
+                ? error.message
+                : "Invalid AI provider settings",
+          },
+          { status: 400 },
+        );
+      }
+    }
+
+    let nextGoogleKey = encryptedGoogleKey;
+    let nextAnthropicKey = encryptedAnthropicKey;
+    let nextOpenAIKey = encryptedOpenAIKey;
+    let nextLegacyProvider = nextProvider;
+    let nextMaxIterations = validated.maxIterations;
+
+    if (nextAiProviders && nextAiProviders.providers.length > 0) {
+      const legacyFromList = legacyColumnsFromConfig(nextAiProviders);
+      nextGoogleKey = legacyFromList.googleApiKey;
+      nextAnthropicKey = legacyFromList.anthropicApiKey;
+      nextOpenAIKey = legacyFromList.openaiApiKey;
+      nextLegacyProvider = legacyFromList.aiProvider;
+      nextMaxIterations = legacyFromList.maxIterations;
+    }
+
     await upsertUserSettings({
       userId: session.user.id,
-      googleApiKey: encryptedGoogleKey,
-      anthropicApiKey: encryptedAnthropicKey,
-      openaiApiKey: encryptedOpenAIKey,
+      googleApiKey: nextGoogleKey,
+      anthropicApiKey: nextAnthropicKey,
+      openaiApiKey: nextOpenAIKey,
       // Clear legacy Inception key when settings are saved
       inceptionApiKey: null,
-      aiProvider: nextProvider,
+      aiProvider: nextLegacyProvider,
       netsuiteAccountId: nextAccountId,
       netsuiteClientId: nextClientId,
       netsuiteAccounts: nextAccounts,
@@ -409,10 +505,18 @@ export async function POST(request: Request) {
         validated.searchDomainIds !== undefined
           ? (validated.searchDomainIds ?? [])
           : undefined,
-      maxIterations: validated.maxIterations,
+      maxIterations: nextMaxIterations,
       customInstructions: validated.customInstructions,
       enabledSkillIds: nextEnabledSkillIds,
       customSkills: nextCustomSkills,
+      aiProviders: nextAiProviders,
+      netsuiteMcpTools:
+        validated.netsuiteMcpTools !== undefined
+          ? mergeNetsuiteMcpToolSettings(
+              existing?.netsuiteMcpTools,
+              validated.netsuiteMcpTools,
+            )
+          : undefined,
     });
 
     return NextResponse.json({

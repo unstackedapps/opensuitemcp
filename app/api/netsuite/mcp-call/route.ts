@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
+import { getUserSettings } from "@/lib/db/queries";
+import { normalizeNetSuiteAccountId } from "@/lib/netsuite/accounts";
 import { executeMCPTool } from "@/lib/netsuite/mcp";
+import {
+  isMcpToolAllowed,
+  MCP_TOOL_DISABLED_MESSAGE,
+} from "@/lib/netsuite/mcp-tool-settings";
 import { getNetSuiteToken } from "@/lib/netsuite/tokens";
 
 const bodySchema = z.object({
@@ -29,6 +35,20 @@ export async function POST(request: Request) {
 
   try {
     const parsed = bodySchema.parse(await request.json());
+    const settings = await getUserSettings({ userId: session.user.id });
+    const accountId = settings?.netsuiteAccountId
+      ? normalizeNetSuiteAccountId(settings.netsuiteAccountId)
+      : null;
+    if (!isMcpToolAllowed(settings?.netsuiteMcpTools, accountId, parsed.name)) {
+      return NextResponse.json(
+        {
+          error: MCP_TOOL_DISABLED_MESSAGE,
+          isError: true,
+          content: [{ type: "text", text: MCP_TOOL_DISABLED_MESSAGE }],
+        },
+        { status: 403 },
+      );
+    }
     const result = await executeMCPTool({
       userId: session.user.id,
       accessToken,

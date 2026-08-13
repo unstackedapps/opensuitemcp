@@ -8,8 +8,8 @@
     "dev:turbo": "next dev --turbo",
     "build": "tsx lib/db/migrate && next build",
     "start": "next start",
-    "lint": "npx ultracite@5.3.9 check",
-    "format": "npx ultracite@5.3.9 fix",
+    "lint": "ultracite check",
+    "format": "ultracite fix",
     "setup:backend": "bash docker/scripts/setup-backend.sh",
     "skills:sync": "tsx lib/ai/skills/cli-sync-oracle.ts",
     "db:generate": "drizzle-kit generate",
@@ -99,7 +99,7 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.2.2",
+    "@biomejs/biome": "2.5.6",
     "@playwright/test": "^1.50.1",
     "@tailwindcss/postcss": "^4.1.13",
     "@tailwindcss/typography": "^0.5.15",
@@ -115,7 +115,10 @@
     "tailwindcss": "^4.1.13",
     "tsx": "^4.19.1",
     "typescript": "^5.6.3",
-    "ultracite": "5.3.9"
+    "ultracite": "7.10.3"
+  },
+  "engines": {
+    "node": ">=22"
   },
   "packageManager": "pnpm@9.12.3",
   "pnpm": {

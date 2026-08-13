@@ -18,7 +18,9 @@ import type { VisibilityType } from "@/components/visibility-selector";
 import { entitlementsByUserType } from "@/lib/ai/entitlements";
 import type { ChatModel } from "@/lib/ai/models";
 import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
+import type { AiProviderType } from "@/lib/ai/provider-entries";
 import { getUserProvider } from "@/lib/ai/providers";
+import { resolveUserChatProvider } from "@/lib/ai/resolve-user-chat-provider";
 import { searchDomains } from "@/lib/ai/search-domains";
 import {
   buildSkillsPromptSection,
@@ -42,7 +44,6 @@ import {
   updateChatMaxIterationsReached,
 } from "@/lib/db/queries";
 import type { DBMessage } from "@/lib/db/schema";
-import { decrypt } from "@/lib/encryption";
 import { ChatSDKError } from "@/lib/errors";
 import { loadNetSuiteMCPTools } from "@/lib/netsuite/mcp";
 import { allowChatBurst } from "@/lib/rate-limit";
@@ -53,14 +54,7 @@ import { type PostRequestBody, postRequestBodySchema } from "./schema";
 
 export const maxDuration = 60;
 
-type AiProvider = "google" | "anthropic" | "openai";
-
-function normalizeAiProvider(provider: string | null | undefined): AiProvider {
-  if (provider === "anthropic" || provider === "openai") {
-    return provider;
-  }
-  return "google";
-}
+type AiProvider = AiProviderType;
 
 const getTokenlensCatalog = cache(
   async (): Promise<ModelCatalog | undefined> => {
@@ -94,11 +88,13 @@ export async function POST(request: Request) {
       message,
       selectedChatModel,
       selectedVisibilityType,
+      aiProviderId,
     }: {
       id: string;
       message: ChatMessage;
       selectedChatModel: ChatModel["id"];
       selectedVisibilityType: VisibilityType;
+      aiProviderId?: string | null;
     } = requestBody;
 
     const session = await auth();
@@ -139,18 +135,22 @@ export async function POST(request: Request) {
       // Get user API key and provider for title generation
       let titleApiKey: string | null = null;
       let titleProvider: AiProvider = "google";
+      let titleBaseUrl: string | undefined;
+      let titleSpeedModelId: string | undefined;
+      let titleReasoningModelId: string | undefined;
       if (session.user?.id) {
         try {
           const settings = await getUserSettings({ userId: session.user.id });
-          titleProvider = normalizeAiProvider(settings?.aiProvider);
-          const apiKeyField =
-            titleProvider === "anthropic"
-              ? settings?.anthropicApiKey
-              : titleProvider === "openai"
-                ? settings?.openaiApiKey
-                : settings?.googleApiKey;
-          if (apiKeyField) {
-            titleApiKey = decrypt(apiKeyField);
+          const resolved = resolveUserChatProvider({
+            chatAiProviderId: aiProviderId ?? null,
+            settings,
+          });
+          if (resolved.type) {
+            titleProvider = resolved.type;
+            titleApiKey = resolved.apiKey;
+            titleBaseUrl = resolved.entry?.baseUrl;
+            titleSpeedModelId = resolved.entry?.speedModelId;
+            titleReasoningModelId = resolved.entry?.reasoningModelId;
           }
         } catch (error) {
           console.error("[Settings] Error loading settings for title:", error);
@@ -160,6 +160,9 @@ export async function POST(request: Request) {
         message,
         apiKey: titleApiKey,
         provider: titleProvider,
+        baseUrl: titleBaseUrl,
+        speedModelId: titleSpeedModelId,
+        reasoningModelId: titleReasoningModelId,
       });
 
       await saveChat({
@@ -168,6 +171,7 @@ export async function POST(request: Request) {
         title,
         summary,
         visibility: selectedVisibilityType,
+        aiProviderId: aiProviderId ?? null,
       });
       // New chat - no need to fetch messages, it's empty
     }
@@ -214,6 +218,10 @@ export async function POST(request: Request) {
           let enabledSkillNames: string[] = [
             "AI Connector Instructions (always on)",
           ];
+          let customBaseUrl: string | undefined;
+          let customSpeedModelId: string | undefined;
+          let customReasoningModelId: string | undefined;
+          let userProviderLabel: string | null = null;
           if (session.user?.id) {
             try {
               const settings = await getUserSettings({
@@ -229,48 +237,28 @@ export async function POST(request: Request) {
                 maxIterations: settings?.maxIterations,
               });
               if (settings) {
-                userProviderType = normalizeAiProvider(settings.aiProvider);
-                // Parse maxIterations, default to 10 if invalid
-                const maxIterationsValue = settings.maxIterations
-                  ? Number.parseInt(settings.maxIterations, 10)
-                  : 10;
-                userMaxIterations =
-                  Number.isNaN(maxIterationsValue) ||
-                  maxIterationsValue < 1 ||
-                  maxIterationsValue > 20
-                    ? 10
-                    : maxIterationsValue;
-
-                // Get API key based on selected provider
-                const apiKeyField =
-                  userProviderType === "anthropic"
-                    ? settings.anthropicApiKey
-                    : userProviderType === "openai"
-                      ? settings.openaiApiKey
-                      : settings.googleApiKey;
-
-                if (apiKeyField) {
-                  try {
-                    userApiKey = decrypt(apiKeyField);
-                    console.log(
-                      `[Settings] Successfully decrypted ${userProviderType} API key for user:`,
-                      session.user.id,
-                      "Key length:",
-                      userApiKey?.length,
-                    );
-                  } catch (error) {
-                    console.error(
-                      "[Settings] Error decrypting API key:",
-                      error,
-                    );
-                    // Continue without API key if decryption fails
-                  }
-                } else {
-                  console.log(
-                    `[Settings] No encrypted ${userProviderType} API key found in settings for user:`,
-                    session.user.id,
+                const latestChat = await getChatById({ id });
+                const resolved = resolveUserChatProvider({
+                  chatAiProviderId: latestChat?.aiProviderId,
+                  settings,
+                });
+                if (resolved.dangling) {
+                  throw new Error(
+                    "This chat's AI provider was removed. Pick another provider in the chat header.",
                   );
                 }
+                if (resolved.missing || !resolved.type) {
+                  throw new Error(
+                    "API key is required. Please set your API key in Settings.",
+                  );
+                }
+                userProviderType = resolved.type;
+                userApiKey = resolved.apiKey;
+                userMaxIterations = resolved.maxIterations;
+                userProviderLabel = resolved.label;
+                customBaseUrl = resolved.entry?.baseUrl;
+                customSpeedModelId = resolved.entry?.speedModelId;
+                customReasoningModelId = resolved.entry?.reasoningModelId;
                 userTimezone = settings.timezone ?? "UTC";
                 selectedSearchDomainIds = settings.searchDomainIds ?? [];
                 const skillSettings = normalizeUserSkillSettings(
@@ -298,7 +286,7 @@ export async function POST(request: Request) {
               }
             } catch (error) {
               console.error("[Settings] Error loading user settings:", error);
-              // Continue with defaults
+              throw error;
             }
           }
 
@@ -310,16 +298,21 @@ export async function POST(request: Request) {
           });
           let userProvider: ReturnType<typeof getUserProvider>;
           try {
-            userProvider = getUserProvider(userApiKey, userProviderType);
+            userProvider = getUserProvider(userApiKey, userProviderType, {
+              baseUrl: customBaseUrl,
+              speedModelId: customSpeedModelId,
+              reasoningModelId: customReasoningModelId,
+            });
             console.log("[Settings] Provider created successfully");
           } catch (error) {
-            // If no API key is configured, return an error to the user
             const providerName =
               userProviderType === "anthropic"
                 ? "Anthropic"
                 : userProviderType === "openai"
                   ? "OpenAI"
-                  : "Google";
+                  : userProviderType === "custom"
+                    ? "Custom"
+                    : "Google";
             const errorMessage =
               error instanceof Error
                 ? error.message
@@ -328,18 +321,20 @@ export async function POST(request: Request) {
               "[Settings] Failed to create provider:",
               errorMessage,
             );
-            // Throw error so SDK can handle it
             throw new Error(errorMessage);
           }
 
           // Load NetSuite MCP tools if user is authenticated
           let netsuiteTools: Record<string, unknown> = {};
+          let netsuiteActiveToolKeys: string[] = [];
           if (session.user?.id) {
             try {
-              netsuiteTools = await loadNetSuiteMCPTools(session.user.id);
+              const loaded = await loadNetSuiteMCPTools(session.user.id);
+              netsuiteTools = loaded.tools;
+              netsuiteActiveToolKeys = loaded.activeToolKeys;
               if (Object.keys(netsuiteTools).length > 0) {
                 console.log(
-                  `[NetSuite] Loaded ${Object.keys(netsuiteTools).length} tools:`,
+                  `[NetSuite] Loaded ${Object.keys(netsuiteTools).length} tools (${netsuiteActiveToolKeys.length} allowed):`,
                   Object.keys(netsuiteTools),
                 );
               } else {
@@ -371,8 +366,9 @@ export async function POST(request: Request) {
             ...netsuiteTools,
           };
 
-          // Build active tools list (tools are enabled in both standard and reasoning modes)
-          const netsuiteToolNames = Object.keys(netsuiteTools);
+          // Offer only allowed NetSuite tools to the model; disabled tools stay
+          // registered so an invoke returns a clear error instead of 404.
+          const netsuiteToolNames = netsuiteActiveToolKeys;
           const baseToolNames = [
             ...Object.keys(searchTools),
             "readWebpage",
@@ -418,6 +414,20 @@ export async function POST(request: Request) {
                 .filter((d) => enabledSearchDomainIds.has(d.id))
                 .map((d) => d.label),
               enabledSkills: enabledSkillNames,
+              modelName:
+                userProviderType === "custom"
+                  ? `${userProviderLabel ?? "custom"} · ${
+                      modelId === "chat-model-reasoning"
+                        ? customReasoningModelId
+                        : customSpeedModelId
+                    }`
+                  : undefined,
+              modelDescription:
+                userProviderType === "custom"
+                  ? modelId === "chat-model-reasoning"
+                    ? "Reasoning mode — custom endpoint"
+                    : "Speed mode — custom endpoint"
+                  : undefined,
             }),
           };
 
@@ -495,13 +505,13 @@ export async function POST(request: Request) {
                           },
                         },
                       }
-                    : userProviderType === "openai"
+                    : userProviderType === "openai" ||
+                        userProviderType === "custom"
                       ? {
                           providerOptions: {
-                            // OpenAI reasoning configuration for o4-mini
                             openai: {
-                              reasoningEffort: "high", // Equivalent to adjusting thinking budget
-                              reasoningSummary: "detailed", // Show thought process in UI
+                              reasoningEffort: "high",
+                              reasoningSummary: "detailed",
                             },
                           },
                         }
@@ -589,7 +599,7 @@ export async function POST(request: Request) {
           const supportsReasoning =
             userProviderType === "google" ||
             userProviderType === "anthropic" ||
-            (userProviderType === "openai" &&
+            ((userProviderType === "openai" || userProviderType === "custom") &&
               modelId === "chat-model-reasoning");
 
           // Merge the UI message stream directly - max steps detection happens in onFinish callback

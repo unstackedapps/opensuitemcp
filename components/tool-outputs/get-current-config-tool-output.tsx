@@ -2,6 +2,7 @@
 
 import { BrainIcon, ClockIcon, GlobeIcon } from "@/components/icons";
 import { Badge } from "@/components/ui/badge";
+import type { AiProviderType } from "@/lib/ai/provider-entries";
 import type { GetCurrentConfigToolResult } from "@/lib/ai/tools/get-current-config";
 import { cn } from "@/lib/utils";
 
@@ -9,10 +10,11 @@ type GetCurrentConfigToolOutputProps = {
   result: GetCurrentConfigToolResult;
 };
 
-const PROVIDER_LABELS: Record<"google" | "anthropic" | "openai", string> = {
+const PROVIDER_LABELS: Record<AiProviderType, string> = {
   google: "Google (Gemini)",
   anthropic: "Anthropic (Claude)",
   openai: "OpenAI",
+  custom: "Custom",
 };
 
 export function GetCurrentConfigToolOutput({
@@ -43,6 +45,8 @@ export function GetCurrentConfigToolOutput({
                   "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200",
                 configuration.provider === "openai" &&
                   "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200",
+                configuration.provider === "custom" &&
+                  "bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-200",
               )}
             >
               {PROVIDER_LABELS[configuration.provider]}

@@ -4,6 +4,7 @@ import { generateText, type UIMessage } from "ai";
 import { cookies } from "next/headers";
 import type { VisibilityType } from "@/components/visibility-selector";
 import { summaryPrompt, titlePrompt } from "@/lib/ai/prompts";
+import type { AiProviderType } from "@/lib/ai/provider-entries";
 import { getUserProvider } from "@/lib/ai/providers";
 import {
   deleteMessagesByChatIdAfterTimestamp,
@@ -40,21 +41,31 @@ export async function generateTitleFromUserMessage({
   message,
   apiKey,
   provider = "google",
+  baseUrl,
+  speedModelId,
+  reasoningModelId,
 }: {
   message: UIMessage;
   apiKey?: string | null;
-  provider?: "google" | "anthropic" | "openai";
+  provider?: AiProviderType;
+  baseUrl?: string;
+  speedModelId?: string;
+  reasoningModelId?: string;
 }): Promise<{ title: string; summary: string | null }> {
   const text = getTextFromMessage(message);
 
   // If no API key is provided, use a default title based on message content
-  if (!apiKey) {
+  if (!apiKey && provider !== "custom") {
     const defaultTitle = text.trim().slice(0, 50) || "New Chat";
     return { title: defaultTitle, summary: null };
   }
 
   try {
-    const providerInstance = getUserProvider(apiKey, provider);
+    const providerInstance = getUserProvider(apiKey, provider, {
+      baseUrl,
+      speedModelId,
+      reasoningModelId,
+    });
     const titleModel = providerInstance.languageModel("title-model");
 
     // Step 1: Generate a longer summary (20-30 words)

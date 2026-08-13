@@ -17,6 +17,7 @@ export type NetSuiteOAuthConfig = {
 
 async function getNetSuiteConfig(
   userId: string,
+  accountId?: string | null,
 ): Promise<NetSuiteOAuthConfig | null> {
   const settings = await getUserSettings({ userId });
   const NS_REDIRECT_URI = getNetSuiteRedirectUri();
@@ -24,24 +25,30 @@ async function getNetSuiteConfig(
   const activeAccountId = settings?.netsuiteAccountId
     ? normalizeNetSuiteAccountId(settings.netsuiteAccountId)
     : null;
+  const requestedAccountId = accountId?.trim()
+    ? normalizeNetSuiteAccountId(accountId)
+    : null;
+  const resolvedAccountId = requestedAccountId || activeAccountId;
 
-  if (!activeAccountId) {
+  if (!resolvedAccountId) {
     return null;
   }
 
   const accounts = resolveNetSuiteAccounts(settings ?? {});
-  const activeAccount = accounts.find(
-    (account) => account.accountId === activeAccountId,
+  const resolvedAccount = accounts.find(
+    (account) => account.accountId === resolvedAccountId,
   );
-  const clientId =
-    activeAccount?.clientId?.trim() || settings?.netsuiteClientId?.trim() || "";
+  let clientId = resolvedAccount?.clientId?.trim() || "";
+  if (!clientId && resolvedAccountId === activeAccountId) {
+    clientId = settings?.netsuiteClientId?.trim() || "";
+  }
 
   if (!clientId) {
     return null;
   }
 
   return {
-    NS_ACCOUNT_ID: activeAccountId,
+    NS_ACCOUNT_ID: resolvedAccountId,
     NS_INTEGRATION_CLIENT_ID: clientId,
     NS_REDIRECT_URI,
   };
@@ -162,13 +169,14 @@ export async function exchangeCodeForToken(params: {
 export async function refreshAccessToken(params: {
   userId: string;
   refreshToken: string;
+  accountId?: string | null;
 }): Promise<{
   access_token: string;
   refresh_token: string;
   expires_in: number;
   token_type: string;
 }> {
-  const config = await getNetSuiteConfig(params.userId);
+  const config = await getNetSuiteConfig(params.userId, params.accountId);
   if (!config) {
     throw new Error(
       "NetSuite configuration is missing. Add an account and Connect via Settings.",

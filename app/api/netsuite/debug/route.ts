@@ -36,11 +36,12 @@ export async function GET() {
 
   // Try to load tools
   try {
-    const tools = await loadNetSuiteMCPTools(userId);
+    const loaded = await loadNetSuiteMCPTools(userId);
     return NextResponse.json({
       ...debugInfo,
-      toolsLoaded: Object.keys(tools).length,
-      toolNames: Object.keys(tools),
+      toolsLoaded: Object.keys(loaded.tools).length,
+      toolNames: Object.keys(loaded.tools),
+      activeToolNames: loaded.activeToolKeys,
     });
   } catch (error) {
     return NextResponse.json({

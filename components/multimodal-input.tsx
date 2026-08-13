@@ -17,9 +17,16 @@ import {
 import useSWR from "swr";
 import { useWindowSize } from "usehooks-ts";
 import { saveChatModelAsCookie } from "@/app/(chat)/actions";
+import { AiProviderSwitcher } from "@/components/ai-provider-switcher";
 import { useAppPortal } from "@/components/portal/context";
 import { SelectItem } from "@/components/ui/select";
 import { chatModels } from "@/lib/ai/models";
+import {
+  type AiProviderConfig,
+  findProviderById,
+  isMultiAiProviders,
+  parseAiProviderConfig,
+} from "@/lib/ai/provider-entries";
 import { myProvider } from "@/lib/ai/providers";
 import type { ChatMessage } from "@/lib/types";
 import type { AppUsage } from "@/lib/usage";
@@ -64,6 +71,8 @@ function PureMultimodalInput({
   selectedVisibilityType: _selectedVisibilityType,
   selectedModelId,
   onModelChange,
+  aiProviderId = null,
+  onAiProviderChange,
   usage,
   disabled = false,
 }: {
@@ -78,6 +87,8 @@ function PureMultimodalInput({
   selectedVisibilityType: VisibilityType;
   selectedModelId: string;
   onModelChange?: (modelId: string) => void;
+  aiProviderId?: string | null;
+  onAiProviderChange?: (id: string | null) => void;
   usage?: AppUsage;
   disabled?: boolean;
 }) {
@@ -262,7 +273,13 @@ function PureMultimodalInput({
         </div>
         <PromptInputToolbar className="border-top-0! border-t-0! p-0 shadow-none dark:border-0 dark:border-transparent!">
           <PromptInputTools className="gap-0 sm:gap-0.5">
+            <AiProviderSwitcher
+              aiProviderId={aiProviderId}
+              chatId={chatId}
+              onAiProviderChange={onAiProviderChange}
+            />
             <ModelSelectorCompact
+              aiProviderId={aiProviderId}
               onModelChange={onModelChange}
               selectedModelId={selectedModelId}
             />
@@ -336,6 +353,9 @@ export const MultimodalInput = memo(
     if (prevProps.selectedModelId !== nextProps.selectedModelId) {
       return false;
     }
+    if (prevProps.aiProviderId !== nextProps.aiProviderId) {
+      return false;
+    }
     if (prevProps.disabled !== nextProps.disabled) {
       return false;
     }
@@ -347,7 +367,10 @@ export const MultimodalInput = memo(
 async function fetchSettings() {
   const response = await fetch("/api/settings");
   if (!response.ok) {
-    return { aiProvider: "google" as const };
+    return {
+      aiProvider: "google" as const,
+      aiProviders: { defaultId: null, providers: [] } as AiProviderConfig,
+    };
   }
   const data = await response.json();
   return {
@@ -355,22 +378,28 @@ async function fetchSettings() {
       | "google"
       | "anthropic"
       | "openai",
+    aiProviders: parseAiProviderConfig(data.aiProviders),
   };
 }
 
 function PureModelSelectorCompact({
   selectedModelId,
   onModelChange,
+  aiProviderId = null,
 }: {
   selectedModelId: string;
   onModelChange?: (modelId: string) => void;
+  aiProviderId?: string | null;
 }) {
   const [optimisticModelId, setOptimisticModelId] = useState(selectedModelId);
   const [mounted, setMounted] = useState(false);
 
   // Fetch user's provider setting
   const { data: settings } = useSWR("settings", fetchSettings, {
-    fallbackData: { aiProvider: "google" as const },
+    fallbackData: {
+      aiProvider: "google" as const,
+      aiProviders: { defaultId: null, providers: [] },
+    },
   });
 
   useEffect(() => {
@@ -381,11 +410,31 @@ function PureModelSelectorCompact({
     setOptimisticModelId(selectedModelId);
   }, [selectedModelId]);
 
-  // Get available models for current provider
-  const provider = settings?.aiProvider || "google";
-  const availableModels = chatModels.filter(
-    (model) => !model.provider || model.provider === provider,
-  );
+  const providerConfig = parseAiProviderConfig(settings?.aiProviders);
+  const multi = isMultiAiProviders(providerConfig);
+  const activeEntry = multi
+    ? (findProviderById(providerConfig, aiProviderId) ??
+      findProviderById(providerConfig, providerConfig.defaultId) ??
+      providerConfig.providers[0])
+    : undefined;
+  const provider = activeEntry?.type || settings?.aiProvider || "google";
+  const availableModels =
+    provider === "custom" && activeEntry
+      ? [
+          {
+            id: "chat-model",
+            name: activeEntry.speedModelId || "Speed",
+            description: "Speed mode — custom endpoint",
+          },
+          {
+            id: "chat-model-reasoning",
+            name: activeEntry.reasoningModelId || "Reasoning",
+            description: "Reasoning mode — custom endpoint",
+          },
+        ]
+      : chatModels.filter(
+          (model) => !model.provider || model.provider === provider,
+        );
   const speedModel = availableModels.find((m) => m.id === "chat-model");
   const reasoningModel = availableModels.find(
     (m) => m.id === "chat-model-reasoning",

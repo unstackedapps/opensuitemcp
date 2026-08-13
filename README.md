@@ -62,7 +62,7 @@ _NetSuite MCP tools in a conversation._
 
 ## Prerequisites
 
-- Node.js 18+ and [pnpm](https://pnpm.io)
+- Node.js 22+ and [pnpm](https://pnpm.io)
 - Docker ([Docker Desktop](https://www.docker.com/products/docker-desktop/) on macOS/Windows, or Docker Engine on Linux) for local PostgreSQL, Redis, and SearXNG via `pnpm setup:backend`
 - A NetSuite account with:
   - [AI Connector Service](https://docs.oracle.com/en/cloud/saas/netsuite/ns-online-help/article_7200233106.html) enabled

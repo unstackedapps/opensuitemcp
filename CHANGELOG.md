@@ -5,6 +5,17 @@ All notable changes to OpenSuiteMCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### 🧰 Technical
+
+- **Node.js 22 + Ultracite 7** — CI and lint use Node 22; Ultracite upgraded from 5.3.9 to 7.10.3 (Biome 2.5.6), pinned in-repo instead of `npx ultracite@latest`
+- **Self-hosted fonts** — Geist from the local package and vendored Raleway woff2 so `next build` does not fetch Google Fonts
+- **Custom provider URLs** — stricter HTTPS/SSRF checks and clearer validation messages
+- **ENCRYPTION_KEY** — accept base64, raw 32-byte UTF-8, or hash longer strings to a 32-byte AES key
+
+---
+
 ## [3.1.1] - 2026-08-07
 
 ### ✨ Added

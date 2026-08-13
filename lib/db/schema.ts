@@ -12,7 +12,9 @@ import {
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
+import type { AiProviderConfig } from "../ai/provider-entries";
 import type { CustomSkill } from "../ai/skills/catalog";
+import type { NetsuiteMcpToolSettings } from "../netsuite/mcp-tool-settings";
 import type { AppUsage } from "../usage";
 
 export const user = pgTable("User", {
@@ -39,6 +41,8 @@ export const chat = pgTable("Chat", {
   maxIterationsReached: boolean("maxIterationsReached")
     .notNull()
     .default(false),
+  /** Per-chat AI provider override; null uses Settings default / legacy */
+  aiProviderId: varchar("aiProviderId", { length: 64 }),
 });
 
 export type Chat = InferSelectModel<typeof chat>;
@@ -137,12 +141,22 @@ export const userSettings = pgTable("UserSettings", {
     .$type<NetSuiteAccountEntry[]>()
     .notNull()
     .default(sql`'[]'::jsonb`),
+  /** Per-account MCP tool denylist; omit/empty keeps every tool allowed */
+  netsuiteMcpTools: jsonb("netsuiteMcpTools")
+    .$type<NetsuiteMcpToolSettings>()
+    .notNull()
+    .default(sql`'{}'::jsonb`),
   timezone: varchar("timezone", { length: 64 }).default("UTC"),
   searchDomainIds: jsonb("searchDomainIds")
     .$type<string[]>()
     .notNull()
     .default(sql`'[]'::jsonb`),
   maxIterations: text("maxIterations").default("10"), // Max reasoning steps (1-20)
+  /** Multi-account AI providers; empty blob keeps classic single-provider UI */
+  aiProviders: jsonb("aiProviders")
+    .$type<AiProviderConfig>()
+    .notNull()
+    .default(sql`'{"defaultId":null,"providers":[]}'::jsonb`),
   customInstructions: text("customInstructions"),
   /** Oracle/builtin skill ids enabled for chat sessions */
   enabledSkillIds: jsonb("enabledSkillIds")

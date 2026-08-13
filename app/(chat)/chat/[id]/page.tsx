@@ -48,6 +48,7 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
         id={chat.id}
         initialChatModel={DEFAULT_CHAT_MODEL}
         initialLastContext={chat.lastContext ?? undefined}
+        initialAiProviderId={chat.aiProviderId ?? null}
         initialMaxIterationsReached={chat.maxIterationsReached}
         initialMessages={uiMessages}
         initialVisibilityType={chat.visibility}
@@ -62,6 +63,7 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
       id={chat.id}
       initialChatModel={chatModelFromCookie.value}
       initialLastContext={chat.lastContext ?? undefined}
+      initialAiProviderId={chat.aiProviderId ?? null}
       initialMaxIterationsReached={chat.maxIterationsReached}
       initialMessages={uiMessages}
       initialVisibilityType={chat.visibility}

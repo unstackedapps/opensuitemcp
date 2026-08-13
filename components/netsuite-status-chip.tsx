@@ -8,7 +8,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import type { NetSuiteAccountEntry } from "@/lib/netsuite/accounts";
+import {
+  formatNetSuiteAccountDisplay,
+  type NetSuiteAccountEntry,
+} from "@/lib/netsuite/accounts";
 import { cn } from "@/lib/utils";
 
 type NetSuiteStatusResponse = {
@@ -37,7 +40,10 @@ function resolveAccountLabel(status: NetSuiteStatusResponse): string {
   const match = status.accounts?.find(
     (account) => account.accountId === activeId,
   );
-  return match?.label?.trim() || activeId;
+  return formatNetSuiteAccountDisplay({
+    accountId: activeId,
+    label: match?.label,
+  });
 }
 
 export function NetSuiteStatusChip({ className }: { className?: string }) {

@@ -15,8 +15,10 @@ import {
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import type { VisibilityType } from "@/components/visibility-selector";
+import type { AiProviderConfig } from "../ai/provider-entries";
 import type { CustomSkill } from "../ai/skills/catalog";
 import { ChatSDKError } from "../errors";
+import type { NetsuiteMcpToolSettings } from "../netsuite/mcp-tool-settings";
 import type { AppUsage } from "../usage";
 import { generateUUID } from "../utils";
 import {
@@ -37,8 +39,25 @@ import { generateHashedPassword } from "./utils";
 // use the Drizzle adapter for Auth.js / NextAuth
 // https://authjs.dev/reference/adapter/drizzle
 
-// biome-ignore lint: Forbidden non-null assertion.
-const client = postgres(process.env.POSTGRES_URL!);
+const globalForDb = globalThis as typeof globalThis & {
+  postgresClient?: ReturnType<typeof postgres>;
+};
+
+function createPostgresClient() {
+  // biome-ignore lint: Forbidden non-null assertion.
+  return postgres(process.env.POSTGRES_URL!, {
+    max: 10,
+    idle_timeout: 20,
+    connect_timeout: 10,
+    max_lifetime: 60 * 30,
+  });
+}
+
+const client = globalForDb.postgresClient ?? createPostgresClient();
+if (process.env.NODE_ENV !== "production") {
+  globalForDb.postgresClient = client;
+}
+
 export const db = drizzle(client);
 
 export async function getUser(email: string): Promise<User[]> {
@@ -108,12 +127,14 @@ export async function saveChat({
   title,
   summary,
   visibility,
+  aiProviderId,
 }: {
   id: string;
   userId: string;
   title: string;
   summary?: string | null;
   visibility: VisibilityType;
+  aiProviderId?: string | null;
 }) {
   try {
     return await db.insert(chat).values({
@@ -123,6 +144,7 @@ export async function saveChat({
       title,
       summary,
       visibility,
+      aiProviderId: aiProviderId ?? null,
     });
   } catch (_error) {
     throw new ChatSDKError("bad_request:database", "Failed to save chat");
@@ -263,7 +285,8 @@ export async function getChatById({ id }: { id: string }) {
     }
 
     return selectedChat;
-  } catch (_error) {
+  } catch (error) {
+    console.error("[DB] Failed to get chat by id:", error);
     throw new ChatSDKError("bad_request:database", "Failed to get chat by id");
   }
 }
@@ -420,6 +443,26 @@ export async function updateChatLastContextById({
   }
 }
 
+export async function updateChatAiProviderId({
+  chatId,
+  aiProviderId,
+}: {
+  chatId: string;
+  aiProviderId: string | null;
+}) {
+  try {
+    return await db
+      .update(chat)
+      .set({ aiProviderId })
+      .where(eq(chat.id, chatId));
+  } catch (_error) {
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to update chat AI provider",
+    );
+  }
+}
+
 export async function updateChatMaxIterationsReached({
   chatId,
   maxIterationsReached,
@@ -550,6 +593,8 @@ export async function upsertUserSettings({
   customInstructions,
   enabledSkillIds,
   customSkills,
+  aiProviders,
+  netsuiteMcpTools,
 }: {
   userId: string;
   googleApiKey?: string | null;
@@ -572,6 +617,8 @@ export async function upsertUserSettings({
   customInstructions?: string | null;
   enabledSkillIds?: string[] | null;
   customSkills?: CustomSkill[] | null;
+  aiProviders?: AiProviderConfig | null;
+  netsuiteMcpTools?: NetsuiteMcpToolSettings | null;
 }): Promise<UserSettings> {
   try {
     const now = new Date();
@@ -635,6 +682,20 @@ export async function upsertUserSettings({
             customSkills !== undefined
               ? (customSkills ?? [])
               : (existing.customSkills ?? []),
+          aiProviders:
+            aiProviders !== undefined
+              ? (aiProviders ?? {
+                  defaultId: null,
+                  providers: [],
+                })
+              : (existing.aiProviders ?? {
+                  defaultId: null,
+                  providers: [],
+                }),
+          netsuiteMcpTools:
+            netsuiteMcpTools !== undefined
+              ? (netsuiteMcpTools ?? { byAccount: {} })
+              : (existing.netsuiteMcpTools ?? { byAccount: {} }),
           updatedAt: now,
         })
         .where(eq(userSettings.userId, userId))
@@ -662,6 +723,11 @@ export async function upsertUserSettings({
         customInstructions: customInstructions ?? null,
         enabledSkillIds: enabledSkillIds ?? [],
         customSkills: customSkills ?? [],
+        aiProviders: aiProviders ?? {
+          defaultId: null,
+          providers: [],
+        },
+        netsuiteMcpTools: netsuiteMcpTools ?? { byAccount: {} },
         createdAt: now,
         updatedAt: now,
       })

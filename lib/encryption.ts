@@ -1,4 +1,9 @@
-import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHash,
+  randomBytes,
+} from "node:crypto";
 
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 12; // 96 bits for GCM
@@ -16,19 +21,18 @@ function getEncryptionKey(): Buffer {
     );
   }
 
-  // If key is base64 encoded, decode it; otherwise use it directly
-  try {
-    return Buffer.from(key, "base64");
-  } catch {
-    // If not base64, treat as raw string and pad/truncate to 32 bytes
-    const keyBuffer = Buffer.from(key, "utf-8");
-    if (keyBuffer.length !== 32) {
-      throw new Error(
-        "ENCRYPTION_KEY must be 32 bytes. Use: openssl rand -base64 32",
-      );
-    }
-    return keyBuffer;
+  const asBase64 = Buffer.from(key, "base64");
+  if (asBase64.length === 32) {
+    return asBase64;
   }
+
+  const asUtf8 = Buffer.from(key, "utf8");
+  if (asUtf8.length === 32) {
+    return asUtf8;
+  }
+
+  // Other secret strings → stable 32-byte AES key
+  return createHash("sha256").update(key).digest();
 }
 
 /**

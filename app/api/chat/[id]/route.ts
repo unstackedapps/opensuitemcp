@@ -29,6 +29,7 @@ export async function GET(
     return Response.json(
       {
         maxIterationsReached: chat.maxIterationsReached,
+        aiProviderId: chat.aiProviderId ?? null,
       },
       { status: 200 },
     );

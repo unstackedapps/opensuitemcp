@@ -1,5 +1,10 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "extends": [
+    "ultracite/biome/core",
+    "ultracite/biome/react",
+    "ultracite/biome/next"
+  ],
   "files": {
     "includes": [
       "**/*",
@@ -12,6 +17,9 @@
       "!.turbo",
       "!dist",
       "!build",
+      "!playwright-report",
+      "!test-results",
+      "!blob-report",
       // Vendored Oracle SuiteCloud Agent Skills pack (not our source)
       "!lib/ai/skills/oracle"
     ]
@@ -22,6 +30,25 @@
     "indentStyle": "space",
     "indentWidth": 2,
     "lineWidth": 80
+  },
+  "javascript": {
+    "formatter": {
+      /* Keep existing function-parameter trailing commas. */
+      "trailingCommas": "all"
+    }
+  },
+  "assist": {
+    "actions": {
+      "source": {
+        /* Alphabetical reordering would churn the whole repo on upgrade. */
+        "useSortedAttributes": "off",
+        "useSortedKeys": "off",
+        "useSortedInterfaceMembers": "off",
+        "useSortedProperties": "off",
+        "useSortedTypeFields": "off",
+        "useSortedPackageJson": "off"
+      }
+    }
   },
   "linter": {
     "rules": {
@@ -36,7 +63,16 @@
         "noConsole": "off",
 
         /* Needed for generateUUID() */
-        "noBitwiseOperators": "off"
+        "noBitwiseOperators": "off",
+
+        /* Too many false positives */
+        "noUnnecessaryConditions": "off",
+
+        /* Needs more work to fix (Ultracite 7) */
+        "noEmptyBlockStatements": "off",
+        "noLeakedRender": "off",
+        "noEqualsToNull": "off",
+        "useAwait": "off"
       },
       "style": {
         /* Allowing magic numbers */
@@ -46,24 +82,58 @@
         "noNestedTernary": "off",
 
         /* React components commonly use PascalCase */
-        "useFilenamingConvention": "off"
+        "useFilenamingConvention": "off",
+
+        /* Needs more work to fix (Ultracite 7) */
+        "useConsistentTypeDefinitions": "off",
+        "useConsistentArrowReturn": "off",
+        "useConsistentArrayType": "off",
+        "useConsistentMemberAccessibility": "off",
+        "useConsistentObjectDefinitions": "off",
+        "useDestructuring": "off",
+        "noNegationElse": "off",
+        "useErrorCause": "off",
+        "noSubstr": "off",
+        "noIncrementDecrement": "off",
+        "noInferrableTypes": "off",
+        "useCollapsedIf": "off",
+        "useBlockStatements": "off",
+        "noUnusedTemplateLiteral": "off"
       },
       "performance": {
         /* Barrel files are a common pattern in React projects */
         "noBarrelFile": "off",
         /* Generated images use base64 data URIs, cannot use Next.js Image */
-        "noImgElement": "off"
-      },
-      "nursery": {
-        /* Too many false positives */
-        "noUnnecessaryConditions": "off"
+        "noImgElement": "off",
+
+        /* Needs more work to fix (Ultracite 7) */
+        "noJsxPropsBind": "off",
+        "useTopLevelRegex": "off",
+        "noAwaitInLoops": "off"
       },
       "complexity": {
         /* Needs more work to fix */
         "noExcessiveCognitiveComplexity": "off",
 
         /* This one has false positives. It's a bit... iffy 😉 */
-        "useSimplifiedLogicExpression": "off"
+        "useSimplifiedLogicExpression": "off",
+
+        /* Needs more work to fix (Ultracite 7) */
+        "noUselessCatchBinding": "off",
+        "noVoid": "off",
+        "noUselessReturn": "off",
+        "noUselessUndefined": "off",
+        "useOptionalChain": "off"
+      },
+      "correctness": {
+        /* Needs more work to fix (Ultracite 7) */
+        "noUnusedInstantiation": "off",
+        "noGlobalDirnameFilename": "off",
+        "useImageSize": "off"
+      },
+      "nursery": {
+        /* Needs more work to fix (Ultracite 7) */
+        "useSortedClasses": "off"
       },
       "a11y": {
         /* Needs more work to fix */

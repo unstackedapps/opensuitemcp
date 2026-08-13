@@ -180,9 +180,12 @@ export function McpAppHost({
         }
 
         const callPayload = await callResponse.json();
-        const freshResult = toCallToolResult(
-          callResponse.ok || callPayload?.content ? callPayload : launch.result,
-        );
+        if (!callResponse.ok) {
+          throw new Error(
+            callPayload.error || "This NetSuite MCP tool is disabled.",
+          );
+        }
+        const freshResult = toCallToolResult(callPayload);
 
         if (cancelled) {
           return;
@@ -274,12 +277,23 @@ export function McpAppHost({
               arguments: params.arguments ?? {},
             }),
           });
-          const payload = toCallToolResult(await response.json());
+          const payload = await response.json();
+          if (!response.ok) {
+            const message =
+              typeof payload.error === "string"
+                ? payload.error
+                : "This NetSuite MCP tool is disabled.";
+            return {
+              content: [{ type: "text", text: message }],
+              isError: true,
+            };
+          }
+          const result = toCallToolResult(payload);
           console.log(
             `[MCP App] tools/call ${params.name} →`,
-            summarizeResult(payload),
+            summarizeResult(result),
           );
-          return payload;
+          return result;
         };
 
         appBridge.onreadresource = async (params) => {

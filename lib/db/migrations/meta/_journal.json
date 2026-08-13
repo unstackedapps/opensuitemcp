@@ -64,6 +64,20 @@
       "when": 1785636000000,
       "tag": "0008_user_skill_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1786478400000,
+      "tag": "0009_ai_providers",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1786482000000,
+      "tag": "0010_netsuite_mcp_tools",
+      "breakpoints": true
     }
   ]
 }

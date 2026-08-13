@@ -205,6 +205,13 @@ export function PromptLibraryPanel({
         if (cancelled) {
           return;
         }
+        if (!response.ok) {
+          setError(
+            payload.error || "This NetSuite MCP tool is disabled in Settings.",
+          );
+          setStatus("error");
+          return;
+        }
         const parsed = parsePromptLibraryResult(payload);
         if (parsed.error && parsed.prompts.length === 0) {
           setError(parsed.error);

@@ -128,7 +128,13 @@ export function AppPortal({ user }: { user: User | undefined }) {
       >
         <DialogContent
           className="flex h-[min(85vh,42rem)] w-[calc(100vw-1.5rem)] max-w-4xl flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl"
+          onInteractOutside={(event) => {
+            event.preventDefault();
+          }}
           onOpenAutoFocus={(event) => {
+            event.preventDefault();
+          }}
+          onPointerDownOutside={(event) => {
             event.preventDefault();
           }}
         >

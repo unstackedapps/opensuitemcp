@@ -1,95 +1,115 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/app/(auth)/auth";
+import { getUserSettings } from "@/lib/db/queries";
+import { resolveRequestedNetSuiteAccountId } from "@/lib/netsuite/accounts";
 import { fetchMCPTools } from "@/lib/netsuite/mcp";
+import {
+  fallbackMcpToolLabel,
+  isMcpToolAllowed,
+} from "@/lib/netsuite/mcp-tool-settings";
 import { getNetSuiteToken } from "@/lib/netsuite/tokens";
-import type { EnhancedToolMetadata } from "@/lib/netsuite/tool-metadata";
-import { enhanceMCPToolsWithAI } from "@/lib/netsuite/tool-metadata";
 
-// Simple in-memory cache for enhanced tool metadata (keyed by userId)
-// In production, consider using Redis or a proper cache
-const enhancedToolsCache = new Map<
+type CatalogTool = {
+  originalName: string;
+  displayName: string;
+  description: string;
+};
+
+const toolsCatalogCache = new Map<
   string,
-  { tools: EnhancedToolMetadata[]; timestamp: number }
+  { tools: CatalogTool[]; timestamp: number }
 >();
 
-const CACHE_TTL = 1000 * 60 * 30; // 30 minutes
+const CACHE_TTL = 1000 * 60 * 30;
+
+function cacheKey(userId: string, accountId: string): string {
+  return `${userId}:${accountId}`;
+}
 
 /**
- * GET /api/netsuite/mcp-tools
- * Returns list of available MCP tools with AI-enhanced metadata
- * Uses session-based caching to avoid re-enhancing on every request
+ * GET /api/netsuite/mcp-tools?accountId=
+ * Lists MCP tools for a specific NetSuite account (defaults to active),
+ * with that account's Allowed/Disabled state.
+ * Labels come from NetSuite metadata / local fallback — no AI calls.
  */
-export async function GET() {
+export async function GET(request: Request) {
   const session = await auth();
 
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const accessToken = await getNetSuiteToken(session.user.id);
+  const settings = await getUserSettings({ userId: session.user.id });
+  const requestedAccountId = new URL(request.url).searchParams.get("accountId");
+  const accountId = resolveRequestedNetSuiteAccountId({
+    requested: requestedAccountId,
+    activeAccountId: settings?.netsuiteAccountId,
+  });
+  const accessToken = accountId
+    ? await getNetSuiteToken(session.user.id, accountId)
+    : null;
 
-  if (!accessToken) {
-    return NextResponse.json(
-      {
-        error: "NetSuite not connected",
-        message:
-          "Please connect your NetSuite account in Settings to access MCP tools.",
-      },
-      { status: 400 },
-    );
+  if (!(accountId && accessToken)) {
+    return NextResponse.json({
+      connected: false,
+      accountId,
+      tools: [],
+    });
   }
 
   try {
-    // Check cache first
-    const cached = enhancedToolsCache.get(session.user.id);
     const now = Date.now();
-    if (
-      cached &&
-      cached.tools.length > 0 &&
-      now - cached.timestamp < CACHE_TTL
-    ) {
-      console.log(
-        `[MCP Tools API] Returning ${cached.tools.length} cached enhanced tools`,
+    const key = cacheKey(session.user.id, accountId);
+    let catalog = toolsCatalogCache.get(key);
+    if (!catalog || now - catalog.timestamp >= CACHE_TTL) {
+      const rawTools = await fetchMCPTools(
+        session.user.id,
+        accessToken,
+        accountId,
       );
-      return NextResponse.json({ tools: cached.tools });
-    }
+      if (rawTools.length === 0) {
+        return NextResponse.json({
+          connected: true,
+          accountId,
+          tools: [],
+        });
+      }
 
-    // Fetch raw tools from NetSuite
-    const rawTools = await fetchMCPTools(session.user.id, accessToken);
+      const tools = rawTools.map((tool) => {
+        const label = fallbackMcpToolLabel(tool);
+        return {
+          originalName: tool.name,
+          displayName: label.displayName,
+          description: label.description,
+        };
+      });
 
-    if (rawTools.length === 0) {
-      return NextResponse.json({ tools: [] });
-    }
+      catalog = { tools, timestamp: now };
+      toolsCatalogCache.set(key, catalog);
 
-    // Enhance with AI-generated metadata
-    console.log(
-      `[MCP Tools API] Enhancing ${rawTools.length} tools with AI metadata...`,
-    );
-    const enhancedTools = await enhanceMCPToolsWithAI(
-      rawTools,
-      session.user.id,
-    );
-
-    // Cache the enhanced tools
-    enhancedToolsCache.set(session.user.id, {
-      tools: enhancedTools,
-      timestamp: now,
-    });
-
-    // Clean up old cache entries (older than 1 hour)
-    for (const [userId, entry] of enhancedToolsCache.entries()) {
-      if (now - entry.timestamp > CACHE_TTL * 2) {
-        enhancedToolsCache.delete(userId);
+      for (const [entryKey, entry] of toolsCatalogCache.entries()) {
+        if (now - entry.timestamp > CACHE_TTL * 2) {
+          toolsCatalogCache.delete(entryKey);
+        }
       }
     }
 
-    console.log(
-      `[MCP Tools API] Returning ${enhancedTools.length} enhanced tools`,
-    );
-
-    return NextResponse.json({ tools: enhancedTools });
+    return NextResponse.json({
+      connected: true,
+      accountId,
+      tools: catalog.tools.map((tool) => ({
+        originalName: tool.originalName,
+        displayName: tool.displayName,
+        description: tool.description,
+        allowed: isMcpToolAllowed(
+          settings?.netsuiteMcpTools,
+          accountId,
+          tool.originalName,
+        ),
+      })),
+    });
   } catch (error) {
-    console.error("[MCP Tools API] Error fetching/enhancing tools:", error);
+    console.error("[MCP Tools API] Error fetching tools:", error);
     return NextResponse.json(
       {
         error: "Failed to fetch MCP tools",

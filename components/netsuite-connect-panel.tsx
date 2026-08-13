@@ -1,9 +1,14 @@
-"use client";
+﻿"use client";
 
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import { useId, useState } from "react";
 import { LoaderIcon, WarningIcon } from "@/components/icons";
 import { NetSuiteIntegrationChecklist } from "@/components/netsuite-integration-checklist";
+import {
+  formatMcpToolsAvailableLabel,
+  NetSuiteMcpToolsSection,
+  useNetSuiteMcpToolSummary,
+} from "@/components/netsuite-mcp-tools-panel";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -16,7 +21,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { NetSuiteAccountEntry } from "@/lib/netsuite/accounts";
+import {
+  formatNetSuiteAccountDisplay,
+  type NetSuiteAccountEntry,
+} from "@/lib/netsuite/accounts";
 import { cn } from "@/lib/utils";
 
 export type NetSuiteDcrProbeState =
@@ -42,6 +50,7 @@ type NetSuiteConnectPanelProps = {
   newAccountLabel: string;
   dcrProbe: NetSuiteDcrProbeState;
   isConnected: boolean;
+  connectedAccountIds?: string[];
   isConnecting: boolean;
   canConnect: boolean;
   onNewAccountIdChange: (value: string) => void;
@@ -54,6 +63,8 @@ type NetSuiteConnectPanelProps = {
   onProbe: (accountId: string) => void;
   onOpenIntegration: () => void;
   onConnect: () => void;
+  onDisconnect: (accountId: string) => void;
+  settingsActive: boolean;
 };
 
 const STEPS = [
@@ -63,6 +74,47 @@ const STEPS = [
 ] as const;
 
 const compactInputClass = "h-8 px-2.5 text-sm";
+
+function AccountMcpToolsToggle({
+  accountId,
+  enabled,
+  expanded,
+  onToggle,
+}: {
+  accountId: string;
+  enabled: boolean;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const { total, isLoading } = useNetSuiteMcpToolSummary(accountId, enabled);
+  if (!enabled) {
+    return null;
+  }
+  if (isLoading && total == null) {
+    return (
+      <span className="text-muted-foreground text-xs">Loading tools…</span>
+    );
+  }
+  if (total == null) {
+    return null;
+  }
+  return (
+    <Button
+      aria-expanded={expanded}
+      className="h-auto px-1.5 py-0.5 text-muted-foreground text-xs"
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onToggle();
+      }}
+      size="sm"
+      type="button"
+      variant="ghost"
+    >
+      {formatMcpToolsAvailableLabel(total)}
+    </Button>
+  );
+}
 
 function resolveWizardStep(args: {
   hasAccounts: boolean;
@@ -90,6 +142,7 @@ export function NetSuiteConnectPanel({
   newAccountLabel,
   dcrProbe,
   isConnected,
+  connectedAccountIds = [],
   isConnecting,
   canConnect,
   onNewAccountIdChange,
@@ -102,12 +155,16 @@ export function NetSuiteConnectPanel({
   onProbe,
   onOpenIntegration,
   onConnect,
+  onDisconnect,
+  settingsActive,
 }: NetSuiteConnectPanelProps) {
   const accountIdFieldId = useId();
   const accountLabelFieldId = useId();
   const renameFieldId = useId();
-  const [manageOpen, setManageOpen] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [toolsOpenAccountId, setToolsOpenAccountId] = useState<string | null>(
+    null,
+  );
   const [renameAccountId, setRenameAccountId] = useState<string | null>(null);
 
   const hasAccounts = accounts.length > 0;
@@ -134,6 +191,15 @@ export function NetSuiteConnectPanel({
     renameAccountId != null
       ? (editingLabels[renameAccountId] ?? renameTarget?.label ?? "")
       : "";
+  const selectedAccount = accounts.find(
+    (account) => account.accountId === selectedAccountId,
+  );
+  const selectedAccountDisplay = selectedAccountId
+    ? formatNetSuiteAccountDisplay({
+        accountId: selectedAccountId,
+        label: selectedAccount?.label,
+      })
+    : "";
 
   if (showSkeletons && !hasAccounts) {
     return (
@@ -219,7 +285,7 @@ export function NetSuiteConnectPanel({
             <p className="text-muted-foreground text-xs leading-relaxed">
               Account{" "}
               <span className="font-medium text-foreground">
-                {selectedAccountId}
+                {selectedAccountDisplay}
               </span>
               . A NetSuite administrator needs to create this once per account.
             </p>
@@ -247,14 +313,25 @@ export function NetSuiteConnectPanel({
                   <p className="text-xs text-yellow-800 dark:text-yellow-200">
                     {dcrProbe.error}
                   </p>
-                  <Button
-                    onClick={() => onProbe(selectedAccountId)}
-                    size="sm"
-                    type="button"
-                    variant="outline"
-                  >
-                    Check again
-                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      onClick={() => onProbe(selectedAccountId)}
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                    >
+                      Check again
+                    </Button>
+                    <Button
+                      disabled={!selectedAccountId}
+                      onClick={() => onRemoveAccount(selectedAccountId)}
+                      size="sm"
+                      type="button"
+                      variant="ghost"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -281,82 +358,47 @@ export function NetSuiteConnectPanel({
                 >
                   I&apos;ve finished — Check again
                 </Button>
+                <Button
+                  disabled={!selectedAccountId}
+                  onClick={() => onRemoveAccount(selectedAccountId)}
+                  size="sm"
+                  type="button"
+                  variant="ghost"
+                >
+                  Cancel
+                </Button>
               </div>
             </div>
           ) : null}
         </div>
       ) : null}
 
-      {hasAccounts && activeStep === 3 ? (
-        <div className="space-y-3">
-          <div className="space-y-1">
-            <p className="font-medium text-sm">Connect with OAuth</p>
-            <p className="text-muted-foreground text-xs leading-relaxed">
-              {isConnected
-                ? "This account is connected. You can disconnect or manage other accounts below."
-                : "Integration looks ready. Connect to authorize OpenSuiteMCP for MCP tools."}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              disabled={!canConnect && !isConnected}
-              onClick={onConnect}
-              size="sm"
-              type="button"
-              variant={isConnected ? "destructive" : "default"}
-            >
-              {isConnected
-                ? "Disconnect"
-                : isConnecting
-                  ? "Connecting..."
-                  : "Connect"}
-            </Button>
-            {isConnected ? (
-              <div className="flex items-center gap-1.5">
-                <div className="h-1.5 w-1.5 rounded-full bg-green-600 dark:bg-green-400" />
-                <span className="text-muted-foreground text-xs">
-                  Connected · {selectedAccountId}
-                </span>
-              </div>
-            ) : dcrProbe.status === "ready" ? (
-              <span className="text-muted-foreground text-xs">
-                Integration ready
-              </span>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
-
       {hasAccounts ? (
         <div className="space-y-2 border-border/60 border-t pt-3">
-          <button
-            className="flex w-full items-center justify-between text-left"
-            onClick={() => setManageOpen((open) => !open)}
-            type="button"
-          >
-            <div>
-              <p className="font-medium text-sm">Your accounts</p>
-              <p className="text-muted-foreground text-xs">
-                {`${accounts.length} account${accounts.length === 1 ? "" : "s"}`}
-                {selectedAccountId ? ` · active ${selectedAccountId}` : ""}
-              </p>
-            </div>
-            <span className="text-muted-foreground text-xs">
-              {manageOpen ? "Hide" : "Manage"}
-            </span>
-          </button>
+          <div className="flex justify-end">
+            <Button
+              onClick={() => setShowAddForm(true)}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              Add Account
+            </Button>
+          </div>
 
-          {manageOpen ? (
-            <div className="space-y-2">
-              <ul className="divide-y divide-border/60 rounded-md border border-border/60">
-                {accounts.map((account) => {
-                  const isActive = account.accountId === selectedAccountId;
-                  const radioId = `ns-account-${account.accountId}`;
-                  return (
-                    <li
-                      className="flex items-center gap-2.5 px-2.5 py-2"
-                      key={account.accountId}
-                    >
+          <div className="space-y-2">
+            <ul className="divide-y divide-border/60 rounded-md border border-border/60">
+              {accounts.map((account) => {
+                const isActive = account.accountId === selectedAccountId;
+                const accountConnected = connectedAccountIds.includes(
+                  account.accountId,
+                );
+                const toolsExpanded = toolsOpenAccountId === account.accountId;
+                const radioId = `ns-account-${account.accountId}`;
+                const displayName = formatNetSuiteAccountDisplay(account);
+                return (
+                  <li className="px-2.5 py-2" key={account.accountId}>
+                    <div className="flex items-center gap-2.5">
                       <input
                         checked={isActive}
                         className="size-3.5 shrink-0 accent-foreground"
@@ -375,22 +417,54 @@ export function NetSuiteConnectPanel({
                         htmlFor={radioId}
                       >
                         <p className="truncate text-sm">
-                          <span className="font-medium">{account.label}</span>
-                          {isConnected && isActive ? (
+                          <span className="font-medium">{displayName}</span>
+                          {accountConnected ? (
                             <span className="ml-1.5 text-muted-foreground text-xs">
                               Connected
                             </span>
                           ) : null}
                         </p>
-                        {account.label !== account.accountId ? (
-                          <p className="truncate text-muted-foreground text-xs">
-                            {account.accountId}
-                          </p>
-                        ) : null}
                       </label>
+                      <AccountMcpToolsToggle
+                        accountId={account.accountId}
+                        enabled={accountConnected && settingsActive}
+                        expanded={toolsExpanded}
+                        onToggle={() => {
+                          setToolsOpenAccountId((current) =>
+                            current === account.accountId
+                              ? null
+                              : account.accountId,
+                          );
+                        }}
+                      />
+                      {accountConnected ? (
+                        <Button
+                          onClick={() => {
+                            setToolsOpenAccountId((current) =>
+                              current === account.accountId ? null : current,
+                            );
+                            onDisconnect(account.accountId);
+                          }}
+                          size="sm"
+                          type="button"
+                          variant="destructive"
+                        >
+                          Disconnect
+                        </Button>
+                      ) : isActive ? (
+                        <Button
+                          className="cursor-pointer"
+                          disabled={!canConnect || isConnecting}
+                          onClick={onConnect}
+                          size="sm"
+                          type="button"
+                        >
+                          {isConnecting ? "Connecting..." : "Connect"}
+                        </Button>
+                      ) : null}
                       <div className="flex shrink-0 items-center gap-0.5">
                         <Button
-                          aria-label={`Rename ${account.label}`}
+                          aria-label={`Rename ${displayName}`}
                           className="size-7"
                           onClick={() => {
                             onEditingLabelChange(
@@ -406,7 +480,7 @@ export function NetSuiteConnectPanel({
                           <Pencil className="size-3.5" />
                         </Button>
                         <Button
-                          aria-label={`Remove ${account.label}`}
+                          aria-label={`Remove ${displayName}`}
                           className="size-7 text-muted-foreground hover:text-destructive"
                           onClick={() => onRemoveAccount(account.accountId)}
                           size="icon"
@@ -416,41 +490,51 @@ export function NetSuiteConnectPanel({
                           <Trash2 className="size-3.5" />
                         </Button>
                       </div>
-                    </li>
-                  );
-                })}
-              </ul>
+                    </div>
+                    {toolsExpanded ? (
+                      <div className="mt-2 border-border/60 border-t pt-2 pl-6">
+                        <NetSuiteMcpToolsSection
+                          accountId={account.accountId}
+                          accountLabel={account.label}
+                          active={settingsActive}
+                          connected={accountConnected}
+                          nested
+                        />
+                      </div>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
 
-              {showAddForm ? (
-                <div className="space-y-2 rounded-md border border-border/60 p-2.5">
-                  <AddAccountForm
-                    accountId={newAccountId}
-                    accountIdFieldId={`${accountIdFieldId}-another`}
-                    accountLabel={newAccountLabel}
-                    accountLabelFieldId={`${accountLabelFieldId}-another`}
-                    onAccountIdChange={onNewAccountIdChange}
-                    onAccountLabelChange={onNewAccountLabelChange}
-                    onSubmit={() => {
-                      onAddAccount();
-                      setShowAddForm(false);
-                    }}
-                    submitLabel="Add"
-                  />
+            {showAddForm ? (
+              <div className="space-y-2 rounded-md border border-border/60 p-2.5">
+                <AddAccountForm
+                  accountId={newAccountId}
+                  accountIdFieldId={`${accountIdFieldId}-another`}
+                  accountLabel={newAccountLabel}
+                  accountLabelFieldId={`${accountLabelFieldId}-another`}
+                  onAccountIdChange={onNewAccountIdChange}
+                  onAccountLabelChange={onNewAccountLabelChange}
+                  onSubmit={() => {
+                    onAddAccount();
+                    setShowAddForm(false);
+                  }}
+                  submitLabel="Add"
+                />
+                <div className="flex justify-end">
+                  <Button
+                    onClick={() => setShowAddForm(false)}
+                    size="sm"
+                    type="button"
+                    variant="ghost"
+                  >
+                    Cancel
+                  </Button>
                 </div>
-              ) : (
-                <Button
-                  aria-label="Add another account"
-                  className="size-7"
-                  onClick={() => setShowAddForm(true)}
-                  size="icon"
-                  type="button"
-                  variant="outline"
-                >
-                  <Plus className="size-3.5" />
-                </Button>
-              )}
-            </div>
-          ) : null}
+              </div>
+            ) : null}
+          </div>
         </div>
       ) : null}
 
