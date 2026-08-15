@@ -195,10 +195,9 @@ function IntegrationSetupCard({
               Create the Integration record
             </p>
             <p className="text-xs text-yellow-800 dark:text-yellow-200/80">
-              Account{" "}
-              <span className="font-medium">{accountDisplay}</span>. A NetSuite
-              administrator needs to create this once per account, then you can
-              connect.
+              Account <span className="font-medium">{accountDisplay}</span>. A
+              NetSuite administrator needs to create this once per account, then
+              you can connect.
             </p>
           </div>
           <NetSuiteIntegrationChecklist
@@ -463,9 +462,7 @@ export function NetSuiteConnectPanel({
                                 : `Connect ${displayName}`
                             }
                             className="size-7 text-muted-foreground hover:text-foreground"
-                            disabled={
-                              isActive && (!canConnect || isConnecting)
-                            }
+                            disabled={isActive && (!canConnect || isConnecting)}
                             onClick={() => {
                               if (!isActive) {
                                 onSelectAccount(account.accountId);
