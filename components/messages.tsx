@@ -151,7 +151,7 @@ function PureMessages({
     >
       <Conversation
         className={cn(
-          "mx-auto flex min-w-0 max-w-2xl flex-col gap-4",
+          "mx-auto flex min-w-0 max-w-3xl flex-col gap-4",
           messages.length === 0 && "h-full",
         )}
       >
@@ -183,10 +183,7 @@ function PureMessages({
             />
           ))}
 
-          <div
-            className="min-h-[24px] min-w-[24px] shrink-0"
-            ref={messagesEndRef}
-          />
+          <div className="size-6 shrink-0" ref={messagesEndRef} />
         </ConversationContent>
       </Conversation>
 
@@ -212,7 +209,7 @@ function PureMessages({
             right: "0",
           }}
         >
-          <div className="mx-auto flex max-w-2xl justify-center px-2 md:px-4">
+          <div className="mx-auto flex max-w-3xl justify-center px-2 md:px-4">
             <button
               aria-label="Scroll to bottom"
               className="pointer-events-auto rounded-full border bg-background p-2 shadow-lg transition-colors hover:bg-muted"

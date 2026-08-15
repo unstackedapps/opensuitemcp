@@ -1,19 +1,32 @@
 import "server-only";
+import { upsertUserSettings } from "../db/queries";
+import type { UserSettings } from "../db/schema";
 import { decrypt, encrypt } from "../encryption";
 import { assertAllowedProviderUrl } from "./custom-provider-url";
 import {
   type AiProviderConfig,
   type AiProviderEntry,
-  appendProviderEntry,
+  assertCanonicalSeedsPresent,
   clampMaxIterations,
+  ensureSeededProviderConfig,
   findDuplicateProviderLabel,
   findProviderById,
-  isMultiAiProviders,
   MAX_AI_PROVIDER_LABEL_LENGTH,
   MAX_AI_PROVIDERS,
-  migrateLegacyKeysToEntries,
   parseAiProviderConfig,
+  resolveDefaultProviderId,
+  supportsHostedModelOverrides,
 } from "./provider-entries";
+
+function legacyFromUserSettings(settings: UserSettings) {
+  return {
+    googleApiKey: settings.googleApiKey,
+    anthropicApiKey: settings.anthropicApiKey,
+    openaiApiKey: settings.openaiApiKey,
+    aiProvider: settings.aiProvider,
+    maxIterations: settings.maxIterations,
+  };
+}
 
 export function decryptProviderConfig(
   config: AiProviderConfig | null | undefined,
@@ -50,65 +63,81 @@ export async function persistProviderConfig(params: {
     maxIterations?: string | null;
   };
 }): Promise<AiProviderConfig> {
-  const incoming = parseAiProviderConfig(params.incoming);
   const existing = parseAiProviderConfig(params.existingConfig);
+  const seeded = ensureSeededProviderConfig(
+    parseAiProviderConfig(params.incoming),
+    params.legacy,
+  );
 
-  if (incoming.providers.length === 0) {
-    if (isMultiAiProviders(existing)) {
-      throw new Error("Cannot remove the last AI provider after switching.");
-    }
-    return { defaultId: null, providers: [] };
-  }
+  assertCanonicalSeedsPresent(seeded.providers);
 
-  if (incoming.providers.length > MAX_AI_PROVIDERS) {
+  if (seeded.providers.length > MAX_AI_PROVIDERS) {
     throw new Error(`You can save at most ${MAX_AI_PROVIDERS} AI providers.`);
   }
 
-  const duplicate = findDuplicateProviderLabel(incoming.providers);
+  const duplicate = findDuplicateProviderLabel(seeded.providers);
   if (duplicate) {
     throw new Error(`Provider label "${duplicate}" is already in use.`);
   }
 
   const encryptedIncoming = await Promise.all(
-    incoming.providers.map((entry) =>
-      encryptIncomingEntry(entry, findProviderById(existing, entry.id)),
+    seeded.providers.map((entry) =>
+      encryptIncomingEntry(
+        entry,
+        findProviderById(existing, entry.id),
+        seeded.providers,
+      ),
     ),
   );
 
-  if (!isMultiAiProviders(existing)) {
-    const migrated = migrateLegacyKeysToEntries(params.legacy);
-    let merged = migrated;
-    for (const entry of encryptedIncoming) {
-      merged = appendProviderEntry(merged, entry);
-    }
-    if (!merged.defaultId) {
-      merged = {
-        ...merged,
-        defaultId: merged.providers[0]?.id ?? null,
-      };
-    }
-    return merged;
-  }
-
-  if (encryptedIncoming.length === 0) {
-    throw new Error("Cannot remove the last AI provider after switching.");
-  }
-
   const defaultId =
-    incoming.defaultId &&
-    encryptedIncoming.some((entry) => entry.id === incoming.defaultId)
-      ? incoming.defaultId
+    seeded.defaultId &&
+    encryptedIncoming.some((entry) => entry.id === seeded.defaultId)
+      ? seeded.defaultId
       : (encryptedIncoming[0]?.id ?? null);
 
   return {
-    defaultId,
+    defaultId: resolveDefaultProviderId({
+      defaultId,
+      providers: encryptedIncoming,
+    }),
     providers: encryptedIncoming,
   };
+}
+
+export async function updateDefaultAiProviderId(params: {
+  userId: string;
+  providerId: string | null;
+  settings: UserSettings;
+}): Promise<AiProviderConfig> {
+  const existing = parseAiProviderConfig(params.settings.aiProviders);
+  const decrypted = decryptProviderConfig(params.settings.aiProviders);
+
+  if (params.providerId && !findProviderById(decrypted, params.providerId)) {
+    throw new Error("Unknown AI provider.");
+  }
+
+  const persisted = await persistProviderConfig({
+    incoming: {
+      ...decrypted,
+      defaultId: params.providerId,
+    },
+    existingConfig: existing,
+    legacy: legacyFromUserSettings(params.settings),
+  });
+
+  await upsertUserSettings({
+    userId: params.userId,
+    aiProviders: persisted,
+  });
+
+  return persisted;
 }
 
 async function encryptIncomingEntry(
   incoming: AiProviderEntry,
   existing: AiProviderEntry | undefined,
+  knownProviders: AiProviderEntry[],
 ): Promise<AiProviderEntry> {
   const label = incoming.label.trim();
   if (!label || label.length > MAX_AI_PROVIDER_LABEL_LENGTH) {
@@ -124,11 +153,6 @@ async function encryptIncomingEntry(
       throw new Error(
         "Pick Speed and Reasoning models from the custom endpoint list.",
       );
-    }
-  } else {
-    const nextKey = incoming.apiKey?.trim() || existing?.apiKey?.trim();
-    if (!nextKey) {
-      throw new Error(`Enter an API key for ${label}.`);
     }
   }
 
@@ -149,11 +173,21 @@ async function encryptIncomingEntry(
     apiKey,
     maxIterations: clampMaxIterations(incoming.maxIterations),
     baseUrl: incoming.type === "custom" ? incoming.baseUrl?.trim() : undefined,
-    speedModelId:
-      incoming.type === "custom" ? incoming.speedModelId?.trim() : undefined,
-    reasoningModelId:
-      incoming.type === "custom"
-        ? incoming.reasoningModelId?.trim()
-        : undefined,
+    speedModelId: shouldPersistModelIds(incoming, knownProviders)
+      ? incoming.speedModelId?.trim() || undefined
+      : undefined,
+    reasoningModelId: shouldPersistModelIds(incoming, knownProviders)
+      ? incoming.reasoningModelId?.trim() || undefined
+      : undefined,
   };
+}
+
+function shouldPersistModelIds(
+  entry: AiProviderEntry,
+  knownProviders: AiProviderEntry[],
+): boolean {
+  return (
+    entry.type === "custom" ||
+    supportsHostedModelOverrides(entry, knownProviders)
+  );
 }

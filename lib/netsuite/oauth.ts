@@ -88,8 +88,9 @@ export async function buildAuthorizationUrl(params: {
   userId: string;
   codeChallenge: string;
   state: string;
+  accountId?: string | null;
 }): Promise<string> {
-  const config = await getNetSuiteConfig(params.userId);
+  const config = await getNetSuiteConfig(params.userId, params.accountId);
   if (!config) {
     throw new Error(
       "NetSuite configuration is missing. Add an account and Connect via Settings.",
@@ -118,13 +119,14 @@ export async function exchangeCodeForToken(params: {
   code: string;
   codeVerifier: string;
   state: string;
+  accountId?: string | null;
 }): Promise<{
   access_token: string;
   refresh_token: string;
   expires_in: number;
   token_type: string;
 }> {
-  const config = await getNetSuiteConfig(params.userId);
+  const config = await getNetSuiteConfig(params.userId, params.accountId);
   if (!config) {
     throw new Error(
       "NetSuite configuration is missing. Add an account and Connect via Settings.",

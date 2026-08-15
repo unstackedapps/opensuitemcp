@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getUserSettings } from "@/lib/db/queries";
 import { publicAppUrl } from "@/lib/http/public-origin";
+import { normalizeNetSuiteAccountId } from "@/lib/netsuite/accounts";
 import { callbackSchema, exchangeCodeForToken } from "@/lib/netsuite/oauth";
 import { saveNetSuiteToken } from "@/lib/netsuite/tokens";
 
@@ -34,6 +35,7 @@ export async function GET(request: Request) {
   const storedCodeVerifier = cookieStore.get("netsuite_code_verifier")?.value;
   const storedState = cookieStore.get("netsuite_state")?.value;
   const userId = cookieStore.get("netsuite_user_id")?.value;
+  const storedAccountId = cookieStore.get("netsuite_account_id")?.value;
 
   // Validate state to prevent CSRF attacks
   if (!storedState || storedState !== state) {
@@ -52,24 +54,28 @@ export async function GET(request: Request) {
     // Exchange authorization code for tokens
     const tokenResponse = await exchangeCodeForToken({
       userId,
+      accountId: storedAccountId,
       code,
       codeVerifier: storedCodeVerifier,
       state,
     });
 
     const settings = await getUserSettings({ userId });
+    const accountId = storedAccountId?.trim()
+      ? normalizeNetSuiteAccountId(storedAccountId)
+      : (settings?.netsuiteAccountId ?? null);
     await saveNetSuiteToken({
       userId,
-      accountId: settings?.netsuiteAccountId ?? null,
+      accountId,
       accessToken: tokenResponse.access_token,
       refreshToken: tokenResponse.refresh_token,
       expiresIn: tokenResponse.expires_in,
     });
 
-    // Clear cookies
     cookieStore.delete("netsuite_code_verifier");
     cookieStore.delete("netsuite_state");
     cookieStore.delete("netsuite_user_id");
+    cookieStore.delete("netsuite_account_id");
 
     return NextResponse.redirect(
       publicAppUrl("/?netsuite_connected=true", request),

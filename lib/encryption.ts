@@ -8,6 +8,8 @@ import {
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 12; // 96 bits for GCM
 const AUTH_TAG_LENGTH = 16; // 128 bits
+const MIN_CIPHERTEXT_BYTES = IV_LENGTH + AUTH_TAG_LENGTH + 1;
+const BASE64_BLOB = /^[A-Za-z0-9+/]+={0,2}$/;
 
 /**
  * Get encryption key from environment variable
@@ -90,4 +92,42 @@ export function decrypt(encryptedData: string): string {
   decrypted += decipher.final("utf-8");
 
   return decrypted;
+}
+
+export type StoredSecret = {
+  plaintext: string;
+  encrypted: boolean;
+};
+
+function looksLikeCiphertext(value: string): boolean {
+  if (value.includes(".") || !BASE64_BLOB.test(value)) {
+    return false;
+  }
+  const combined = Buffer.from(value, "base64");
+  if (combined.length < MIN_CIPHERTEXT_BYTES) {
+    return false;
+  }
+  return combined.toString("base64") === value;
+}
+
+/**
+ * Decrypt AES-256-GCM values written by encrypt().
+ * Legacy plaintext (e.g. NetSuite JWTs stored before encryption) is returned
+ * as-is so callers can re-encrypt on the next write.
+ */
+export function decryptStoredSecret(value: string): StoredSecret {
+  if (!value) {
+    return { plaintext: "", encrypted: false };
+  }
+
+  try {
+    return { plaintext: decrypt(value), encrypted: true };
+  } catch {
+    if (looksLikeCiphertext(value)) {
+      throw new Error(
+        "Failed to decrypt stored secret. Check ENCRYPTION_KEY environment variable.",
+      );
+    }
+    return { plaintext: value, encrypted: false };
+  }
 }

@@ -45,13 +45,13 @@ export default function UpgradesDocsPage() {
               database, then rebuild and restart the app.
             </figcaption>
             <ol className="flex flex-col gap-2 text-[#f3efe6]/80 text-xs sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-2 sm:gap-y-2">
-              <li className="rounded-md border border-white/15 bg-white/[0.04] px-3 py-2">
+              <li className="rounded-md border border-white/15 bg-white/4 px-3 py-2">
                 GitHub release tag
               </li>
               <li aria-hidden className="hidden text-[#f3efe6]/35 sm:inline">
                 →
               </li>
-              <li className="rounded-md border border-white/15 bg-white/[0.04] px-3 py-2">
+              <li className="rounded-md border border-white/15 bg-white/4 px-3 py-2">
                 git fetch / checkout
               </li>
               <li aria-hidden className="hidden text-[#f3efe6]/35 sm:inline">
@@ -63,13 +63,13 @@ export default function UpgradesDocsPage() {
               <li aria-hidden className="hidden text-[#f3efe6]/35 sm:inline">
                 →
               </li>
-              <li className="rounded-md border border-white/15 bg-white/[0.04] px-3 py-2">
+              <li className="rounded-md border border-white/15 bg-white/4 px-3 py-2">
                 pnpm db:migrate
               </li>
               <li aria-hidden className="hidden text-[#f3efe6]/35 sm:inline">
                 →
               </li>
-              <li className="rounded-md border border-white/15 bg-white/[0.04] px-3 py-2">
+              <li className="rounded-md border border-white/15 bg-white/4 px-3 py-2">
                 rebuild · restart
               </li>
             </ol>
@@ -125,7 +125,7 @@ export default function UpgradesDocsPage() {
           </p>
           <pre className="overflow-x-auto rounded-md border border-white/10 bg-[#0c1219] px-3 py-3 font-mono text-[#f3efe6]/85 text-xs leading-relaxed">
             {`git fetch --tags origin
-git checkout v3.1.0   # or the tag you chose
+git checkout v4.0.0   # or the tag you chose
 pnpm install
 pnpm skills:sync
 pnpm db:migrate

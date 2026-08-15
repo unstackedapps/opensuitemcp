@@ -39,7 +39,10 @@ export async function POST(
     }
 
     const settings = await getUserSettings({ userId: session.user.id });
-    const config = parseAiProviderConfig(settings?.aiProviders);
+    if (!settings) {
+      return new ChatSDKError("bad_request:api").toResponse();
+    }
+    const config = parseAiProviderConfig(settings.aiProviders);
     if (!isMultiAiProviders(config)) {
       return Response.json(
         { error: "Multiple AI providers are not enabled." },

@@ -325,11 +325,11 @@ export const ReasoningContent = memo(
       {...props}
     >
       {isPlainText ? (
-        <div className="max-h-[200px] overflow-y-auto whitespace-pre-wrap">
+        <div className="max-h-50 overflow-y-auto whitespace-pre-wrap">
           {children}
         </div>
       ) : (
-        <div className="max-h-[200px] overflow-y-auto">
+        <div className="max-h-50 overflow-y-auto">
           <Response className="grid gap-2">{children}</Response>
         </div>
       )}

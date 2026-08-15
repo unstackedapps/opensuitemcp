@@ -1,48 +1,29 @@
 "use client";
 
 import type { UseChatHelpers } from "@ai-sdk/react";
-import { Trigger } from "@radix-ui/react-select";
 import { BookOpen, Sparkles } from "lucide-react";
 import {
   type Dispatch,
   memo,
   type SetStateAction,
-  startTransition,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
-import useSWR from "swr";
 import { useWindowSize } from "usehooks-ts";
-import { saveChatModelAsCookie } from "@/app/(chat)/actions";
-import { AiProviderSwitcher } from "@/components/ai-provider-switcher";
+import { ComposerModelMenu } from "@/components/composer-model-menu";
+import { NetSuiteAccountSwitcher } from "@/components/netsuite-account-switcher";
 import { useAppPortal } from "@/components/portal/context";
-import { SelectItem } from "@/components/ui/select";
-import { chatModels } from "@/lib/ai/models";
-import {
-  type AiProviderConfig,
-  findProviderById,
-  isMultiAiProviders,
-  parseAiProviderConfig,
-} from "@/lib/ai/provider-entries";
 import { myProvider } from "@/lib/ai/providers";
 import type { ChatMessage } from "@/lib/types";
 import type { AppUsage } from "@/lib/usage";
 import { cn } from "@/lib/utils";
-import {
-  ArrowUpIcon,
-  BrainIcon,
-  ChevronDownIcon,
-  StopIcon,
-  StopwatchFastIcon,
-} from "./icons";
+import { ArrowUpIcon, StopIcon } from "./icons";
 import { Context } from "./message-elements/context";
 import {
   PromptInput,
-  PromptInputModelSelect,
-  PromptInputModelSelectContent,
   PromptInputSubmit,
   PromptInputTextarea,
   PromptInputToolbar,
@@ -273,16 +254,14 @@ function PureMultimodalInput({
         </div>
         <PromptInputToolbar className="border-top-0! border-t-0! p-0 shadow-none dark:border-0 dark:border-transparent!">
           <PromptInputTools className="gap-0 sm:gap-0.5">
-            <AiProviderSwitcher
+            <ComposerModelMenu
               aiProviderId={aiProviderId}
               chatId={chatId}
               onAiProviderChange={onAiProviderChange}
-            />
-            <ModelSelectorCompact
-              aiProviderId={aiProviderId}
               onModelChange={onModelChange}
               selectedModelId={selectedModelId}
             />
+            <NetSuiteAccountSwitcher />
             <TooltipProvider delayDuration={300}>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -363,175 +342,6 @@ export const MultimodalInput = memo(
     return true;
   },
 );
-
-async function fetchSettings() {
-  const response = await fetch("/api/settings");
-  if (!response.ok) {
-    return {
-      aiProvider: "google" as const,
-      aiProviders: { defaultId: null, providers: [] } as AiProviderConfig,
-    };
-  }
-  const data = await response.json();
-  return {
-    aiProvider: (data.aiProvider || "google") as
-      | "google"
-      | "anthropic"
-      | "openai",
-    aiProviders: parseAiProviderConfig(data.aiProviders),
-  };
-}
-
-function PureModelSelectorCompact({
-  selectedModelId,
-  onModelChange,
-  aiProviderId = null,
-}: {
-  selectedModelId: string;
-  onModelChange?: (modelId: string) => void;
-  aiProviderId?: string | null;
-}) {
-  const [optimisticModelId, setOptimisticModelId] = useState(selectedModelId);
-  const [mounted, setMounted] = useState(false);
-
-  // Fetch user's provider setting
-  const { data: settings } = useSWR("settings", fetchSettings, {
-    fallbackData: {
-      aiProvider: "google" as const,
-      aiProviders: { defaultId: null, providers: [] },
-    },
-  });
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    setOptimisticModelId(selectedModelId);
-  }, [selectedModelId]);
-
-  const providerConfig = parseAiProviderConfig(settings?.aiProviders);
-  const multi = isMultiAiProviders(providerConfig);
-  const activeEntry = multi
-    ? (findProviderById(providerConfig, aiProviderId) ??
-      findProviderById(providerConfig, providerConfig.defaultId) ??
-      providerConfig.providers[0])
-    : undefined;
-  const provider = activeEntry?.type || settings?.aiProvider || "google";
-  const availableModels =
-    provider === "custom" && activeEntry
-      ? [
-          {
-            id: "chat-model",
-            name: activeEntry.speedModelId || "Speed",
-            description: "Speed mode — custom endpoint",
-          },
-          {
-            id: "chat-model-reasoning",
-            name: activeEntry.reasoningModelId || "Reasoning",
-            description: "Reasoning mode — custom endpoint",
-          },
-        ]
-      : chatModels.filter(
-          (model) => !model.provider || model.provider === provider,
-        );
-  const speedModel = availableModels.find((m) => m.id === "chat-model");
-  const reasoningModel = availableModels.find(
-    (m) => m.id === "chat-model-reasoning",
-  );
-
-  const handleModelChange = (newModelId: string) => {
-    // Use availableModels (filtered by provider) instead of full chatModels array
-    const model = availableModels.find((m) => m.id === newModelId);
-    const modelName = model?.name || newModelId;
-    console.log("[ModelSelector] Model changed:", {
-      newModelId,
-      modelName,
-      provider,
-      availableModels: availableModels.map((m) => ({ id: m.id, name: m.name })),
-    });
-    toast({
-      type: "success",
-      description: `Switched to ${modelName}`,
-    });
-    setOptimisticModelId(newModelId);
-    onModelChange?.(newModelId);
-    startTransition(() => {
-      saveChatModelAsCookie(newModelId);
-    });
-  };
-
-  const currentIsReasoning = optimisticModelId === "chat-model-reasoning";
-  const currentModel = currentIsReasoning ? reasoningModel : speedModel;
-
-  // Only render Select after mount to avoid hydration issues with Chrome extensions
-  if (!mounted || !speedModel || !reasoningModel) {
-    return (
-      <Button className="h-8 px-2" variant="ghost">
-        {currentIsReasoning ? (
-          <BrainIcon size={16} />
-        ) : (
-          <StopwatchFastIcon size={16} />
-        )}
-        <span className="font-medium text-xs">
-          {currentModel?.name || (currentIsReasoning ? "Reasoning" : "Speed")}
-        </span>
-        <ChevronDownIcon size={16} />
-      </Button>
-    );
-  }
-
-  return (
-    <PromptInputModelSelect
-      onValueChange={(value) => {
-        handleModelChange(value);
-      }}
-      value={optimisticModelId}
-    >
-      <Trigger asChild>
-        <Button className="h-8 px-2" variant="ghost">
-          {currentIsReasoning ? (
-            <BrainIcon size={16} />
-          ) : (
-            <StopwatchFastIcon size={16} />
-          )}
-          <span className="font-medium text-xs">
-            {currentModel?.name || (currentIsReasoning ? "Reasoning" : "Speed")}
-          </span>
-          <ChevronDownIcon size={16} />
-        </Button>
-      </Trigger>
-      <PromptInputModelSelectContent className="min-w-[180px] p-0">
-        <div className="flex flex-col gap-px">
-          <SelectItem value={speedModel.id}>
-            <div className="flex items-center gap-2">
-              <StopwatchFastIcon size={16} />
-              <div className="truncate font-medium text-xs">
-                {speedModel.name}
-              </div>
-            </div>
-            <div className="mt-px truncate text-[10px] text-muted-foreground leading-tight">
-              {speedModel.description}
-            </div>
-          </SelectItem>
-          <SelectItem value={reasoningModel.id}>
-            <div className="flex items-center gap-2">
-              <BrainIcon size={16} />
-              <div className="truncate font-medium text-xs">
-                {reasoningModel.name}
-              </div>
-            </div>
-            <div className="mt-px truncate text-[10px] text-muted-foreground leading-tight">
-              {reasoningModel.description}
-            </div>
-          </SelectItem>
-        </div>
-      </PromptInputModelSelectContent>
-    </PromptInputModelSelect>
-  );
-}
-
-const ModelSelectorCompact = memo(PureModelSelectorCompact);
 
 function PureStopButton({
   stop,

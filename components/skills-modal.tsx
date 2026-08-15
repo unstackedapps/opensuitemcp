@@ -235,7 +235,7 @@ function SkillRow({
             <p className="px-3 py-4 text-destructive text-xs">{contentError}</p>
           ) : null}
           {content !== null && !isLoadingContent ? (
-            <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-words px-3 py-3 font-mono text-[11px] text-muted-foreground leading-relaxed">
+            <pre className="max-h-64 overflow-auto whitespace-pre-wrap wrap-break-word px-3 py-3 font-mono text-[11px] text-muted-foreground leading-relaxed">
               {content}
             </pre>
           ) : null}
@@ -361,7 +361,7 @@ function CustomSkillEditor({
             </div>
           </div>
           <Textarea
-            className="min-h-[160px] font-mono text-sm"
+            className="min-h-40 font-mono text-sm"
             id={contentInputId}
             onChange={(event) => setContent(event.target.value)}
             placeholder="Write or import your custom skill instructions..."

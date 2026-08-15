@@ -7,12 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [4.0.0] - 2026-08-14
+
+### ✨ Added
+
+- **Multiple named AI providers** — save up to 10 (Google, Anthropic, OpenAI, or custom OpenAI-compatible HTTPS); pick a provider per chat; list Speed / Reasoning models from the live API
+- **Canonical provider list** — Google, Anthropic, and OpenAI are always seeded in settings (add extra named copies as needed)
+- **Per-account NetSuite MCP tools** — enable or disable individual tools per connected account (opt-out denylist)
+
+### Changed
+
+- **NetSuite OAuth tokens** — access and refresh tokens encrypted at rest with AES-256-GCM (`ENCRYPTION_KEY`); plaintext rows are re-encrypted on next use
+- **Multiple NetSuite connections** — keep OAuth tokens per account; radio (and composer) set the active one; prompts, skills, and MCP use that account only; composer lists connected accounts only
+- **Composer model menu** — provider and Speed/Reasoning share one nested control; NetSuite stays its own dropdown
+- **NetSuite accounts** — drop the global 1–2–3 chips; Integration setup is a yellow card for the selected account, only when the Integration record is missing
+- **Wider chat column** — composer, messages, and empty-state greeting use `max-w-3xl`
+
+### 💥 Breaking
+
+- **Database** — run `pnpm db:migrate` (`0009` `aiProviders` / `Chat.aiProviderId`, `0010` `netsuiteMcpTools`)
+- **Token encryption** — NetSuite access and refresh tokens encrypt at rest on next use; `ENCRYPTION_KEY` is required
+
 ### 🧰 Technical
 
-- **Node.js 22 + Ultracite 7** — CI and lint use Node 22; Ultracite upgraded from 5.3.9 to 7.10.3 (Biome 2.5.6), pinned in-repo instead of `npx ultracite@latest`
+- **Node.js 22 + Ultracite 7** — CI and lint use Node 22; Ultracite 7.10.3 (Biome 2.5.6), pinned in-repo
+- **Tailwind class lint** — `pnpm lint` now runs the official Tailwind language-server checks (`suggestCanonicalClasses` and class conflicts) so IDE-only class rewrites fail in CI
 - **Self-hosted fonts** — Geist from the local package and vendored Raleway woff2 so `next build` does not fetch Google Fonts
 - **Custom provider URLs** — stricter HTTPS/SSRF checks and clearer validation messages
 - **ENCRYPTION_KEY** — accept base64, raw 32-byte UTF-8, or hash longer strings to a 32-byte AES key
+- **`package.json` version** aligned to `4.0.0` (tags remain source of truth for releases)
 
 ---
 

@@ -127,7 +127,7 @@ export const Context = ({ className, usage, ...props }: ContextProps) => {
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-fit p-3" side="top">
-        <div className="min-w-[240px] space-y-2">
+        <div className="min-w-60 space-y-2">
           <div className="flex items-start justify-between text-sm">
             <span>{usedPercent.toFixed(1)}%</span>
             <span className="text-muted-foreground">

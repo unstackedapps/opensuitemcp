@@ -138,6 +138,7 @@ export async function POST(request: Request) {
       let titleBaseUrl: string | undefined;
       let titleSpeedModelId: string | undefined;
       let titleReasoningModelId: string | undefined;
+      let stampedProviderId = aiProviderId?.trim() || null;
       if (session.user?.id) {
         try {
           const settings = await getUserSettings({ userId: session.user.id });
@@ -151,6 +152,9 @@ export async function POST(request: Request) {
             titleBaseUrl = resolved.entry?.baseUrl;
             titleSpeedModelId = resolved.entry?.speedModelId;
             titleReasoningModelId = resolved.entry?.reasoningModelId;
+          }
+          if (!stampedProviderId && resolved.entry?.id) {
+            stampedProviderId = resolved.entry.id;
           }
         } catch (error) {
           console.error("[Settings] Error loading settings for title:", error);
@@ -171,7 +175,7 @@ export async function POST(request: Request) {
         title,
         summary,
         visibility: selectedVisibilityType,
-        aiProviderId: aiProviderId ?? null,
+        aiProviderId: stampedProviderId,
       });
       // New chat - no need to fetch messages, it's empty
     }

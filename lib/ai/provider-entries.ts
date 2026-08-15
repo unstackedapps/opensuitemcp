@@ -74,16 +74,25 @@ export function parseAiProviderConfig(value: unknown): AiProviderConfig {
         return parsed ? [parsed] : [];
       })
     : [];
+  const sanitizedProviders = providers.map((entry) =>
+    isCanonicalSeedEntry(entry, providers)
+      ? {
+          ...entry,
+          speedModelId: undefined,
+          reasoningModelId: undefined,
+        }
+      : entry,
+  );
   const defaultId =
     typeof record.defaultId === "string" && record.defaultId.trim()
       ? record.defaultId
       : null;
   return {
     defaultId:
-      defaultId && providers.some((entry) => entry.id === defaultId)
+      defaultId && sanitizedProviders.some((entry) => entry.id === defaultId)
         ? defaultId
-        : (providers[0]?.id ?? null),
-    providers,
+        : (sanitizedProviders[0]?.id ?? null),
+    providers: sanitizedProviders,
   };
 }
 
@@ -158,6 +167,296 @@ export function findProviderById(
     return;
   }
   return config.providers.find((entry) => entry.id === id);
+}
+
+/** Canonical labels for the three always-present hosted provider slots. */
+export const CANONICAL_SEED_LABELS: Record<HostedAiProviderType, string> = {
+  google: "Google",
+  anthropic: "Anthropic",
+  openai: "OpenAI",
+};
+
+export function defaultLabelForProviderType(type: AiProviderType): string {
+  if (type === "google") {
+    return CANONICAL_SEED_LABELS.google;
+  }
+  if (type === "anthropic") {
+    return CANONICAL_SEED_LABELS.anthropic;
+  }
+  if (type === "openai") {
+    return CANONICAL_SEED_LABELS.openai;
+  }
+  return "Custom";
+}
+
+export function isCanonicalSeedEntry(
+  entry: AiProviderEntry,
+  knownProviders?: readonly AiProviderEntry[],
+): boolean {
+  if (entry.type === "custom") {
+    return false;
+  }
+  const canonicalLabel = normalizeProviderLabel(
+    CANONICAL_SEED_LABELS[entry.type],
+  );
+  if (normalizeProviderLabel(entry.label) !== canonicalLabel) {
+    return false;
+  }
+  if (!knownProviders) {
+    return true;
+  }
+  const savedCanonical = knownProviders.find(
+    (provider) =>
+      provider.type === entry.type &&
+      normalizeProviderLabel(provider.label) === canonicalLabel,
+  );
+  return savedCanonical?.id === entry.id;
+}
+
+/** Clears keys and custom slots on a built-in Google/Anthropic/OpenAI seed. */
+export function stockCanonicalSeedEntry(
+  entry: AiProviderEntry,
+): AiProviderEntry {
+  if (entry.type === "custom") {
+    return entry;
+  }
+  return {
+    id: entry.id,
+    label: CANONICAL_SEED_LABELS[entry.type],
+    type: entry.type,
+    apiKey: null,
+    maxIterations: "10",
+  };
+}
+
+/** User-added Google/Anthropic/OpenAI entries may override registry model slots. */
+export function supportsHostedModelOverrides(
+  entry: AiProviderEntry,
+  knownProviders?: readonly AiProviderEntry[],
+): boolean {
+  return (
+    entry.type !== "custom" && !isCanonicalSeedEntry(entry, knownProviders)
+  );
+}
+
+export function entryUsesModelOverrides(
+  entry: AiProviderEntry,
+  knownProviders?: readonly AiProviderEntry[],
+): boolean {
+  if (entry.type === "custom") {
+    return true;
+  }
+  return (
+    supportsHostedModelOverrides(entry, knownProviders) &&
+    Boolean(entry.speedModelId?.trim() && entry.reasoningModelId?.trim())
+  );
+}
+
+export function ensureUniqueProviderLabel(
+  label: string,
+  existing: AiProviderEntry[],
+  excludeId?: string,
+): string {
+  const base = label.trim() || "Provider";
+  const others = existing.filter((entry) => entry.id !== excludeId);
+  const taken = new Set(
+    others.map((entry) => normalizeProviderLabel(entry.label)),
+  );
+  if (!taken.has(normalizeProviderLabel(base))) {
+    return base;
+  }
+
+  let index = 1;
+  while (taken.has(normalizeProviderLabel(`${base} (${index})`))) {
+    index += 1;
+  }
+  return `${base} (${index})`;
+}
+
+export function suggestedLabelForType(
+  type: AiProviderType,
+  existing: AiProviderEntry[],
+): string {
+  return ensureUniqueProviderLabel(defaultLabelForProviderType(type), existing);
+}
+
+function legacyKeyForHostedType(
+  type: HostedAiProviderType,
+  legacy: LegacyAiProviderSettings | undefined,
+): string | null {
+  if (!legacy) {
+    return null;
+  }
+  if (type === "google") {
+    return legacy.googleApiKey?.trim() || null;
+  }
+  if (type === "anthropic") {
+    return legacy.anthropicApiKey?.trim() || null;
+  }
+  return legacy.openaiApiKey?.trim() || null;
+}
+
+function sortProvidersWithSeedsFirst(
+  providers: AiProviderEntry[],
+): AiProviderEntry[] {
+  const seedOrder = HOSTED_TYPES.map((type) =>
+    normalizeProviderLabel(CANONICAL_SEED_LABELS[type]),
+  );
+  return [...providers].sort((left, right) => {
+    const leftSeed = isCanonicalSeedEntry(left)
+      ? seedOrder.indexOf(normalizeProviderLabel(left.label))
+      : HOSTED_TYPES.length;
+    const rightSeed = isCanonicalSeedEntry(right)
+      ? seedOrder.indexOf(normalizeProviderLabel(right.label))
+      : HOSTED_TYPES.length;
+    if (leftSeed !== rightSeed) {
+      return leftSeed - rightSeed;
+    }
+    return left.label.localeCompare(right.label);
+  });
+}
+
+function pickDefaultProviderId(
+  providers: AiProviderEntry[],
+  legacy: LegacyAiProviderSettings | undefined,
+): string | null {
+  const preferredRaw = legacy?.aiProvider ?? "";
+  const preferredType = isHostedAiProviderType(preferredRaw)
+    ? preferredRaw
+    : "google";
+  const canonical = providers.find(
+    (entry) => entry.type === preferredType && isCanonicalSeedEntry(entry),
+  );
+  if (canonical) {
+    return canonical.id;
+  }
+  const firstWithKey = providers.find((entry) => entry.apiKey?.trim());
+  return firstWithKey?.id ?? providers[0]?.id ?? null;
+}
+
+function upsertCanonicalSeed(
+  providers: AiProviderEntry[],
+  type: HostedAiProviderType,
+  legacy: LegacyAiProviderSettings | undefined,
+  maxIterations: string,
+  generateId: () => string,
+): { providers: AiProviderEntry[]; changed: boolean } {
+  const canonical = CANONICAL_SEED_LABELS[type];
+  const canonicalNorm = normalizeProviderLabel(canonical);
+
+  const existingCanonical = providers.find(
+    (entry) =>
+      entry.type === type &&
+      normalizeProviderLabel(entry.label) === canonicalNorm,
+  );
+  if (existingCanonical) {
+    return { providers, changed: false };
+  }
+
+  const legacyStyleIndex = providers.findIndex(
+    (entry) =>
+      entry.type === type &&
+      normalizeProviderLabel(entry.label) === normalizeProviderLabel(type),
+  );
+  if (legacyStyleIndex >= 0) {
+    const next = [...providers];
+    const promoted = next[legacyStyleIndex];
+    if (promoted) {
+      next[legacyStyleIndex] = { ...promoted, label: canonical };
+    }
+    return { providers: next, changed: true };
+  }
+
+  return {
+    providers: [
+      ...providers,
+      {
+        id: generateId(),
+        label: canonical,
+        type,
+        apiKey: legacyKeyForHostedType(type, legacy),
+        maxIterations,
+      },
+    ],
+    changed: true,
+  };
+}
+
+export function seedDefaultProviderList(
+  legacy: LegacyAiProviderSettings = {},
+  generateId: () => string = () => crypto.randomUUID(),
+): AiProviderConfig {
+  const maxIterations = clampMaxIterations(legacy.maxIterations);
+  const providers: AiProviderEntry[] = HOSTED_TYPES.map((type) => ({
+    id: generateId(),
+    label: CANONICAL_SEED_LABELS[type],
+    type,
+    apiKey: legacyKeyForHostedType(type, legacy),
+    maxIterations,
+  }));
+
+  return {
+    defaultId: pickDefaultProviderId(providers, legacy),
+    providers,
+  };
+}
+
+export function ensureSeededProviderConfig(
+  config: AiProviderConfig | null | undefined,
+  legacy: LegacyAiProviderSettings = {},
+  generateId: () => string = () => crypto.randomUUID(),
+): AiProviderConfig {
+  const parsed = parseAiProviderConfig(config);
+  const maxIterations = clampMaxIterations(legacy.maxIterations);
+
+  if (parsed.providers.length === 0) {
+    return seedDefaultProviderList(legacy, generateId);
+  }
+
+  let providers = [...parsed.providers];
+  let changed = false;
+
+  for (const type of HOSTED_TYPES) {
+    const result = upsertCanonicalSeed(
+      providers,
+      type,
+      legacy,
+      maxIterations,
+      generateId,
+    );
+    providers = result.providers;
+    changed = changed || result.changed;
+  }
+
+  providers = sortProvidersWithSeedsFirst(providers);
+
+  let defaultId = parsed.defaultId;
+  if (!defaultId || !providers.some((entry) => entry.id === defaultId)) {
+    defaultId = pickDefaultProviderId(providers, legacy);
+    changed = true;
+  }
+
+  if (!changed) {
+    return parsed;
+  }
+
+  return { defaultId, providers };
+}
+
+export function assertCanonicalSeedsPresent(
+  providers: AiProviderEntry[],
+): void {
+  for (const type of HOSTED_TYPES) {
+    const label = CANONICAL_SEED_LABELS[type];
+    const hasSeed = providers.some(
+      (entry) =>
+        entry.type === type &&
+        normalizeProviderLabel(entry.label) === normalizeProviderLabel(label),
+    );
+    if (!hasSeed) {
+      throw new Error(`The ${label} provider cannot be removed.`);
+    }
+  }
 }
 
 export type LegacyAiProviderSettings = {
@@ -295,6 +594,52 @@ export type ResolvedChatProvider =
       dangling: true;
     };
 
+export function isProviderEntryConfigured(entry: AiProviderEntry): boolean {
+  if (entry.type === "custom") {
+    return Boolean(
+      entry.baseUrl?.trim() &&
+        entry.speedModelId?.trim() &&
+        entry.reasoningModelId?.trim(),
+    );
+  }
+  return Boolean(entry.apiKey?.trim());
+}
+
+export function resolveDefaultProviderId(
+  config: AiProviderConfig,
+  preferredId?: string | null,
+): string | null {
+  if (preferredId) {
+    const preferred = findProviderById(config, preferredId);
+    if (preferred && isProviderEntryConfigured(preferred)) {
+      return preferred.id;
+    }
+  }
+
+  const current = findProviderById(config, config.defaultId);
+  if (current && isProviderEntryConfigured(current)) {
+    return config.defaultId;
+  }
+
+  const firstConfigured = config.providers.find(isProviderEntryConfigured);
+  return firstConfigured?.id ?? null;
+}
+
+/** Stored chat provider if it is still configured; otherwise the default. */
+export function findUsableChatProvider(
+  config: AiProviderConfig,
+  chatAiProviderId?: string | null,
+): AiProviderEntry | undefined {
+  if (chatAiProviderId?.trim()) {
+    const stored = findProviderById(config, chatAiProviderId);
+    if (stored && isProviderEntryConfigured(stored)) {
+      return stored;
+    }
+  }
+  const fallbackId = resolveDefaultProviderId(config);
+  return fallbackId ? findProviderById(config, fallbackId) : undefined;
+}
+
 export function resolveChatProviderSelection(
   chatAiProviderId: string | null | undefined,
   config: AiProviderConfig,
@@ -336,24 +681,9 @@ export function resolveChatProviderSelection(
     };
   }
 
-  if (chatAiProviderId?.trim()) {
-    const entry = findProviderById(config, chatAiProviderId);
-    if (!entry) {
-      return {
-        source: "dangling",
-        entry: null,
-        type: null,
-        apiKey: null,
-        maxIterations: maxFromLegacy,
-        dangling: true,
-      };
-    }
-    return resolvedFromEntry(entry);
-  }
-
-  const defaultEntry = findProviderById(config, config.defaultId);
-  if (defaultEntry) {
-    return resolvedFromEntry(defaultEntry);
+  const usable = findUsableChatProvider(config, chatAiProviderId);
+  if (usable) {
+    return resolvedFromEntry(usable);
   }
 
   const fallbackTypeRaw = legacy.aiProvider ?? "";
@@ -414,4 +744,19 @@ export function providerTypeLabel(type: AiProviderType): string {
     return "Custom";
   }
   return "Google";
+}
+
+/** Subtitle for in-chat provider picker rows. */
+export function providerSelectorSubtitle(
+  entry: AiProviderEntry,
+  knownProviders?: readonly AiProviderEntry[],
+): string {
+  if (entry.type === "custom") {
+    return "Custom";
+  }
+  const base = providerTypeLabel(entry.type);
+  if (supportsHostedModelOverrides(entry, knownProviders)) {
+    return `${base} (custom)`;
+  }
+  return base;
 }

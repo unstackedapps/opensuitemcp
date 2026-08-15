@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
 import {
+  ensureSeededProviderConfig,
   legacyColumnsFromConfig,
   parseAiProviderConfig,
 } from "@/lib/ai/provider-entries";
@@ -178,7 +179,7 @@ export async function GET() {
         customInstructions: null,
         enabledSkillIds: emptySkills.enabledSkillIds,
         customSkills: emptySkills.customSkills,
-        aiProviders: { defaultId: null, providers: [] },
+        aiProviders: ensureSeededProviderConfig(null),
         netsuiteMcpTools: { byAccount: {} },
       });
     }
@@ -243,6 +244,47 @@ export async function GET() {
 
     const skillSettings = resolveSkillSettings(settings);
 
+    const legacyForProviders = {
+      googleApiKey: decryptedGoogleKey,
+      anthropicApiKey: decryptedAnthropicKey,
+      openaiApiKey: decryptedOpenAIKey,
+      aiProvider: provider,
+      maxIterations: settings.maxIterations,
+    };
+    const decryptedProviderConfig = decryptProviderConfig(settings.aiProviders);
+    const seededProviderConfig = ensureSeededProviderConfig(
+      decryptedProviderConfig,
+      legacyForProviders,
+    );
+
+    if (
+      JSON.stringify(seededProviderConfig) !==
+      JSON.stringify(decryptedProviderConfig)
+    ) {
+      try {
+        const persistedProviders = await persistProviderConfig({
+          incoming: seededProviderConfig,
+          existingConfig: parseAiProviderConfig(settings.aiProviders),
+          legacy: {
+            googleApiKey: settings.googleApiKey,
+            anthropicApiKey: settings.anthropicApiKey,
+            openaiApiKey: settings.openaiApiKey,
+            aiProvider: settings.aiProvider,
+            maxIterations: settings.maxIterations,
+          },
+        });
+        await upsertUserSettings({
+          userId: session.user.id,
+          aiProviders: persistedProviders,
+        });
+      } catch (error) {
+        console.warn(
+          "[Settings API] Failed to persist seeded AI provider migration:",
+          error,
+        );
+      }
+    }
+
     if (shouldPersistLegacySkillMigration(settings, skillSettings)) {
       try {
         await upsertUserSettings({
@@ -273,7 +315,7 @@ export async function GET() {
       customInstructions: settings.customInstructions ?? null,
       enabledSkillIds: skillSettings.enabledSkillIds,
       customSkills: skillSettings.customSkills,
-      aiProviders: decryptProviderConfig(settings.aiProviders),
+      aiProviders: seededProviderConfig,
       netsuiteMcpTools: parseNetsuiteMcpToolSettings(settings.netsuiteMcpTools),
     };
 
@@ -424,6 +466,13 @@ export async function POST(request: Request) {
         (account) => account.accountId === nextAccountId,
       );
       if (active && nextClientId === undefined) {
+        nextClientId = active.clientId ?? null;
+      }
+    } else if (nextAccountId && nextClientId === undefined) {
+      const active = resolveNetSuiteAccounts(existing ?? {}).find(
+        (account) => account.accountId === nextAccountId,
+      );
+      if (active) {
         nextClientId = active.clientId ?? null;
       }
     }

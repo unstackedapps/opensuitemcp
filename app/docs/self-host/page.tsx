@@ -59,7 +59,7 @@ export default function SelfHostDocsPage() {
               chosen LLM, NetSuite AI Connector, and Postgres/Redis.
             </figcaption>
             <div className="flex flex-col items-stretch gap-3 text-center sm:flex-row sm:items-center sm:justify-between sm:gap-2">
-              <div className="rounded-md border border-white/15 bg-white/[0.04] px-3 py-2.5 text-[#f3efe6]/85 text-xs sm:min-w-[5.5rem]">
+              <div className="rounded-md border border-white/15 bg-white/4 px-3 py-2.5 text-[#f3efe6]/85 text-xs sm:min-w-22">
                 Org users
               </div>
               <span
@@ -68,7 +68,7 @@ export default function SelfHostDocsPage() {
               >
                 →
               </span>
-              <div className="rounded-md border border-[#4a81e8]/40 bg-[#4a81e8]/10 px-3 py-2.5 text-[#f3efe6] text-xs sm:min-w-[8rem]">
+              <div className="rounded-md border border-[#4a81e8]/40 bg-[#4a81e8]/10 px-3 py-2.5 text-[#f3efe6] text-xs sm:min-w-32">
                 OpenSuiteMCP
                 <span className="mt-0.5 block text-[#f3efe6]/50">
                   in your VPC
@@ -78,13 +78,13 @@ export default function SelfHostDocsPage() {
                 →
               </span>
               <div className="grid flex-1 gap-2 sm:max-w-xs">
-                <div className="rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-[#f3efe6]/80 text-xs">
+                <div className="rounded-md border border-white/10 bg-white/3 px-3 py-2 text-[#f3efe6]/80 text-xs">
                   Org-chosen LLM
                 </div>
-                <div className="rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-[#f3efe6]/80 text-xs">
+                <div className="rounded-md border border-white/10 bg-white/3 px-3 py-2 text-[#f3efe6]/80 text-xs">
                   NetSuite AI Connector
                 </div>
-                <div className="rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-[#f3efe6]/80 text-xs">
+                <div className="rounded-md border border-white/10 bg-white/3 px-3 py-2 text-[#f3efe6]/80 text-xs">
                   Postgres · Redis
                 </div>
               </div>
@@ -96,8 +96,8 @@ export default function SelfHostDocsPage() {
                 Stays in-org:
               </strong>{" "}
               app process, session/auth config, Postgres (chats, settings),
-              Redis, encrypted LLM API keys, your OAuth client secrets for
-              NetSuite DCR.
+              Redis, encrypted LLM API keys, encrypted NetSuite OAuth tokens,
+              your OAuth client secrets for NetSuite DCR.
             </li>
             <li>
               <strong className="font-medium text-[#f3efe6]/85">
@@ -151,6 +151,10 @@ export default function SelfHostDocsPage() {
           </h2>
           <ul className="list-disc space-y-2 pl-5 text-[#f3efe6]/65">
             <li>LLM provider API keys (stored encrypted in your DB)</li>
+            <li>
+              NetSuite OAuth access and refresh tokens (AES-256-GCM at rest,
+              same <code className="text-[#f3efe6]/85">ENCRYPTION_KEY</code>)
+            </li>
             <li>Postgres and Redis credentials</li>
             <li>Auth secrets (NextAuth / session)</li>
             <li>

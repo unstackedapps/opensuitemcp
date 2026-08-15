@@ -33,8 +33,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import {
   type AiProviderConfig,
-  type AiProviderEntry,
-  isMultiAiProviders,
+  ensureSeededProviderConfig,
   parseAiProviderConfig,
 } from "@/lib/ai/provider-entries";
 import { getSearchDomainUrl, searchDomains } from "@/lib/ai/search-domains";
@@ -69,7 +68,7 @@ function PortalPanelHeader({
   docsLinks,
 }: PortalPanelHeaderProps) {
   return (
-    <div className="flex shrink-0 items-start justify-between gap-3 border-border/60 border-b py-3 pl-4 pr-[calc(1rem+1rem)] sm:pl-5 sm:pr-[calc(1.25rem+1rem)]">
+    <div className="flex shrink-0 items-start justify-between gap-3 border-border/60 border-b py-3 pl-4 pr-8 sm:pl-5 sm:pr-9">
       <div className="min-w-0 space-y-1">
         <p className="flex items-center gap-1.5 font-medium text-sm">
           <Icon className="size-3.5 text-muted-foreground" />
@@ -133,8 +132,7 @@ const SECTION_META: Record<
   provider: {
     icon: Sparkles,
     title: "AI Provider",
-    subtitle:
-      "Bring your own LLM key and choose which provider powers chat responses.",
+    subtitle: "Bring your own LLM key and configure providers",
   },
   netsuite: {
     icon: Cloud,
@@ -331,9 +329,6 @@ export function SettingsPanel({ active, section }: SettingsPanelProps) {
       }>;
     },
   );
-  const googleApiKeyId = useId();
-  const anthropicApiKeyId = useId();
-  const openaiApiKeyId = useId();
   const timezoneId = useId();
   const [settingsCacheKey, setSettingsCacheKey] = useState<string | null>(null);
   const { mutate: globalMutate } = useSWRConfig();
@@ -363,15 +358,6 @@ export function SettingsPanel({ active, section }: SettingsPanelProps) {
     fetchNetSuiteStatus,
   );
 
-  const [googleApiKey, setGoogleApiKey] = useState("");
-  const [anthropicApiKey, setAnthropicApiKey] = useState("");
-  const [openaiApiKey, setOpenaiApiKey] = useState("");
-  const [aiProvider, setAiProvider] = useState<
-    "google" | "anthropic" | "openai"
-  >("google");
-  const [showGoogleApiKey, setShowGoogleApiKey] = useState(false);
-  const [showAnthropicApiKey, setShowAnthropicApiKey] = useState(false);
-  const [showOpenaiApiKey, setShowOpenaiApiKey] = useState(false);
   const [netsuiteAccounts, setNetsuiteAccounts] = useState<
     NetSuiteAccountEntry[]
   >([]);
@@ -383,12 +369,9 @@ export function SettingsPanel({ active, section }: SettingsPanelProps) {
   const [timezoneSearch, setTimezoneSearch] = useState("");
   const [timezoneOpen, setTimezoneOpen] = useState(false);
   const [searchDomainIds, setSearchDomainIds] = useState<string[]>([]);
-  const [maxIterations, setMaxIterations] = useState("10");
-  const [aiProviders, setAiProviders] = useState<AiProviderConfig>({
-    defaultId: null,
-    providers: [],
-  });
-  const maxIterationsId = useId();
+  const [aiProviders, setAiProviders] = useState<AiProviderConfig>(() =>
+    ensureSeededProviderConfig(null),
+  );
   const [isConnectingNetSuite, setIsConnectingNetSuite] = useState(false);
   const [dcrProbe, setDcrProbe] = useState<NetSuiteDcrProbeState>({
     status: "idle",
@@ -445,17 +428,12 @@ export function SettingsPanel({ active, section }: SettingsPanelProps) {
 
     // Populate form when settings are available
     if (typeof settings === "object" && "aiProvider" in settings) {
-      setGoogleApiKey(settings.googleApiKey ?? "");
-      setAnthropicApiKey(settings.anthropicApiKey ?? "");
-      setOpenaiApiKey(settings.openaiApiKey ?? "");
-      // Coerce unknown or deprecated provider values to google
       const provider =
         settings.aiProvider === "google" ||
         settings.aiProvider === "anthropic" ||
         settings.aiProvider === "openai"
           ? settings.aiProvider
           : "google";
-      setAiProvider(provider);
       const accounts = settings.netsuiteAccounts ?? [];
       const activeId =
         settings.netsuiteAccountId ?? accounts[0]?.accountId ?? "";
@@ -468,10 +446,18 @@ export function SettingsPanel({ active, section }: SettingsPanelProps) {
       );
       setTimezone(settings.timezone ?? "UTC");
       setSearchDomainIds(settings.searchDomainIds ?? []);
-      setMaxIterations(settings.maxIterations ?? "10");
       setAiProviders(
-        parseAiProviderConfig(
-          "aiProviders" in settings ? settings.aiProviders : null,
+        ensureSeededProviderConfig(
+          parseAiProviderConfig(
+            "aiProviders" in settings ? settings.aiProviders : null,
+          ),
+          {
+            googleApiKey: settings.googleApiKey,
+            anthropicApiKey: settings.anthropicApiKey,
+            openaiApiKey: settings.openaiApiKey,
+            aiProvider: provider,
+            maxIterations: settings.maxIterations,
+          },
         ),
       );
       initializedForThisOpenRef.current = true;
@@ -552,19 +538,12 @@ export function SettingsPanel({ active, section }: SettingsPanelProps) {
         null;
 
       const payload: Record<string, unknown> = {
-        googleApiKey: googleApiKey?.trim() || null,
-        anthropicApiKey: anthropicApiKey?.trim() || null,
-        openaiApiKey: openaiApiKey?.trim() || null,
-        aiProvider: aiProvider,
         netsuiteAccountId: activeToSave,
         netsuiteAccounts: accountsToSave,
         timezone: timezone?.trim() || "UTC",
         searchDomainIds: effectiveSearchDomainIds,
-        maxIterations: maxIterations?.trim() || "10",
+        aiProviders,
       };
-      if (isMultiAiProviders(aiProviders)) {
-        payload.aiProviders = aiProviders;
-      }
 
       const response = await fetch("/api/settings", {
         method: "POST",
@@ -985,48 +964,13 @@ export function SettingsPanel({ active, section }: SettingsPanelProps) {
   // Show skeletons while loading
   const showSkeletons = isLoading;
   const sectionMeta = SECTION_META[section];
-  const defaultMultiType = aiProviders.providers.find(
+  const defaultProviderType = aiProviders.providers.find(
     (entry) => entry.id === aiProviders.defaultId,
   )?.type;
   const headerDocsLinks =
     section === "provider"
-      ? [
-          PROVIDER_DOCS[
-            isMultiAiProviders(aiProviders)
-              ? (defaultMultiType ?? "openai")
-              : aiProvider
-          ],
-        ]
+      ? [PROVIDER_DOCS[defaultProviderType ?? "google"]]
       : sectionMeta.docsLinks;
-
-  const handleGraduateProvider = async (entry: AiProviderEntry) => {
-    const response = await fetch("/api/settings", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        googleApiKey: googleApiKey?.trim() || null,
-        anthropicApiKey: anthropicApiKey?.trim() || null,
-        openaiApiKey: openaiApiKey?.trim() || null,
-        aiProvider,
-        maxIterations: maxIterations?.trim() || "10",
-        aiProviders: {
-          defaultId: null,
-          providers: [entry],
-        },
-      }),
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(data.error || "Failed to add AI provider");
-    }
-    toast({
-      type: "success",
-      description: "Switched to multiple AI providers",
-    });
-    await refreshSettings();
-    initializedForThisOpenRef.current = false;
-    globalMutate("settings");
-  };
 
   const handlePersistProviders = async (config: AiProviderConfig) => {
     const response = await fetch("/api/settings", {
@@ -1041,8 +985,6 @@ export function SettingsPanel({ active, section }: SettingsPanelProps) {
     await refreshSettings();
     await globalMutate("settings");
   };
-
-  const multiAiProviders = isMultiAiProviders(aiProviders);
 
   return (
     <form
@@ -1063,31 +1005,8 @@ export function SettingsPanel({ active, section }: SettingsPanelProps) {
         {section === "provider" ? (
           <AiProviderSettings
             aiProviders={aiProviders}
-            anthropicApiKey={anthropicApiKey}
-            anthropicApiKeyId={anthropicApiKeyId}
-            classicProvider={aiProvider}
-            googleApiKey={googleApiKey}
-            googleApiKeyId={googleApiKeyId}
-            maxIterations={maxIterations}
-            maxIterationsId={maxIterationsId}
             onAiProvidersChange={setAiProviders}
             onPersistProviders={handlePersistProviders}
-            onAnthropicApiKeyChange={setAnthropicApiKey}
-            onClassicProviderChange={setAiProvider}
-            onGraduate={handleGraduateProvider}
-            onGoogleApiKeyChange={setGoogleApiKey}
-            onMaxIterationsChange={setMaxIterations}
-            onOpenaiApiKeyChange={setOpenaiApiKey}
-            onToggleAnthropicApiKey={() =>
-              setShowAnthropicApiKey(!showAnthropicApiKey)
-            }
-            onToggleGoogleApiKey={() => setShowGoogleApiKey(!showGoogleApiKey)}
-            onToggleOpenaiApiKey={() => setShowOpenaiApiKey(!showOpenaiApiKey)}
-            openaiApiKey={openaiApiKey}
-            openaiApiKeyId={openaiApiKeyId}
-            showAnthropicApiKey={showAnthropicApiKey}
-            showGoogleApiKey={showGoogleApiKey}
-            showOpenaiApiKey={showOpenaiApiKey}
             showSkeletons={showSkeletons || !settings}
           />
         ) : null}
@@ -1320,9 +1239,8 @@ export function SettingsPanel({ active, section }: SettingsPanelProps) {
         ) : null}
       </div>
 
-      <DialogFooter className="shrink-0 gap-2 border-t border-border/60 py-3 pl-4 pr-[calc(1rem+1rem)] sm:justify-end sm:pl-5 sm:pr-[calc(1.25rem+1rem)]">
-        {section === "netsuite" ||
-        (section === "provider" && multiAiProviders) ? (
+      <DialogFooter className="shrink-0 gap-2 border-t border-border/60 py-3 pl-4 pr-8 sm:justify-end sm:pl-5 sm:pr-9">
+        {section === "netsuite" ? (
           <Button onClick={() => closePortal()} type="button">
             Close
           </Button>

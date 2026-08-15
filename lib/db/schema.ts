@@ -103,8 +103,8 @@ export const netsuiteToken = pgTable("NetSuiteToken", {
     .notNull()
     .references(() => user.id),
   accountId: varchar("accountId", { length: 64 }),
-  accessToken: text("accessToken").notNull(),
-  refreshToken: text("refreshToken").notNull(),
+  accessToken: text("accessToken").notNull(), // Encrypted AES-256-GCM
+  refreshToken: text("refreshToken").notNull(), // Encrypted AES-256-GCM
   expiresAt: timestamp("expiresAt").notNull(),
   createdAt: timestamp("createdAt").notNull(),
   updatedAt: timestamp("updatedAt").notNull(),

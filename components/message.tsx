@@ -580,7 +580,7 @@ export const ThinkingMessage = () => {
         left: isSidebarOpen ? "var(--sidebar-width, 20rem)" : "0",
       }}
     >
-      <div className="mx-auto flex max-w-2xl justify-center px-2 md:px-4">
+      <div className="mx-auto flex max-w-3xl justify-center px-2 md:px-4">
         <div className="-translate-y-1/2 flex items-center gap-2">
           <span
             className="size-3 animate-smooth-bounce rounded-full bg-blue-500"

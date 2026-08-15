@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { memo } from "react";
+import { useAppPortal } from "@/components/portal/context";
 import { useChatVisibility } from "@/hooks/use-chat-visibility";
 import type { Chat } from "@/lib/db/schema";
 import {
@@ -38,6 +39,7 @@ const PureChatItem = ({
   onDelete: (chatId: string) => void;
   setOpenMobile: (open: boolean) => void;
 }) => {
+  const { closePortal } = useAppPortal();
   const { visibilityType, setVisibilityType } = useChatVisibility({
     chatId: chat.id,
     initialVisibilityType: chat.visibility,
@@ -54,7 +56,10 @@ const PureChatItem = ({
           >
             <Link
               href={`/chat/${chat.id}`}
-              onClick={() => setOpenMobile(false)}
+              onClick={() => {
+                setOpenMobile(false);
+                closePortal();
+              }}
             >
               <span className="truncate block">{chat.title}</span>
             </Link>

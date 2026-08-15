@@ -1,7 +1,7 @@
 "use client";
 
-import { Wrench } from "lucide-react";
-import { useMemo, useState } from "react";
+import { ChevronDown, Wrench } from "lucide-react";
+import { useState } from "react";
 import useSWR from "swr";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,6 +16,7 @@ import {
   formatNetSuiteAccountDisplay,
   normalizeNetSuiteAccountId,
 } from "@/lib/netsuite/accounts";
+import { cn } from "@/lib/utils";
 import { toast } from "./toast";
 
 type McpToolRow = {
@@ -84,6 +85,49 @@ function EmptyState({ message }: { message: string }) {
   );
 }
 
+const MCP_TOOL_DESCRIPTION_COLLAPSE_CHARS = 120;
+
+function McpToolDescription({ description }: { description: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const trimmed = description.trim();
+
+  if (!trimmed) {
+    return null;
+  }
+
+  const collapsible =
+    trimmed.length > MCP_TOOL_DESCRIPTION_COLLAPSE_CHARS ||
+    trimmed.includes("\n");
+
+  return (
+    <div className="space-y-0.5">
+      <p
+        className={cn(
+          "text-muted-foreground text-xs leading-relaxed",
+          !expanded && collapsible && "line-clamp-2",
+        )}
+      >
+        {trimmed}
+      </p>
+      {collapsible ? (
+        <button
+          className="inline-flex items-center gap-0.5 text-muted-foreground text-xs hover:text-foreground"
+          onClick={() => setExpanded((value) => !value)}
+          type="button"
+        >
+          {expanded ? "Show less" : "Show more"}
+          <ChevronDown
+            className={cn(
+              "size-3 shrink-0 transition-transform",
+              expanded && "rotate-180",
+            )}
+          />
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 async function persistDisabledNames(
   accountId: string,
   disabledNames: string[],
@@ -123,12 +167,8 @@ export function NetSuiteMcpToolsPanel({
   const [pending, setPending] = useState(false);
 
   const tools = data?.tools ?? [];
-  const sortedTools = useMemo(
-    () =>
-      [...tools].sort((left, right) =>
-        left.displayName.localeCompare(right.displayName),
-      ),
-    [tools],
+  const sortedTools = [...tools].sort((left, right) =>
+    left.displayName.localeCompare(right.displayName),
   );
 
   const applyToolAccess = async (
@@ -265,15 +305,15 @@ export function NetSuiteMcpToolsPanel({
           key={tool.originalName}
         >
           <div className="min-w-0 space-y-0.5">
-            <p className="font-medium text-sm">{tool.displayName}</p>
-            <p className="text-muted-foreground text-xs leading-relaxed">
-              {tool.description}
-            </p>
-            {tool.originalName === tool.displayName ? null : (
-              <p className="font-mono text-[11px] text-muted-foreground">
-                {tool.originalName}
-              </p>
-            )}
+            <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+              <p className="font-medium text-sm">{tool.displayName}</p>
+              {tool.originalName === tool.displayName ? null : (
+                <p className="truncate font-mono text-[11px] text-muted-foreground">
+                  {tool.originalName}
+                </p>
+              )}
+            </div>
+            <McpToolDescription description={tool.description} />
           </div>
           <Select
             disabled={pending}

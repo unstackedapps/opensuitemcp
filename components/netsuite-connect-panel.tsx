@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Plug, Plus, Trash2, Unplug } from "lucide-react";
 import { useId, useState } from "react";
 import { LoaderIcon, WarningIcon } from "@/components/icons";
 import { NetSuiteIntegrationChecklist } from "@/components/netsuite-integration-checklist";
@@ -67,12 +67,6 @@ type NetSuiteConnectPanelProps = {
   settingsActive: boolean;
 };
 
-const STEPS = [
-  { id: 1, label: "Add account" },
-  { id: 2, label: "Integration" },
-  { id: 3, label: "Connect" },
-] as const;
-
 const compactInputClass = "h-8 px-2.5 text-sm";
 
 function AccountMcpToolsToggle({
@@ -116,21 +110,133 @@ function AccountMcpToolsToggle({
   );
 }
 
-function resolveWizardStep(args: {
-  hasAccounts: boolean;
-  isConnected: boolean;
+function IntegrationSetupCard({
+  accountDisplay,
+  accountId,
+  dcrProbe,
+  redirectUri,
+  clientName,
+  onProbe,
+  onOpenIntegration,
+  onCancel,
+}: {
+  accountDisplay: string;
+  accountId: string;
   dcrProbe: NetSuiteDcrProbeState;
-}): number {
-  if (!args.hasAccounts) {
-    return 1;
+  redirectUri: string;
+  clientName?: string;
+  onProbe: (accountId: string) => void;
+  onOpenIntegration: () => void;
+  onCancel: (accountId: string) => void;
+}) {
+  if (dcrProbe.status === "probing") {
+    return (
+      <p className="flex items-center gap-2 text-muted-foreground text-xs">
+        <span className="inline-block animate-spin">
+          <LoaderIcon size={14} />
+        </span>
+        Checking Integration record…
+      </p>
+    );
   }
-  if (args.isConnected) {
-    return 3;
+
+  if (dcrProbe.status === "error") {
+    return (
+      <div className="rounded-md border border-yellow-500/50 bg-yellow-500/10 p-3 dark:border-yellow-400/20 dark:bg-yellow-400/5">
+        <div className="flex items-start gap-2">
+          <div className="mt-0.5 shrink-0 text-yellow-600 dark:text-yellow-400/70">
+            <WarningIcon size={14} />
+          </div>
+          <div className="flex-1 space-y-2">
+            <p className="font-medium text-sm text-yellow-900 dark:text-yellow-200">
+              Could not verify Integration
+            </p>
+            <p className="text-xs text-yellow-800 dark:text-yellow-200/80">
+              {dcrProbe.error}
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                onClick={() => onProbe(accountId)}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                Check again
+              </Button>
+              <Button
+                disabled={!accountId}
+                onClick={() => onCancel(accountId)}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
-  if (args.dcrProbe.status === "ready") {
-    return 3;
+
+  if (dcrProbe.status !== "needs_integration") {
+    return null;
   }
-  return 2;
+
+  return (
+    <div className="rounded-md border border-yellow-500/50 bg-yellow-500/10 p-3 dark:border-yellow-400/20 dark:bg-yellow-400/5">
+      <div className="flex items-start gap-2">
+        <div className="mt-0.5 shrink-0 text-yellow-600 dark:text-yellow-400/70">
+          <WarningIcon size={14} />
+        </div>
+        <div className="flex-1 space-y-3">
+          <div className="space-y-1">
+            <p className="font-medium text-sm text-yellow-900 dark:text-yellow-200">
+              Create the Integration record
+            </p>
+            <p className="text-xs text-yellow-800 dark:text-yellow-200/80">
+              Account{" "}
+              <span className="font-medium">{accountDisplay}</span>. A NetSuite
+              administrator needs to create this once per account, then you can
+              connect.
+            </p>
+          </div>
+          <NetSuiteIntegrationChecklist
+            clientName={clientName}
+            redirectUri={redirectUri}
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              onClick={onOpenIntegration}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              Open New Integration
+            </Button>
+            <Button
+              disabled={!accountId}
+              onClick={() => onProbe(accountId)}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              Check again
+            </Button>
+            <Button
+              disabled={!accountId}
+              onClick={() => onCancel(accountId)}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function NetSuiteConnectPanel({
@@ -168,11 +274,12 @@ export function NetSuiteConnectPanel({
   const [renameAccountId, setRenameAccountId] = useState<string | null>(null);
 
   const hasAccounts = accounts.length > 0;
-  const activeStep = resolveWizardStep({
-    hasAccounts,
-    isConnected,
-    dcrProbe,
-  });
+  const showIntegrationSetup =
+    hasAccounts &&
+    !isConnected &&
+    (dcrProbe.status === "probing" ||
+      dcrProbe.status === "needs_integration" ||
+      dcrProbe.status === "error");
   const redirectUri =
     dcrProbe.status === "needs_integration"
       ? dcrProbe.redirectUri
@@ -213,48 +320,6 @@ export function NetSuiteConnectPanel({
 
   return (
     <div className="space-y-5">
-      {hasAccounts ? (
-        <nav aria-label="NetSuite setup steps">
-          <ol className="flex flex-wrap items-center gap-2 text-xs">
-            {STEPS.map((step, index) => {
-              const done =
-                step.id < activeStep || (step.id === 3 && isConnected);
-              const current = step.id === activeStep && !isConnected;
-              return (
-                <li className="flex items-center gap-2" key={step.id}>
-                  {index > 0 ? (
-                    <span aria-hidden className="text-muted-foreground/50">
-                      →
-                    </span>
-                  ) : null}
-                  <span
-                    className={cn(
-                      "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5",
-                      done &&
-                        "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-                      current && "bg-primary/10 font-medium text-foreground",
-                      !done && !current && "text-muted-foreground",
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        "inline-flex size-3.5 items-center justify-center rounded-full text-[10px]",
-                        done || current
-                          ? "bg-foreground text-background"
-                          : "bg-muted text-muted-foreground",
-                      )}
-                    >
-                      {step.id}
-                    </span>
-                    {step.label}
-                  </span>
-                </li>
-              );
-            })}
-          </ol>
-        </nav>
-      ) : null}
-
       {!hasAccounts ? (
         <div className="space-y-3">
           <div className="space-y-1">
@@ -278,110 +343,23 @@ export function NetSuiteConnectPanel({
         </div>
       ) : null}
 
-      {hasAccounts && activeStep === 2 ? (
-        <div className="space-y-3">
-          <div className="space-y-1">
-            <p className="font-medium text-sm">Create the Integration record</p>
-            <p className="text-muted-foreground text-xs leading-relaxed">
-              Account{" "}
-              <span className="font-medium text-foreground">
-                {selectedAccountDisplay}
-              </span>
-              . A NetSuite administrator needs to create this once per account.
-            </p>
-          </div>
-
-          {dcrProbe.status === "probing" ? (
-            <p className="flex items-center gap-2 text-muted-foreground text-xs">
-              <span className="inline-block animate-spin">
-                <LoaderIcon size={14} />
-              </span>
-              Checking Integration record…
-            </p>
-          ) : null}
-
-          {dcrProbe.status === "error" ? (
-            <div className="rounded-md border border-yellow-500/50 bg-yellow-500/10 p-2.5">
-              <div className="flex items-start gap-2">
-                <div className="mt-0.5 shrink-0 text-yellow-600 dark:text-yellow-500">
-                  <WarningIcon size={14} />
-                </div>
-                <div className="flex-1 space-y-2">
-                  <p className="font-medium text-sm text-yellow-900 dark:text-yellow-100">
-                    Could not verify Integration
-                  </p>
-                  <p className="text-xs text-yellow-800 dark:text-yellow-200">
-                    {dcrProbe.error}
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      onClick={() => onProbe(selectedAccountId)}
-                      size="sm"
-                      type="button"
-                      variant="outline"
-                    >
-                      Check again
-                    </Button>
-                    <Button
-                      disabled={!selectedAccountId}
-                      onClick={() => onRemoveAccount(selectedAccountId)}
-                      size="sm"
-                      type="button"
-                      variant="ghost"
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          {dcrProbe.status === "needs_integration" ||
-          dcrProbe.status === "idle" ||
-          dcrProbe.status === "probing" ? (
-            <div className="space-y-3 rounded-md border border-border/60 p-3">
-              <NetSuiteIntegrationChecklist
-                clientName={clientName}
-                redirectUri={redirectUri}
-              />
-              <div className="flex flex-wrap gap-2">
-                <Button onClick={onOpenIntegration} size="sm" type="button">
-                  Open New Integration
-                </Button>
-                <Button
-                  disabled={!selectedAccountId || dcrProbe.status === "probing"}
-                  onClick={() => onProbe(selectedAccountId)}
-                  size="sm"
-                  type="button"
-                  variant="outline"
-                >
-                  I&apos;ve finished — Check again
-                </Button>
-                <Button
-                  disabled={!selectedAccountId}
-                  onClick={() => onRemoveAccount(selectedAccountId)}
-                  size="sm"
-                  type="button"
-                  variant="ghost"
-                >
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-
       {hasAccounts ? (
-        <div className="space-y-2 border-border/60 border-t pt-3">
-          <div className="flex justify-end">
+        <div className="space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <p className="font-medium text-sm">Configured accounts</p>
+              <p className="text-muted-foreground text-xs leading-relaxed">
+                Choose the active account for chat. Connect OAuth and configure
+                MCP tools per account.
+              </p>
+            </div>
             <Button
               onClick={() => setShowAddForm(true)}
               size="sm"
               type="button"
               variant="outline"
             >
+              <Plus className="size-4" />
               Add Account
             </Button>
           </div>
@@ -416,14 +394,21 @@ export function NetSuiteConnectPanel({
                         className="min-w-0 flex-1 cursor-pointer"
                         htmlFor={radioId}
                       >
-                        <p className="truncate text-sm">
-                          <span className="font-medium">{displayName}</span>
-                          {accountConnected ? (
-                            <span className="ml-1.5 text-muted-foreground text-xs">
-                              Connected
-                            </span>
-                          ) : null}
-                        </p>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="truncate font-medium text-sm">
+                            {displayName}
+                          </span>
+                          <span
+                            className={cn(
+                              "inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 font-medium text-[10px] leading-none",
+                              accountConnected
+                                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300"
+                                : "border-border/80 bg-muted/50 text-muted-foreground",
+                            )}
+                          >
+                            {accountConnected ? "Connected" : "Not connected"}
+                          </span>
+                        </div>
                       </label>
                       <AccountMcpToolsToggle
                         accountId={account.accountId}
@@ -437,31 +422,6 @@ export function NetSuiteConnectPanel({
                           );
                         }}
                       />
-                      {accountConnected ? (
-                        <Button
-                          onClick={() => {
-                            setToolsOpenAccountId((current) =>
-                              current === account.accountId ? null : current,
-                            );
-                            onDisconnect(account.accountId);
-                          }}
-                          size="sm"
-                          type="button"
-                          variant="destructive"
-                        >
-                          Disconnect
-                        </Button>
-                      ) : isActive ? (
-                        <Button
-                          className="cursor-pointer"
-                          disabled={!canConnect || isConnecting}
-                          onClick={onConnect}
-                          size="sm"
-                          type="button"
-                        >
-                          {isConnecting ? "Connecting..." : "Connect"}
-                        </Button>
-                      ) : null}
                       <div className="flex shrink-0 items-center gap-0.5">
                         <Button
                           aria-label={`Rename ${displayName}`}
@@ -479,6 +439,53 @@ export function NetSuiteConnectPanel({
                         >
                           <Pencil className="size-3.5" />
                         </Button>
+                        {accountConnected ? (
+                          <Button
+                            aria-label={`Disconnect ${displayName}`}
+                            className="size-7 text-muted-foreground hover:text-destructive"
+                            onClick={() => {
+                              setToolsOpenAccountId((current) =>
+                                current === account.accountId ? null : current,
+                              );
+                              onDisconnect(account.accountId);
+                            }}
+                            size="icon"
+                            type="button"
+                            variant="ghost"
+                          >
+                            <Unplug className="size-3.5" />
+                          </Button>
+                        ) : (
+                          <Button
+                            aria-label={
+                              isConnecting && isActive
+                                ? `Connecting ${displayName}`
+                                : `Connect ${displayName}`
+                            }
+                            className="size-7 text-muted-foreground hover:text-foreground"
+                            disabled={
+                              isActive && (!canConnect || isConnecting)
+                            }
+                            onClick={() => {
+                              if (!isActive) {
+                                onSelectAccount(account.accountId);
+                                return;
+                              }
+                              onConnect();
+                            }}
+                            size="icon"
+                            type="button"
+                            variant="ghost"
+                          >
+                            {isConnecting && isActive ? (
+                              <span className="inline-block animate-spin">
+                                <LoaderIcon size={14} />
+                              </span>
+                            ) : (
+                              <Plug className="size-3.5" />
+                            )}
+                          </Button>
+                        )}
                         <Button
                           aria-label={`Remove ${displayName}`}
                           className="size-7 text-muted-foreground hover:text-destructive"
@@ -536,6 +543,19 @@ export function NetSuiteConnectPanel({
             ) : null}
           </div>
         </div>
+      ) : null}
+
+      {showIntegrationSetup ? (
+        <IntegrationSetupCard
+          accountDisplay={selectedAccountDisplay}
+          accountId={selectedAccountId}
+          clientName={clientName}
+          dcrProbe={dcrProbe}
+          onCancel={onRemoveAccount}
+          onOpenIntegration={onOpenIntegration}
+          onProbe={onProbe}
+          redirectUri={redirectUri}
+        />
       ) : null}
 
       <Dialog

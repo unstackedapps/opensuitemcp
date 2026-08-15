@@ -488,7 +488,7 @@ export function McpAppHost({
 
         <div className="relative min-h-0 flex-1 overflow-hidden bg-background">
           {status === "error" ? (
-            <div className="flex h-[320px] flex-col items-center justify-center gap-3 px-6 text-center">
+            <div className="flex h-80 flex-col items-center justify-center gap-3 px-6 text-center">
               <p className="text-destructive text-sm">{error}</p>
               <Button
                 onClick={() => onOpenChange(false)}

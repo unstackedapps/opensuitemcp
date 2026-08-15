@@ -10,18 +10,19 @@ Bring your own LLM keys (**Google Gemini**, **Anthropic Claude**, or **OpenAI GP
 
 **Star this repo** if it helps your NetSuite team — it makes the project discoverable.
 
-**Current release:** [v3.1.1](https://github.com/unstackedapps/opensuitemcp/releases/tag/v3.1.1) · [Changelog](CHANGELOG.md)
+**Current release:** [v4.0.0](https://github.com/unstackedapps/opensuitemcp/releases/tag/v4.0.0) · [Changelog](CHANGELOG.md)
 
 <img src="./docs/screenshot-chat.png" alt="OpenSuiteMCP chat UI" width="100%" />
 
 _Main chat UI._
 
-## What’s in 3.0
+## What’s in 4.0
 
 - **App Portal** — Chats, Skills, Prompts, AI Provider, NetSuite, Web Search, Timezone, and Account in one panel
+- **Multiple AI providers** — named Google / Anthropic / OpenAI (or custom HTTPS) keys; Speed / Reasoning per chat
 - **SuiteCloud Agent Skills** — Oracle pack + custom `SKILL.md`; toggle into the system prompt per session
 - **Companion Prompt Library** — Browse, fill placeholders, send into chat
-- **NetSuite MCP** — Multi-account connect (DCR), status chip, live tool calls
+- **NetSuite MCP** — Multiple connected accounts, per-account tools, encrypted OAuth tokens
 - **BYOLLM** — Your API keys; no shared multi-tenant model account in this app
 
 ## Skills

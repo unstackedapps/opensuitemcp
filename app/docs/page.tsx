@@ -66,7 +66,7 @@ export default function DocsIndexPage() {
           <li key={doc.title}>
             {doc.ready ? (
               <Link
-                className="block rounded-lg border border-white/10 bg-white/[0.03] px-4 py-4 transition-colors hover:border-white/20 hover:bg-white/[0.05]"
+                className="block rounded-lg border border-white/10 bg-white/3 px-4 py-4 transition-colors hover:border-white/20 hover:bg-white/5"
                 href={doc.href}
               >
                 <p className="font-medium text-[#f3efe6]">{doc.title}</p>
@@ -75,7 +75,7 @@ export default function DocsIndexPage() {
                 </p>
               </Link>
             ) : (
-              <div className="rounded-lg border border-white/5 bg-white/[0.02] px-4 py-4 opacity-70">
+              <div className="rounded-lg border border-white/5 bg-white/2 px-4 py-4 opacity-70">
                 <p className="font-medium text-[#f3efe6]/80">{doc.title}</p>
                 <p className="mt-1 text-[#f3efe6]/45 text-sm">
                   {doc.description}

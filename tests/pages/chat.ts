@@ -88,8 +88,10 @@ export class ChatPage {
     }
 
     await this.page.getByTestId("model-selector").click();
+    await this.page.getByTestId("model-selector-mode").click();
     await this.page.getByTestId(`model-selector-item-${chatModelId}`).click();
-    expect(await this.getSelectedModel()).toBe(chatModel.name);
+    const shortName = chatModel.name.split(" (")[0];
+    expect(await this.getSelectedModel()).toContain(shortName);
   }
 
   async getSelectedVisibility() {

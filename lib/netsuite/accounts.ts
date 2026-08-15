@@ -61,6 +61,20 @@ export function isNetSuiteAccountConnected(
   return Boolean(status?.connected);
 }
 
+/** Connected composer entries whose id matches the saved active account. */
+export function connectedAccountSelection(
+  connectedAccounts: readonly NetSuiteAccountEntry[],
+  activeAccountId?: string | null,
+): NetSuiteAccountEntry | null {
+  if (!activeAccountId?.trim()) {
+    return null;
+  }
+  const activeId = normalizeNetSuiteAccountId(activeAccountId);
+  return (
+    connectedAccounts.find((account) => account.accountId === activeId) ?? null
+  );
+}
+
 /**
  * Whether a stored token row belongs to the account being disconnected.
  * Matches normalized account ids (case / underscore variants) and treats

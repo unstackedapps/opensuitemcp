@@ -1,14 +1,60 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { db, getUserSettings } from "@/lib/db/queries";
 import { netsuiteToken } from "@/lib/db/schema";
-import { normalizeNetSuiteAccountId, tokenBelongsToAccount } from "./accounts";
+import { decryptStoredSecret, encrypt } from "@/lib/encryption";
+import {
+  normalizeNetSuiteAccountId,
+  resolveNetSuiteAccounts,
+  tokenBelongsToAccount,
+} from "./accounts";
 import { refreshAccessToken } from "./oauth";
 
-async function getActiveAccountId(userId: string): Promise<string | null> {
+function encryptTokenPair(accessToken: string, refreshToken: string) {
+  return {
+    accessToken: encrypt(accessToken),
+    refreshToken: encrypt(refreshToken),
+  };
+}
+
+function readTokenSecrets(row: { accessToken: string; refreshToken: string }): {
+  accessToken: string;
+  refreshToken: string;
+  needsReencrypt: boolean;
+} | null {
+  try {
+    const access = decryptStoredSecret(row.accessToken);
+    const refresh = decryptStoredSecret(row.refreshToken);
+    if (!(access.plaintext && refresh.plaintext)) {
+      return null;
+    }
+    return {
+      accessToken: access.plaintext,
+      refreshToken: refresh.plaintext,
+      needsReencrypt: !(access.encrypted && refresh.encrypted),
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function getAccountContext(userId: string): Promise<{
+  activeAccountId: string | null;
+  configuredCount: number;
+}> {
   const settings = await getUserSettings({ userId });
-  return settings?.netsuiteAccountId
+  const accounts = resolveNetSuiteAccounts(settings ?? {});
+  const fromSettings = settings?.netsuiteAccountId
     ? normalizeNetSuiteAccountId(settings.netsuiteAccountId)
     : null;
+  return {
+    activeAccountId: fromSettings ?? accounts[0]?.accountId ?? null,
+    configuredCount: accounts.length,
+  };
+}
+
+async function getActiveAccountId(userId: string): Promise<string | null> {
+  const context = await getAccountContext(userId);
+  return context.activeAccountId;
 }
 
 /**
@@ -22,8 +68,8 @@ export async function getNetSuiteToken(
   const requestedAccountId = accountId?.trim()
     ? normalizeNetSuiteAccountId(accountId)
     : null;
-  const targetAccountId =
-    requestedAccountId ?? (await getActiveAccountId(userId));
+  const context = await getAccountContext(userId);
+  const targetAccountId = requestedAccountId ?? context.activeAccountId;
   if (!targetAccountId) {
     console.log(`[NetSuite] No active account for user: ${userId}`);
     return null;
@@ -40,17 +86,34 @@ export async function getNetSuiteToken(
     )
     .limit(1);
 
-  // Legacy rows may lack accountId; accept only when resolving the active
-  // account implicitly, and only if they belong to that account.
+  // Untagged legacy rows are only safe for a single-account user. Never
+  // attach them to a newly selected account once multiple accounts exist.
   let resolved = token;
-  if (!resolved && !requestedAccountId) {
-    const [legacy] = await db
-      .select()
+  if (!resolved && context.configuredCount <= 1) {
+    const [tagged] = await db
+      .select({ id: netsuiteToken.id })
       .from(netsuiteToken)
-      .where(eq(netsuiteToken.userId, userId))
+      .where(
+        and(
+          eq(netsuiteToken.userId, userId),
+          isNotNull(netsuiteToken.accountId),
+        ),
+      )
       .limit(1);
-    if (legacy && (!legacy.accountId || legacy.accountId === targetAccountId)) {
-      resolved = legacy;
+    if (!tagged) {
+      const [legacy] = await db
+        .select()
+        .from(netsuiteToken)
+        .where(
+          and(
+            eq(netsuiteToken.userId, userId),
+            isNull(netsuiteToken.accountId),
+          ),
+        )
+        .limit(1);
+      if (legacy) {
+        resolved = legacy;
+      }
     }
   }
 
@@ -58,6 +121,11 @@ export async function getNetSuiteToken(
     console.log(
       `[NetSuite] No token found for user: ${userId}, account: ${targetAccountId}`,
     );
+    return null;
+  }
+
+  const secrets = readTokenSecrets(resolved);
+  if (!secrets) {
     return null;
   }
 
@@ -73,7 +141,7 @@ export async function getNetSuiteToken(
     try {
       const refreshed = await refreshAccessToken({
         userId,
-        refreshToken: resolved.refreshToken,
+        refreshToken: secrets.refreshToken,
         accountId: targetAccountId,
       });
       const newExpiresAt = new Date(Date.now() + refreshed.expires_in * 1000);
@@ -82,8 +150,7 @@ export async function getNetSuiteToken(
         .update(netsuiteToken)
         .set({
           accountId: targetAccountId,
-          accessToken: refreshed.access_token,
-          refreshToken: refreshed.refresh_token,
+          ...encryptTokenPair(refreshed.access_token, refreshed.refresh_token),
           expiresAt: newExpiresAt,
           updatedAt: new Date(),
         })
@@ -96,35 +163,50 @@ export async function getNetSuiteToken(
     }
   }
 
-  if (!resolved.accountId) {
+  if (!resolved.accountId || secrets.needsReencrypt) {
     await db
       .update(netsuiteToken)
-      .set({ accountId: targetAccountId, updatedAt: new Date() })
+      .set({
+        accountId: targetAccountId,
+        ...(secrets.needsReencrypt
+          ? encryptTokenPair(secrets.accessToken, secrets.refreshToken)
+          : {}),
+        updatedAt: new Date(),
+      })
       .where(eq(netsuiteToken.id, resolved.id));
   }
 
-  return resolved.accessToken;
+  return secrets.accessToken;
 }
 
 export async function listConnectedNetSuiteAccountIds(
   userId: string,
 ): Promise<string[]> {
+  const context = await getAccountContext(userId);
   const rows = await db
     .select({ accountId: netsuiteToken.accountId })
     .from(netsuiteToken)
     .where(eq(netsuiteToken.userId, userId));
 
-  const ids: string[] = [];
+  const tagged: string[] = [];
+  let hasUntagged = false;
   for (const row of rows) {
     if (!row.accountId?.trim()) {
+      hasUntagged = true;
       continue;
     }
     const normalized = normalizeNetSuiteAccountId(row.accountId);
-    if (!ids.includes(normalized)) {
-      ids.push(normalized);
+    if (!tagged.includes(normalized)) {
+      tagged.push(normalized);
     }
   }
-  return ids;
+  if (tagged.length > 0) {
+    return tagged;
+  }
+  if (hasUntagged && context.configuredCount <= 1 && context.activeAccountId) {
+    return [context.activeAccountId];
+  }
+  return [];
 }
 
 /**
@@ -143,6 +225,7 @@ export async function saveNetSuiteToken(params: {
     (params.accountId
       ? normalizeNetSuiteAccountId(params.accountId)
       : await getActiveAccountId(params.userId)) || null;
+  const encrypted = encryptTokenPair(params.accessToken, params.refreshToken);
 
   const [existingForAccount] = accountId
     ? await db
@@ -162,8 +245,7 @@ export async function saveNetSuiteToken(params: {
       .update(netsuiteToken)
       .set({
         accountId,
-        accessToken: params.accessToken,
-        refreshToken: params.refreshToken,
+        ...encrypted,
         expiresAt,
         updatedAt: now,
       })
@@ -185,8 +267,7 @@ export async function saveNetSuiteToken(params: {
         .update(netsuiteToken)
         .set({
           accountId,
-          accessToken: params.accessToken,
-          refreshToken: params.refreshToken,
+          ...encrypted,
           expiresAt,
           updatedAt: now,
         })
@@ -198,8 +279,7 @@ export async function saveNetSuiteToken(params: {
   await db.insert(netsuiteToken).values({
     userId: params.userId,
     accountId,
-    accessToken: params.accessToken,
-    refreshToken: params.refreshToken,
+    ...encrypted,
     expiresAt,
     createdAt: now,
     updatedAt: now,

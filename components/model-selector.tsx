@@ -14,6 +14,7 @@ import {
 import { entitlementsByUserType } from "@/lib/ai/entitlements";
 import { chatModels } from "@/lib/ai/models";
 import {
+  entryUsesModelOverrides,
   findProviderById,
   isMultiAiProviders,
   parseAiProviderConfig,
@@ -64,18 +65,18 @@ export function ModelSelector({
 
   // Filter models by both entitlements AND provider
   const availableChatModels =
-    providerType === "custom" && activeEntry
+    activeEntry && entryUsesModelOverrides(activeEntry)
       ? [
           {
             id: "chat-model",
             name: activeEntry.speedModelId || "Speed",
-            description: "Speed mode — custom endpoint",
+            description: "Speed mode",
             provider: undefined,
           },
           {
             id: "chat-model-reasoning",
             name: activeEntry.reasoningModelId || "Reasoning",
-            description: "Reasoning mode — custom endpoint",
+            description: "Reasoning mode",
             provider: undefined,
           },
         ].filter((chatModel) => availableChatModelIds.includes(chatModel.id))
@@ -116,7 +117,7 @@ export function ModelSelector({
       </DropdownMenuTrigger>
       <DropdownMenuContent
         align="start"
-        className="min-w-[280px] max-w-[90vw] sm:min-w-[300px]"
+        className="min-w-70 max-w-[90vw] sm:min-w-75"
       >
         {availableChatModels.map((chatModel) => {
           const { id } = chatModel;

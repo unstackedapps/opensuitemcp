@@ -593,7 +593,7 @@ export function PromptLibraryPanel({
                 </div>
               </div>
             </div>
-            <div className="flex min-h-[12rem] flex-1 flex-col border-border/60 border-t px-6 py-4 lg:min-h-0 lg:border-t-0 lg:border-l">
+            <div className="flex min-h-48 flex-1 flex-col border-border/60 border-t px-6 py-4 lg:min-h-0 lg:border-t-0 lg:border-l">
               <Label className="mb-2 shrink-0">Preview</Label>
               <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border bg-muted/30 p-3 text-sm leading-relaxed whitespace-pre-wrap">
                 {previewText}

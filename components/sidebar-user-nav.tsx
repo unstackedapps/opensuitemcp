@@ -19,8 +19,10 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { guestRegex } from "@/lib/constants";
+import { cn } from "@/lib/utils";
 import { LoaderIcon, SignInIcon } from "./icons";
 import { toast } from "./toast";
 
@@ -29,6 +31,8 @@ export function SidebarUserNav({ user }: { user: User }) {
   const searchParams = useSearchParams();
   const { data, status } = useSession();
   const { openPortal } = useAppPortal();
+  const { state, isMobile } = useSidebar();
+  const iconOnly = state === "collapsed" && !isMobile;
 
   const isGuest = guestRegex.test(data?.user?.email ?? "");
 
@@ -80,16 +84,25 @@ export function SidebarUserNav({ user }: { user: User }) {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             {status === "loading" ? (
-              <SidebarMenuButton className="h-10 justify-between bg-background data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground">
-                <div className="flex flex-row gap-2">
-                  <div className="size-6 animate-pulse rounded-full bg-zinc-500/30" />
-                  <span className="animate-pulse rounded-md bg-zinc-500/30 text-transparent group-data-[collapsible=icon]:hidden">
-                    Loading
-                  </span>
-                </div>
-                <div className="animate-spin text-zinc-500">
-                  <LoaderIcon />
-                </div>
+              <SidebarMenuButton
+                className={cn(
+                  "bg-background data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground",
+                  iconOnly ? "justify-center" : "h-10",
+                )}
+              >
+                {iconOnly ? (
+                  <div className="size-6 shrink-0 animate-pulse rounded-full bg-zinc-500/30" />
+                ) : (
+                  <>
+                    <div className="size-6 shrink-0 animate-pulse rounded-full bg-zinc-500/30" />
+                    <span className="animate-pulse rounded-md bg-zinc-500/30 text-transparent">
+                      Loading
+                    </span>
+                    <div className="ml-auto animate-spin text-zinc-500">
+                      <LoaderIcon />
+                    </div>
+                  </>
+                )}
               </SidebarMenuButton>
             ) : (
               <SidebarMenuButton

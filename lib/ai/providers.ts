@@ -13,7 +13,10 @@ import {
 const HOSTED_OPENAI_BASE_URL = "https://api.openai.com/v1";
 const HOSTED_ANTHROPIC_BASE_URL = "https://api.anthropic.com/v1";
 
-function createGoogleProvider(apiKey?: string) {
+function createGoogleProvider(
+  apiKey?: string,
+  modelOverrides?: { speedModelId?: string; reasoningModelId?: string },
+) {
   const googleProvider = apiKey ? createGoogleGenerativeAI({ apiKey }) : google;
 
   if (apiKey) {
@@ -27,8 +30,11 @@ function createGoogleProvider(apiKey?: string) {
     );
   }
 
-  const speed = apiModelFor("google", "speed");
-  const reasoning = apiModelFor("google", "reasoning");
+  const speed =
+    modelOverrides?.speedModelId?.trim() || apiModelFor("google", "speed");
+  const reasoning =
+    modelOverrides?.reasoningModelId?.trim() ||
+    apiModelFor("google", "reasoning");
 
   return customProvider({
     languageModels: {
@@ -39,7 +45,10 @@ function createGoogleProvider(apiKey?: string) {
   });
 }
 
-function createAnthropicProvider(apiKey?: string) {
+function createAnthropicProvider(
+  apiKey?: string,
+  modelOverrides?: { speedModelId?: string; reasoningModelId?: string },
+) {
   const anthropicProvider = createAnthropic({
     apiKey,
     baseURL: HOSTED_ANTHROPIC_BASE_URL,
@@ -56,8 +65,11 @@ function createAnthropicProvider(apiKey?: string) {
     );
   }
 
-  const speed = apiModelFor("anthropic", "speed");
-  const reasoning = apiModelFor("anthropic", "reasoning");
+  const speed =
+    modelOverrides?.speedModelId?.trim() || apiModelFor("anthropic", "speed");
+  const reasoning =
+    modelOverrides?.reasoningModelId?.trim() ||
+    apiModelFor("anthropic", "reasoning");
 
   return customProvider({
     languageModels: {
@@ -95,7 +107,10 @@ function createOpenAICompatibleProvider(params: {
   });
 }
 
-function createOpenAIProvider(apiKey?: string) {
+function createOpenAIProvider(
+  apiKey?: string,
+  modelOverrides?: { speedModelId?: string; reasoningModelId?: string },
+) {
   const openaiProvider = createOpenAI({
     apiKey,
     baseURL: HOSTED_OPENAI_BASE_URL,
@@ -112,8 +127,11 @@ function createOpenAIProvider(apiKey?: string) {
     );
   }
 
-  const speed = apiModelFor("openai", "speed");
-  const reasoning = apiModelFor("openai", "reasoning");
+  const speed =
+    modelOverrides?.speedModelId?.trim() || apiModelFor("openai", "speed");
+  const reasoning =
+    modelOverrides?.reasoningModelId?.trim() ||
+    apiModelFor("openai", "reasoning");
 
   return customProvider({
     languageModels: {
@@ -193,7 +211,7 @@ export function getUserProvider(
       );
     }
 
-    return createAnthropicProvider(apiKey);
+    return createAnthropicProvider(apiKey, options);
   }
 
   if (provider === "openai") {
@@ -203,7 +221,7 @@ export function getUserProvider(
       );
     }
 
-    return createOpenAIProvider(apiKey);
+    return createOpenAIProvider(apiKey, options);
   }
 
   // Default to Google
@@ -213,5 +231,5 @@ export function getUserProvider(
     );
   }
 
-  return createGoogleProvider(apiKey);
+  return createGoogleProvider(apiKey, options);
 }

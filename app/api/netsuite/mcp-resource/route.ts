@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
+import { getUserSettings } from "@/lib/db/queries";
+import { normalizeNetSuiteAccountId } from "@/lib/netsuite/accounts";
 import { readMCPResource } from "@/lib/netsuite/mcp";
 import { getNetSuiteToken } from "@/lib/netsuite/tokens";
 
@@ -10,7 +12,8 @@ const bodySchema = z.object({
 
 /**
  * POST /api/netsuite/mcp-resource
- * Reads an MCP resource (e.g. MCP App HTML) from the NetSuite AI Connector.
+ * Reads an MCP resource (e.g. MCP App HTML) from the NetSuite AI Connector
+ * for the user's selected (active) account.
  */
 export async function POST(request: Request) {
   const session = await auth();
@@ -18,8 +21,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const accessToken = await getNetSuiteToken(session.user.id);
-  if (!accessToken) {
+  const settings = await getUserSettings({ userId: session.user.id });
+  const accountId = settings?.netsuiteAccountId
+    ? normalizeNetSuiteAccountId(settings.netsuiteAccountId)
+    : null;
+  const accessToken = accountId
+    ? await getNetSuiteToken(session.user.id, accountId)
+    : null;
+  if (!(accountId && accessToken)) {
     return NextResponse.json(
       { error: "NetSuite not connected" },
       { status: 400 },
@@ -32,6 +41,7 @@ export async function POST(request: Request) {
       userId: session.user.id,
       accessToken,
       uri: parsed.uri,
+      accountId,
     });
 
     const content = resource.contents[0];

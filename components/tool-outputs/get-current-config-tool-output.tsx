@@ -127,7 +127,7 @@ export function GetCurrentConfigToolOutput({
                     None listed
                   </Badge>
                 ) : (
-                  <div className="flex max-w-[16rem] flex-wrap justify-end gap-1">
+                  <div className="flex max-w-64 flex-wrap justify-end gap-1">
                     {(configuration.enabledSkills ?? []).map((skill) => (
                       <Badge key={skill} variant="outline" className="text-xs">
                         {skill}

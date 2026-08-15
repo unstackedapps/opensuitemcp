@@ -40,7 +40,7 @@ export default function NetSuiteIntegrationDocsPage() {
         NetSuite integration
       </h1>
       <p className="mt-3 max-w-2xl text-[#f3efe6]/65 text-sm leading-relaxed md:text-base">
-        Same steps as the in-app NetSuite wizard: prerequisites, add your
+        Same steps as connecting an account in the app: prerequisites, add your
         account, admin Integration record, then OAuth connect.
       </p>
 
@@ -117,7 +117,7 @@ export default function NetSuiteIntegrationDocsPage() {
           <code className="block break-all rounded-md border border-white/10 bg-[#0c1219] px-3 py-2 font-mono text-[#f3efe6]/85 text-xs">
             {redirectUri}
           </code>
-          <div className="rounded-lg border border-white/10 bg-white/[0.03] p-4 [&_.text-foreground]:text-[#f3efe6] [&_.text-muted-foreground]:text-[#f3efe6]/60 [&_code]:border-white/10 [&_code]:bg-[#0c1219] [&_code]:text-[#f3efe6]/80 [&_button]:border-white/15 [&_button]:bg-transparent [&_button]:text-[#f3efe6]/80">
+          <div className="rounded-lg border border-white/10 bg-white/3 p-4 [&_.text-foreground]:text-[#f3efe6] [&_.text-muted-foreground]:text-[#f3efe6]/60 [&_code]:border-white/10 [&_code]:bg-[#0c1219] [&_code]:text-[#f3efe6]/80 [&_button]:border-white/15 [&_button]:bg-transparent [&_button]:text-[#f3efe6]/80">
             <NetSuiteIntegrationChecklist redirectUri={redirectUri} />
           </div>
         </section>

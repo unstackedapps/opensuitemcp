@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  connectedAccountSelection,
   formatNetSuiteAccountDisplay,
   isNetSuiteAccountConnected,
   resolveRequestedNetSuiteAccountId,
@@ -95,6 +96,21 @@ describe("isNetSuiteAccountConnected", () => {
       isNetSuiteAccountConnected("td3107923", { connected: false }),
       false,
     );
+  });
+});
+
+describe("connectedAccountSelection", () => {
+  it("returns the active connected account and not a different connected one", () => {
+    const connected = [
+      { accountId: "td3107923", label: "Prod" },
+      { accountId: "1234567-sb1", label: "Sandbox" },
+    ];
+    assert.equal(
+      connectedAccountSelection(connected, "1234567_SB1")?.accountId,
+      "1234567-sb1",
+    );
+    assert.equal(connectedAccountSelection(connected, "999"), null);
+    assert.equal(connectedAccountSelection(connected, null), null);
   });
 });
 

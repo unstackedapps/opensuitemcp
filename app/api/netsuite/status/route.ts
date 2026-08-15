@@ -24,17 +24,13 @@ export async function GET() {
     ? normalizeNetSuiteAccountId(settings.netsuiteAccountId)
     : (accounts[0]?.accountId ?? null);
 
-  const storedConnectedIds = await listConnectedNetSuiteAccountIds(
+  const connectedAccountIds = await listConnectedNetSuiteAccountIds(
     session.user.id,
   );
-  const accessToken = await getNetSuiteToken(session.user.id);
-  const isConnected = !!accessToken;
-  const connectedAccountIds =
-    isConnected &&
-    activeAccountId &&
-    !storedConnectedIds.includes(activeAccountId)
-      ? [...storedConnectedIds, activeAccountId]
-      : storedConnectedIds;
+  const accessToken = activeAccountId
+    ? await getNetSuiteToken(session.user.id, activeAccountId)
+    : null;
+  const isConnected = Boolean(accessToken);
 
   let toolCount = 0;
   if (isConnected) {
