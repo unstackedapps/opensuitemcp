@@ -1,0 +1,42 @@
+name: Build and push ECR image
+description: Build a linux/amd64 image and push SHA plus live tags
+inputs:
+  repository:
+    description: ECR repository name
+    required: true
+  dockerfile:
+    description: Dockerfile path relative to the repo root
+    required: true
+outputs:
+  image-uri:
+    description: Pushed image URI tagged with the git SHA
+    value: ${{ steps.meta.outputs.image-uri }}
+runs:
+  using: composite
+  steps:
+    - name: Log in to Amazon ECR
+      id: ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Set image URI
+      id: meta
+      shell: bash
+      run: |
+        echo "image-uri=${{ steps.ecr.outputs.registry }}/${{ inputs.repository }}:${{ github.sha }}" >> "$GITHUB_OUTPUT"
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build and push
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        file: ${{ inputs.dockerfile }}
+        platforms: linux/amd64
+        push: true
+        tags: |
+          ${{ steps.meta.outputs.image-uri }}
+          ${{ steps.ecr.outputs.registry }}/${{ inputs.repository }}:live
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        provenance: false

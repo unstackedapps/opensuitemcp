@@ -1,0 +1,5 @@
+cdk.out
+dist
+node_modules
+cdk.context.json
+.env

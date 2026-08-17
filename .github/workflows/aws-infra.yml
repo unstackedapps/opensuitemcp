@@ -1,0 +1,25 @@
+name: Infra
+
+on:
+  push:
+
+jobs:
+  security:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: aws/infra/pnpm-lock.yaml
+      - name: Install CDK dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: aws/infra
+      - name: CDK security assertions
+        run: pnpm test
+        working-directory: aws/infra

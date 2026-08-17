@@ -1,0 +1,45 @@
+name: Deploy SearXNG
+
+on:
+  workflow_call:
+    inputs:
+      nested:
+        description: Unique concurrency when called from Deploy (avoids deadlock)
+        type: boolean
+        default: true
+  workflow_dispatch:
+
+# Direct workflow_dispatch shares aws-deploy-production with Deploy.
+# Nested calls must not: github.event_name stays push/workflow_dispatch from the
+# caller, so never key off event_name == workflow_call.
+concurrency:
+  group: ${{ inputs.nested && format('reusable-{0}-{1}', github.workflow, github.run_id) || 'aws-deploy-production' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+  actions: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-22.04
+    environment: production
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/configure-aws
+        with:
+          role-name: OpenSuiteMcpGithubAppDeploy
+          aws-account-id: ${{ vars.AWS_ACCOUNT_ID }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - id: image
+        uses: ./.github/actions/ecr-build-push
+        with:
+          repository: opensuitemcp-searxng
+          dockerfile: docker/Dockerfile.searxng
+      - uses: ./.github/actions/ssm-compose-pull
+        with:
+          service: searxng
+          image-env: SEARXNG_IMAGE
+          image-uri: ${{ steps.image.outputs.image-uri }}

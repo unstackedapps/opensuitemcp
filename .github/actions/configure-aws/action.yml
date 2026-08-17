@@ -1,0 +1,27 @@
+name: Configure AWS
+description: Assume the GitHub OIDC deploy role
+inputs:
+  role-name:
+    description: IAM role name to assume
+    required: true
+  aws-account-id:
+    description: AWS account ID (pass vars.AWS_ACCOUNT_ID from the workflow)
+    required: true
+  aws-region:
+    description: AWS region (pass vars.AWS_REGION from the workflow)
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Check GitHub variables
+      shell: bash
+      run: |
+        if [ -z "${{ inputs.aws-account-id }}" ] || [ -z "${{ inputs.aws-region }}" ]; then
+          echo "Set repository variables AWS_ACCOUNT_ID and AWS_REGION (see aws/infra/README.md)."
+          exit 1
+        fi
+    - name: Assume AWS role
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: arn:aws:iam::${{ inputs.aws-account-id }}:role/${{ inputs.role-name }}
+        aws-region: ${{ inputs.aws-region }}

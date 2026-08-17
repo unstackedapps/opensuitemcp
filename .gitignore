@@ -49,3 +49,9 @@ yarn-error.log*
 /playwright-report/
 /blob-report/
 /playwright/*
+
+# CDK (aws/infra)
+aws/infra/cdk.out
+aws/infra/dist
+aws/infra/node_modules
+aws/infra/cdk.context.json

@@ -21,6 +21,12 @@
     "db:pull": "drizzle-kit pull",
     "db:check": "drizzle-kit check",
     "db:up": "drizzle-kit up",
+    "cdk": "node aws/infra/run-cdk.mjs",
+    "cdk:deploy": "node aws/infra/run-cdk.mjs deploy --all",
+    "cdk:diff": "node aws/infra/run-cdk.mjs diff --all",
+    "cdk:synth": "node aws/infra/run-cdk.mjs synth",
+    "cdk:destroy": "node aws/infra/run-cdk.mjs destroy --all",
+    "test:infra": "pnpm --dir aws/infra test",
     "test": "export PLAYWRIGHT=True && pnpm exec playwright test"
   },
   "dependencies": {

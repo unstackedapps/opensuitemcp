@@ -1,0 +1,9 @@
+# Keep in sync with DOCKER_ASSET_EXCLUDE in aws/infra/lib/opensuitemcp-stack.ts
+aws
+infra
+cdk.out
+.git
+.github
+.cursor
+.next
+node_modules

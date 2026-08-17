@@ -1,0 +1,14 @@
+{$DOMAIN} {
+  # NetSuite redirects the browser here without cached basic-auth headers.
+  @oauth_callback path /api/netsuite/callback*
+
+  handle @oauth_callback {
+    reverse_proxy app:3000
+  }
+
+  handle {
+    # Written by /opt/opensuitemcp/sync-basic-auth.sh from SSM.
+    import basic-auth.caddy
+    reverse_proxy app:3000
+  }
+}

@@ -1,0 +1,194 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - app/**
+      - components/**
+      - hooks/**
+      - lib/**
+      - middleware.ts
+      - instrumentation.ts
+      - next.config.ts
+      - tsconfig.json
+      - package.json
+      - pnpm-lock.yaml
+      - postcss.config.mjs
+      - components.json
+      - drizzle.config.ts
+      - docker/**
+      - .dockerignore
+      - aws/infra/**
+      - "!aws/infra/**/*.md"
+      - "!aws/infra/.env.example"
+      - "!aws/infra/test/**"
+      - .github/workflows/deploy-aws.yml
+      - .github/workflows/deploy-aws-app.yml
+      - .github/workflows/deploy-aws-infra.yml
+      - .github/workflows/deploy-aws-searxng.yml
+      - .github/actions/**
+  workflow_dispatch:
+    inputs:
+      deploy_infra:
+        description: Run CDK infra deploy
+        type: boolean
+        default: true
+      deploy_app:
+        description: Build and deploy the app image
+        type: boolean
+        default: true
+      deploy_searxng:
+        description: Build and deploy the SearXNG image
+        type: boolean
+        default: true
+
+# One production pipeline at a time. Leaf workflows pass nested=true (default)
+# so they use a unique concurrency group and do not deadlock on this lock.
+concurrency:
+  group: aws-deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+  actions: write
+
+jobs:
+  changes:
+    runs-on: ubuntu-22.04
+    outputs:
+      infra: ${{ steps.targets.outputs.infra }}
+      app: ${{ steps.targets.outputs.app }}
+      searxng: ${{ steps.targets.outputs.searxng }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: targets
+        name: Detect deploy targets
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+          INPUT_INFRA: ${{ inputs.deploy_infra }}
+          INPUT_APP: ${{ inputs.deploy_app }}
+          INPUT_SEARXNG: ${{ inputs.deploy_searxng }}
+        run: |
+          set -euo pipefail
+
+          write_targets() {
+            echo "infra=$1" >> "$GITHUB_OUTPUT"
+            echo "app=$2" >> "$GITHUB_OUTPUT"
+            echo "searxng=$3" >> "$GITHUB_OUTPUT"
+            echo "Deploy targets: infra=$1 app=$2 searxng=$3"
+          }
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            write_targets "${INPUT_INFRA:-true}" "${INPUT_APP:-true}" "${INPUT_SEARXNG:-true}"
+            exit 0
+          fi
+
+          if [ -z "${BEFORE:-}" ] || echo "$BEFORE" | grep -qE '^0+$'; then
+            echo "No previous SHA; deploying all targets."
+            write_targets true true true
+            exit 0
+          fi
+
+          if ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+            git fetch --no-tags --depth=1 origin "$BEFORE" || {
+              echo "Cannot resolve previous SHA; deploying all targets."
+              write_targets true true true
+              exit 0
+            }
+          fi
+
+          changed() {
+            ! git diff --quiet "$BEFORE" "$AFTER" -- "$@"
+          }
+
+          infra=false
+          app=false
+          searxng=false
+
+          if changed \
+            aws/infra \
+            ':!aws/infra/**/*.md' \
+            ':!aws/infra/.env.example' \
+            ':!aws/infra/test/**' \
+            docker/compose.prod.yml \
+            docker/Caddyfile \
+            .github/workflows/deploy-aws-infra.yml \
+            .github/workflows/aws-infra.yml \
+            .github/actions/configure-aws; then
+            infra=true
+          fi
+
+          if changed \
+            app \
+            components \
+            hooks \
+            lib \
+            middleware.ts \
+            instrumentation.ts \
+            next.config.ts \
+            tsconfig.json \
+            package.json \
+            pnpm-lock.yaml \
+            postcss.config.mjs \
+            components.json \
+            drizzle.config.ts \
+            docker/Dockerfile \
+            docker/app-entrypoint.mjs \
+            .dockerignore \
+            .github/workflows/deploy-aws-app.yml \
+            .github/actions/ecr-build-push \
+            .github/actions/ssm-compose-pull; then
+            app=true
+          fi
+
+          if changed \
+            docker/Dockerfile.searxng \
+            docker/scripts/searxng-entrypoint.sh \
+            .github/workflows/deploy-aws-searxng.yml \
+            .github/actions/ecr-build-push \
+            .github/actions/ssm-compose-pull; then
+            searxng=true
+          fi
+
+          write_targets "$infra" "$app" "$searxng"
+
+  infra:
+    needs: changes
+    if: needs.changes.outputs.infra == 'true'
+    uses: ./.github/workflows/deploy-aws-infra.yml
+    with:
+      nested: true
+    secrets: inherit
+    permissions:
+      contents: read
+      id-token: write
+
+  app:
+    needs: [changes, infra]
+    if: ${{ always() && !cancelled() && needs.changes.result == 'success' && needs.changes.outputs.app == 'true' && (needs.infra.result == 'success' || needs.infra.result == 'skipped') }}
+    uses: ./.github/workflows/deploy-aws-app.yml
+    with:
+      nested: true
+    secrets: inherit
+    permissions:
+      contents: read
+      id-token: write
+      actions: write
+
+  searxng:
+    needs: [changes, infra, app]
+    if: ${{ always() && !cancelled() && needs.changes.result == 'success' && needs.changes.outputs.searxng == 'true' && (needs.infra.result == 'success' || needs.infra.result == 'skipped') && (needs.app.result == 'success' || needs.app.result == 'skipped') }}
+    uses: ./.github/workflows/deploy-aws-searxng.yml
+    with:
+      nested: true
+    secrets: inherit
+    permissions:
+      contents: read
+      id-token: write
+      actions: write

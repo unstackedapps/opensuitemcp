@@ -1,0 +1,65 @@
+name: Deploy infra
+
+on:
+  workflow_call:
+    inputs:
+      nested:
+        description: Unique concurrency when called from Deploy (avoids deadlock)
+        type: boolean
+        default: true
+  workflow_dispatch:
+
+# Direct workflow_dispatch shares aws-deploy-production with Deploy.
+# Nested calls must not: github.event_name stays push/workflow_dispatch from the
+# caller, so never key off event_name == workflow_call.
+concurrency:
+  group: ${{ inputs.nested && format('reusable-{0}-{1}', github.workflow, github.run_id) || 'aws-deploy-production' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-22.04
+    environment: production
+    timeout-minutes: 45
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      CDK_DEFAULT_ACCOUNT: ${{ vars.AWS_ACCOUNT_ID }}
+      CDK_DEFAULT_REGION: ${{ vars.AWS_REGION }}
+      DOMAIN_NAME: ${{ vars.DOMAIN_NAME }}
+      HOSTED_ZONE_NAME: ${{ vars.HOSTED_ZONE_NAME }}
+      HOSTED_ZONE_ID: ${{ vars.HOSTED_ZONE_ID }}
+      GITHUB_DEPLOY_REPO: ${{ github.repository }}
+      GITHUB_OIDC_PROVIDER_ARN: ${{ vars.OIDC_PROVIDER_ARN }}
+      ORIGIN_INGRESS_MODE: ${{ vars.ORIGIN_INGRESS_MODE }}
+      ALLOWED_HTTPS_CIDRS: ${{ vars.ALLOWED_HTTPS_CIDRS }}
+      HTTP_BASIC_AUTH_DEFAULT_ENABLED: ${{ vars.HTTP_BASIC_AUTH_DEFAULT_ENABLED }}
+      BACKUP_DAILY_RETENTION_DAYS: ${{ vars.BACKUP_DAILY_RETENTION_DAYS }}
+      BACKUP_WEEKLY_RETENTION_WEEKS: ${{ vars.BACKUP_WEEKLY_RETENTION_WEEKS }}
+      CDK_BOOTSTRAP_QUALIFIER: ${{ vars.CDK_BOOTSTRAP_QUALIFIER }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/configure-aws
+        with:
+          role-name: OpenSuiteMcpGithubInfraDeploy
+          aws-account-id: ${{ vars.AWS_ACCOUNT_ID }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: aws/infra/pnpm-lock.yaml
+      - name: Install CDK dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: aws/infra
+      - name: CDK security assertions
+        run: pnpm test
+        working-directory: aws/infra
+      - name: Deploy CDK stack
+        run: node aws/infra/run-cdk.mjs deploy --require-approval never

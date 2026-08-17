@@ -1,0 +1,76 @@
+name: Pull compose service via SSM
+description: Point the EC2 compose env at a new image and restart that service
+inputs:
+  service:
+    description: Compose service name (app or searxng)
+    required: true
+  image-env:
+    description: Env var in /opt/opensuitemcp/.env (APP_IMAGE or SEARXNG_IMAGE)
+    required: true
+  image-uri:
+    description: Full ECR image URI to run
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Restart service on the instance
+      shell: bash
+      env:
+        IMAGE_ENV: ${{ inputs.image-env }}
+        IMAGE_URI: ${{ inputs.image-uri }}
+        SERVICE: ${{ inputs.service }}
+      run: |
+        set -euo pipefail
+        INSTANCE_ID="$(aws ssm get-parameter --name /opensuitemcp/instance-id --query Parameter.Value --output text)"
+        jq -n --arg image_env "$IMAGE_ENV" --arg image_uri "$IMAGE_URI" --arg service "$SERVICE" '{
+          commands: [
+            "set -euxo pipefail",
+            ("IMAGE_ENV=" + $image_env),
+            ("IMAGE_URI=" + $image_uri),
+            ("SERVICE=" + $service),
+            "TOKEN=$(curl -sS -X PUT http://169.254.169.254/latest/api/token -H \"X-aws-ec2-metadata-token-ttl-seconds: 60\")",
+            "REGION=$(curl -sS -H \"X-aws-ec2-metadata-token: $TOKEN\" http://169.254.169.254/latest/meta-data/placement/region)",
+            "REGISTRY=$(printf %s \"$IMAGE_URI\" | cut -d/ -f1)",
+            "aws ecr get-login-password --region \"$REGION\" | docker login --username AWS --password-stdin \"$REGISTRY\"",
+            "sed -i \"s|^${IMAGE_ENV}=.*|${IMAGE_ENV}=${IMAGE_URI}|\" /opt/opensuitemcp/.env",
+            "cd /opt/opensuitemcp",
+            "docker-compose --env-file /opt/opensuitemcp/.env -f /opt/opensuitemcp/compose.yml pull \"$SERVICE\"",
+            "docker-compose --env-file /opt/opensuitemcp/.env -f /opt/opensuitemcp/compose.yml up -d \"$SERVICE\""
+          ]
+        }' > "${RUNNER_TEMP}/ssm-params.json"
+        COMMAND_ID="$(aws ssm send-command \
+          --instance-ids "$INSTANCE_ID" \
+          --document-name AWS-RunShellScript \
+          --timeout-seconds 600 \
+          --comment "Pull ${SERVICE}" \
+          --parameters "file://${RUNNER_TEMP}/ssm-params.json" \
+          --query Command.CommandId \
+          --output text)"
+        for _ in $(seq 1 90); do
+          STATUS="$(aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id "$INSTANCE_ID" \
+            --query Status \
+            --output text 2>/dev/null || echo Pending)"
+          case "$STATUS" in
+            Success)
+              aws ssm get-command-invocation \
+                --command-id "$COMMAND_ID" \
+                --instance-id "$INSTANCE_ID" \
+                --query StandardOutputContent \
+                --output text
+              exit 0
+              ;;
+            Failed|Cancelled|TimedOut|Undeliverable)
+              aws ssm get-command-invocation \
+                --command-id "$COMMAND_ID" \
+                --instance-id "$INSTANCE_ID" \
+                --query '{status:Status,stdout:StandardOutputContent,stderr:StandardErrorContent}' \
+                --output json
+              exit 1
+              ;;
+          esac
+          sleep 5
+        done
+        echo "Timed out waiting for SSM command ${COMMAND_ID}"
+        exit 1
