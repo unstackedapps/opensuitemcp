@@ -1,22 +1,14 @@
-import {
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
+import {
+  type GithubContentItem,
+  githubHeaders,
+  writeSkillPack,
+} from "./github-sync";
 
 const ORACLE_REPO = "oracle/netsuite-suitecloud-sdk";
 const ORACLE_SKILLS_PATH = "packages/agent-skills";
 const ALWAYS_ON_MARKER = "netsuite-ai-connector-instructions";
-
-type GithubContentItem = {
-  name: string;
-  path: string;
-  type: "file" | "dir" | string;
-  download_url?: string | null;
-};
 
 /**
  * On-disk Oracle skill pack (single source of truth for all users).
@@ -36,16 +28,32 @@ export function oracleSkillsLookHealthy(
   return existsSync(path.join(skillsDir, ALWAYS_ON_MARKER, "SKILL.md"));
 }
 
-function githubHeaders(): Record<string, string> {
-  const headers: Record<string, string> = {
-    Accept: "application/vnd.github+json",
-    "User-Agent": "opensuitemcp-skill-sync",
-  };
-  const token = process.env.GITHUB_TOKEN?.trim();
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
+async function fetchFileMarkdown(
+  fileUrl: string,
+  headers: Record<string, string>,
+): Promise<string | null> {
+  const skillRes = await fetch(fileUrl, { headers, cache: "no-store" });
+  if (!skillRes.ok) {
+    return null;
   }
-  return headers;
+  const meta = (await skillRes.json()) as {
+    encoding?: string;
+    content?: string;
+    download_url?: string | null;
+  };
+  if (meta.encoding === "base64" && typeof meta.content === "string") {
+    return Buffer.from(meta.content, "base64").toString("utf8");
+  }
+  if (meta.download_url) {
+    const raw = await fetch(meta.download_url, {
+      headers,
+      cache: "no-store",
+    });
+    if (raw.ok) {
+      return await raw.text();
+    }
+  }
+  return null;
 }
 
 /**
@@ -78,65 +86,19 @@ export async function syncOracleSkills(): Promise<boolean> {
       item.name.startsWith("netsuite-"),
   );
 
-  const seen = new Set<string>();
-  let wrote = 0;
+  const skills: Array<{ localId: string; markdown: string }> = [];
 
   for (const dir of skillDirs) {
     const skillUrl = `https://api.github.com/repos/${ORACLE_REPO}/contents/${ORACLE_SKILLS_PATH}/${dir.name}/SKILL.md`;
-    const skillRes = await fetch(skillUrl, { headers, cache: "no-store" });
-    if (!skillRes.ok) {
-      console.warn(
-        `[skills] Skip ${dir.name}: SKILL.md HTTP ${skillRes.status}`,
-      );
-      continue;
-    }
-
-    const meta = (await skillRes.json()) as {
-      encoding?: string;
-      content?: string;
-      download_url?: string | null;
-    };
-
-    let markdown: string | null = null;
-    if (meta.encoding === "base64" && typeof meta.content === "string") {
-      markdown = Buffer.from(meta.content, "base64").toString("utf8");
-    } else if (meta.download_url) {
-      const raw = await fetch(meta.download_url, {
-        headers,
-        cache: "no-store",
-      });
-      if (raw.ok) {
-        markdown = await raw.text();
-      }
-    }
-
+    const markdown = await fetchFileMarkdown(skillUrl, headers);
     if (!markdown?.trim()) {
+      console.warn(`[skills] Skip ${dir.name}: SKILL.md missing or empty`);
       continue;
     }
-
-    const skillDir = path.join(skillsDir, dir.name);
-    mkdirSync(skillDir, { recursive: true });
-    writeFileSync(path.join(skillDir, "SKILL.md"), markdown, "utf8");
-    seen.add(dir.name);
-    wrote += 1;
+    skills.push({ localId: dir.name, markdown });
   }
 
-  // Remove local skills Oracle no longer ships
-  if (existsSync(skillsDir)) {
-    for (const entry of readdirSync(skillsDir, { withFileTypes: true })) {
-      if (!entry.isDirectory()) {
-        continue;
-      }
-      if (!seen.has(entry.name)) {
-        rmSync(path.join(skillsDir, entry.name), {
-          recursive: true,
-          force: true,
-        });
-        console.log(`[skills] Pruned removed upstream skill: ${entry.name}`);
-      }
-    }
-  }
-
+  const wrote = writeSkillPack(skillsDir, skills);
   const ok = oracleSkillsLookHealthy(skillsDir);
   console.log(
     `[skills] Synced ${wrote} Oracle SKILL.md file(s) → ${skillsDir} (healthy=${ok})`,

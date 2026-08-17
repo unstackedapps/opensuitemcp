@@ -33,4 +33,8 @@ export const TEST_PROMPTS: Record<string, ModelMessage> = {
       },
     ],
   },
+  USER_WEATHER: {
+    role: "user",
+    content: [{ type: "text", text: "What's the weather in sf?" }],
+  },
 };

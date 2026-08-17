@@ -10,6 +10,7 @@ type GetCurrentConfigOptions = {
   timezone: string;
   enabledSearchDomains: string[];
   enabledSkills?: string[];
+  persona?: { id: string; name: string };
   modelName?: string;
   modelDescription?: string;
 };
@@ -27,6 +28,7 @@ export type GetCurrentConfigToolResult = {
     timezone: string;
     enabledSearchDomains: string[];
     enabledSkills: string[];
+    persona: { id: string; name: string };
   };
 };
 
@@ -38,6 +40,7 @@ export function createGetCurrentConfigTool(options: GetCurrentConfigOptions) {
     timezone,
     enabledSearchDomains,
     enabledSkills = [],
+    persona = { id: "ava", name: "Ava" },
     modelName: modelNameOverride,
     modelDescription: modelDescriptionOverride,
   } = options;
@@ -56,7 +59,7 @@ export function createGetCurrentConfigTool(options: GetCurrentConfigOptions) {
 
   return tool({
     description:
-      "Get the current AI model, configuration, and enabled skills. Use this when the user asks about what model they're using, their settings, or which skills are active.",
+      "Get the current AI model, configuration, persona, and enabled skills. Use this when the user asks about what model they're using, their settings, or which skills are active.",
     inputSchema: z.object({}),
     execute: (): GetCurrentConfigToolResult => {
       // Re-lookup model info at execution time to ensure we have the latest data
@@ -80,6 +83,7 @@ export function createGetCurrentConfigTool(options: GetCurrentConfigOptions) {
           timezone,
           enabledSearchDomains,
           enabledSkills,
+          persona,
         },
       };
     },

@@ -1,10 +1,20 @@
 /**
  * CLI: pnpm skills:sync
- * Pull Oracle agent-skills SKILL.md files into ORACLE_SKILLS_DIR.
+ * Pull Oracle + Community SKILL.md packs into local .data dirs.
  */
+import { syncCommunitySkills } from "./sync-community";
 import { syncOracleSkills } from "./sync-oracle";
 
-syncOracleSkills()
+async function main() {
+  await syncOracleSkills();
+  try {
+    await syncCommunitySkills();
+  } catch (error) {
+    console.warn("[skills] Community sync failed:", error);
+  }
+}
+
+main()
   .then(() => {
     process.exit(0);
   })

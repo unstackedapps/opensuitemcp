@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/app/(auth)/auth";
 import {
+  listCommunityCatalogSkills,
+  listConnectedCatalogSkills,
   listOracleCatalogSkills,
   normalizeUserSkillSettings,
 } from "@/lib/ai/skills/catalog";
@@ -20,15 +22,23 @@ export async function GET() {
         ? {
             enabledSkillIds: settings.enabledSkillIds ?? [],
             customSkills: settings.customSkills ?? [],
+            connectedSkillSources: settings.connectedSkillSources ?? [],
           }
         : null,
       settings?.customInstructions,
     );
 
+    const connectedSkills = listConnectedCatalogSkills(
+      session.user.id,
+      userSkillSettings.connectedSkillSources,
+    );
+
     return NextResponse.json({
-      catalog: listOracleCatalogSkills(),
+      catalog: [...listOracleCatalogSkills(), ...listCommunityCatalogSkills()],
       enabledSkillIds: userSkillSettings.enabledSkillIds,
       customSkills: userSkillSettings.customSkills,
+      connectedSources: userSkillSettings.connectedSkillSources,
+      connectedSkills,
     });
   } catch (error) {
     console.error("[Skills API] Error fetching skills:", error);

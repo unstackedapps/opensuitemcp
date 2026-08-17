@@ -7,6 +7,15 @@ import {
   assertMcpToolCallAllowed,
   isMcpToolAllowed,
 } from "./mcp-tool-settings";
+import {
+  createMcpToolsListCache,
+  MCP_TOOLS_LIST_TTL_MS,
+} from "./mcp-tools-cache";
+import {
+  deleteDurableMcpTools,
+  readDurableMcpTools,
+  writeDurableMcpTools,
+} from "./mcp-tools-durable";
 import { getNetSuiteToken } from "./tokens";
 
 async function getMCPBaseUrl(
@@ -68,6 +77,11 @@ export type MCPTool = {
     [key: string]: unknown;
   };
 };
+
+const mcpToolsListCache = createMcpToolsListCache<MCPTool[]>(
+  MCP_TOOLS_LIST_TTL_MS,
+);
+const backgroundRefreshKeys = new Set<string>();
 
 export type MCPResourceContents = {
   uri: string;
@@ -160,10 +174,70 @@ async function mcpJsonRpc(params: {
   }
 }
 
-/**
- * Fetch all available MCP tools from NetSuite
- */
-export async function fetchMCPTools(
+export function invalidateMcpToolsListCache(
+  userId: string,
+  accountId?: string | null,
+) {
+  mcpToolsListCache.invalidate(userId, accountId);
+  deleteDurableMcpTools(userId, accountId).catch(() => {
+    // Best-effort cleanup
+  });
+}
+
+function rememberMcpToolsCatalog(
+  userId: string,
+  accountId: string,
+  tools: MCPTool[],
+  fetchedAt: number = Date.now(),
+) {
+  if (tools.length === 0) {
+    return;
+  }
+  mcpToolsListCache.set(userId, accountId, tools, fetchedAt);
+  writeDurableMcpTools(userId, accountId, tools, fetchedAt).catch(() => {
+    // Logged inside writer
+  });
+}
+
+async function refreshMcpToolsInBackground(userId: string, accountId: string) {
+  const key = `${userId}:${accountId}`;
+  if (backgroundRefreshKeys.has(key)) {
+    return;
+  }
+  backgroundRefreshKeys.add(key);
+  try {
+    const accessToken = await getNetSuiteToken(userId, accountId);
+    if (!accessToken) {
+      return;
+    }
+    const tools = await fetchMCPToolsFromNetSuite(
+      userId,
+      accessToken,
+      accountId,
+    );
+    if (tools.length > 0) {
+      rememberMcpToolsCatalog(userId, accountId, tools);
+      console.log(
+        `[NetSuite] Background refreshed tools/list (${tools.length} tools)`,
+      );
+    }
+  } catch (error) {
+    console.warn(
+      "[NetSuite] Background tools/list refresh failed:",
+      error instanceof Error ? error.message : String(error),
+    );
+  } finally {
+    backgroundRefreshKeys.delete(key);
+  }
+}
+
+function scheduleMcpToolsRefresh(userId: string, accountId: string) {
+  refreshMcpToolsInBackground(userId, accountId).catch(() => {
+    // Logged inside refresh
+  });
+}
+
+async function fetchMCPToolsFromNetSuite(
   userId: string,
   accessToken: string,
   accountId?: string | null,
@@ -205,6 +279,90 @@ export async function fetchMCPTools(
   }
 
   return tools;
+}
+
+/**
+ * Fetch all available MCP tools from NetSuite.
+ * Fresh (30m) and stale (7d) memory entries avoid blocking chat; durable
+ * `.data/mcp-tools` survives restarts. In-flight calls coalesce.
+ */
+export async function fetchMCPTools(
+  userId: string,
+  accessToken: string,
+  accountId?: string | null,
+  options?: { forceRefresh?: boolean },
+): Promise<MCPTool[]> {
+  const normalizedAccountId = accountId?.trim()
+    ? normalizeNetSuiteAccountId(accountId)
+    : null;
+  const load = async () => {
+    const tools = await fetchMCPToolsFromNetSuite(
+      userId,
+      accessToken,
+      normalizedAccountId,
+    );
+    if (normalizedAccountId && tools.length > 0) {
+      rememberMcpToolsCatalog(userId, normalizedAccountId, tools);
+    }
+    return tools;
+  };
+
+  if (!normalizedAccountId) {
+    return load();
+  }
+
+  if (options?.forceRefresh) {
+    const tools = await load();
+    if (tools.length === 0) {
+      mcpToolsListCache.invalidate(userId, normalizedAccountId);
+      await deleteDurableMcpTools(userId, normalizedAccountId);
+    }
+    return tools;
+  }
+
+  const memory = mcpToolsListCache.getLookup(userId, normalizedAccountId);
+  if (memory) {
+    if (memory.fresh) {
+      console.log(
+        `[NetSuite] Using cached tools/list (${memory.value.length} tools)`,
+      );
+    } else {
+      console.log(
+        `[NetSuite] Using stale tools/list (${memory.value.length} tools); refreshing in background`,
+      );
+      scheduleMcpToolsRefresh(userId, normalizedAccountId);
+    }
+    return memory.value;
+  }
+
+  const durable = await readDurableMcpTools(userId, normalizedAccountId);
+  if (durable) {
+    mcpToolsListCache.set(
+      userId,
+      normalizedAccountId,
+      durable.tools,
+      durable.fetchedAt,
+    );
+    const ageMs = Date.now() - durable.fetchedAt;
+    if (ageMs < MCP_TOOLS_LIST_TTL_MS) {
+      console.log(
+        `[NetSuite] Using durable tools/list (${durable.tools.length} tools)`,
+      );
+    } else {
+      console.log(
+        `[NetSuite] Using durable stale tools/list (${durable.tools.length} tools); refreshing in background`,
+      );
+      scheduleMcpToolsRefresh(userId, normalizedAccountId);
+    }
+    return durable.tools;
+  }
+
+  return mcpToolsListCache.getOrFetch(
+    userId,
+    normalizedAccountId,
+    load,
+    (tools) => tools.length > 0,
+  );
 }
 
 /**
@@ -412,28 +570,112 @@ const EMPTY_LOADED_MCP_TOOLS: LoadedNetSuiteMcpTools = {
   activeToolKeys: [],
 };
 
+function materializeNetSuiteMcpTools(params: {
+  mcpTools: MCPTool[];
+  userId: string;
+  accountId: string | null;
+  netsuiteMcpTools: Parameters<typeof isMcpToolAllowed>[0];
+}): LoadedNetSuiteMcpTools {
+  const tools: Record<string, unknown> = {};
+  const activeToolKeys: string[] = [];
+
+  for (const mcpTool of params.mcpTools) {
+    const toolKey = mcpTool.name.replace(/[^a-zA-Z0-9_]/g, "_");
+    tools[toolKey] = createMCPTool({
+      mcpTool,
+      userId: params.userId,
+      accountId: params.accountId,
+    });
+    if (
+      isMcpToolAllowed(params.netsuiteMcpTools, params.accountId, mcpTool.name)
+    ) {
+      activeToolKeys.push(toolKey);
+    }
+  }
+
+  return { tools, activeToolKeys };
+}
+
 /**
  * Load and create all NetSuite MCP tools for a user.
+ * Prefers memory/durable catalogs so chat is not blocked on tools/list.
  * Disabled tools stay registered so invoke returns a clear error instead of 404.
  */
 export async function loadNetSuiteMCPTools(
   userId: string,
+  options?: {
+    settings?: Awaited<ReturnType<typeof getUserSettings>>;
+  },
 ): Promise<LoadedNetSuiteMcpTools> {
-  const settings = await getUserSettings({ userId });
+  const settings =
+    options && "settings" in options
+      ? options.settings
+      : await getUserSettings({ userId });
   const accountId = settings?.netsuiteAccountId
     ? normalizeNetSuiteAccountId(settings.netsuiteAccountId)
     : null;
-  const accessToken = await getNetSuiteToken(userId, accountId);
 
-  if (!accessToken) {
-    console.log("[NetSuite] No access token found for user:", userId);
+  if (!accountId) {
+    console.log("[NetSuite] No account configured for user:", userId);
     return EMPTY_LOADED_MCP_TOOLS;
   }
 
   try {
-    console.log("[NetSuite] Fetching MCP tools from NetSuite...");
-    const mcpTools = await fetchMCPTools(userId, accessToken, accountId);
+    const memory = mcpToolsListCache.getLookup(userId, accountId);
+    if (memory) {
+      if (memory.fresh) {
+        console.log(
+          `[NetSuite] Using cached tools/list (${memory.value.length} tools)`,
+        );
+      } else {
+        console.log(
+          `[NetSuite] Using stale tools/list (${memory.value.length} tools); refreshing in background`,
+        );
+        scheduleMcpToolsRefresh(userId, accountId);
+      }
+      return materializeNetSuiteMcpTools({
+        mcpTools: memory.value,
+        userId,
+        accountId,
+        netsuiteMcpTools: settings?.netsuiteMcpTools,
+      });
+    }
 
+    const durable = await readDurableMcpTools(userId, accountId);
+    if (durable) {
+      mcpToolsListCache.set(
+        userId,
+        accountId,
+        durable.tools,
+        durable.fetchedAt,
+      );
+      const ageMs = Date.now() - durable.fetchedAt;
+      if (ageMs < MCP_TOOLS_LIST_TTL_MS) {
+        console.log(
+          `[NetSuite] Using durable tools/list (${durable.tools.length} tools)`,
+        );
+      } else {
+        console.log(
+          `[NetSuite] Using durable stale tools/list (${durable.tools.length} tools); refreshing in background`,
+        );
+        scheduleMcpToolsRefresh(userId, accountId);
+      }
+      return materializeNetSuiteMcpTools({
+        mcpTools: durable.tools as MCPTool[],
+        userId,
+        accountId,
+        netsuiteMcpTools: settings?.netsuiteMcpTools,
+      });
+    }
+
+    const accessToken = await getNetSuiteToken(userId, accountId);
+    if (!accessToken) {
+      console.log("[NetSuite] No access token found for user:", userId);
+      return EMPTY_LOADED_MCP_TOOLS;
+    }
+
+    console.log("[NetSuite] Loading MCP tools (cold)...");
+    const mcpTools = await fetchMCPTools(userId, accessToken, accountId);
     if (!Array.isArray(mcpTools)) {
       console.error(
         "[NetSuite] Tools response is not an array:",
@@ -444,28 +686,12 @@ export async function loadNetSuiteMCPTools(
     }
 
     console.log(`[NetSuite] Received ${mcpTools.length} tools from NetSuite`);
-
-    const tools: Record<string, unknown> = {};
-    const activeToolKeys: string[] = [];
-
-    for (const mcpTool of mcpTools) {
-      const toolKey = mcpTool.name.replace(/[^a-zA-Z0-9_]/g, "_");
-      console.log(`[NetSuite] Creating tool: ${mcpTool.name} -> ${toolKey}`);
-      tools[toolKey] = createMCPTool({
-        mcpTool,
-        userId,
-        accountId,
-      });
-      if (
-        isMcpToolAllowed(settings?.netsuiteMcpTools, accountId, mcpTool.name)
-      ) {
-        activeToolKeys.push(toolKey);
-      } else {
-        console.log(`[NetSuite] Tool registered but disabled: ${mcpTool.name}`);
-      }
-    }
-
-    return { tools, activeToolKeys };
+    return materializeNetSuiteMcpTools({
+      mcpTools,
+      userId,
+      accountId,
+      netsuiteMcpTools: settings?.netsuiteMcpTools,
+    });
   } catch (error) {
     console.error("[NetSuite] Error fetching/creating tools:", error);
     return EMPTY_LOADED_MCP_TOOLS;

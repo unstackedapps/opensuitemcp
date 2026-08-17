@@ -17,6 +17,10 @@ export const postRequestBodySchema = z.object({
   selectedChatModel: z.enum(["chat-model", "chat-model-reasoning"]),
   selectedVisibilityType: z.enum(["public", "private"]),
   aiProviderId: z.string().max(64).optional().nullable(),
+  personaId: z.string().max(64).optional().nullable(),
+  refiningPersonaId: z.string().max(64).optional().nullable(),
+  /** Connected skills invoked via / in the composer for this turn only */
+  invokedConnectedSkillIds: z.array(z.string().max(256)).max(20).optional(),
 });
 
 export type PostRequestBody = z.infer<typeof postRequestBodySchema>;

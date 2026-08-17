@@ -115,6 +115,17 @@ export function GetCurrentConfigToolOutput({
               </div>
             </div>
 
+            {/* Persona */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <BrainIcon size={14} />
+                <span className="text-sm">Persona</span>
+              </div>
+              <Badge variant="outline">
+                {configuration.persona?.name ?? "Ava"}
+              </Badge>
+            </div>
+
             {/* Enabled Skills */}
             <div className="flex items-start justify-between gap-2">
               <div className="flex items-center gap-2">

@@ -8,6 +8,15 @@ import useSWR, { useSWRConfig } from "swr";
 import { unstable_serialize } from "swr/infinite";
 import { ChatHeader } from "@/components/chat-header";
 import {
+  type PersonaListItem,
+  PersonaPickerDialog,
+} from "@/components/persona-picker-dialog";
+import {
+  draftFromAssistantMessages,
+  PersonaSaveDialog,
+} from "@/components/persona-save-dialog";
+import { useAppPortal } from "@/components/portal/context";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -19,6 +28,17 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useAutoResume } from "@/hooks/use-auto-resume";
 import { useChatVisibility } from "@/hooks/use-chat-visibility";
+import {
+  AVA_PERSONA_ID,
+  CLIENT_BUILTIN_PERSONAS,
+  clientPersonaShortName,
+  PERSONA_BUILDER_ID,
+} from "@/lib/ai/personas/ids";
+import {
+  persistGuestPersonaPreferences,
+  readSessionPersonaId,
+  writeSessionPersonaId,
+} from "@/lib/ai/personas/preferences";
 import type { Vote } from "@/lib/db/schema";
 import { ChatSDKError } from "@/lib/errors";
 import type { ChatMessage } from "@/lib/types";
@@ -28,9 +48,41 @@ import { InfoIcon } from "./icons";
 import { Messages } from "./messages";
 import { MultimodalInput } from "./multimodal-input";
 import { getChatHistoryPaginationKey } from "./sidebar-history";
+import { toast } from "./toast";
 import { Button } from "./ui/button";
 import { Card, CardContent } from "./ui/card";
 import type { VisibilityType } from "./visibility-selector";
+
+type PersonaSettingsPayload = {
+  hidePersonaPicker?: boolean;
+  defaultPersonaId?: string | null;
+  personas?: PersonaListItem[];
+};
+
+async function fetchPersonaSettings(): Promise<PersonaSettingsPayload> {
+  const response = await fetch("/api/personas");
+  if (!response.ok) {
+    // Fall back to settings blob, then client builtins
+    const settingsResponse = await fetch("/api/settings");
+    if (settingsResponse.ok) {
+      return settingsResponse.json();
+    }
+    return {
+      hidePersonaPicker: false,
+      personas: CLIENT_BUILTIN_PERSONAS,
+    };
+  }
+  return response.json();
+}
+
+function mergePersonaLists(
+  fromApi: PersonaListItem[] | undefined,
+): PersonaListItem[] {
+  if (fromApi && fromApi.length > 0) {
+    return fromApi;
+  }
+  return CLIENT_BUILTIN_PERSONAS;
+}
 
 export function Chat({
   id,
@@ -42,6 +94,11 @@ export function Chat({
   initialLastContext,
   initialMaxIterationsReached = false,
   initialAiProviderId = null,
+  initialPersonaId = null,
+  initialHidePersonaPicker = false,
+  initialDefaultPersonaId = null,
+  initialPersonaShortName = null,
+  isGuestUser = false,
 }: {
   id: string;
   initialMessages: ChatMessage[];
@@ -52,6 +109,13 @@ export function Chat({
   initialLastContext?: AppUsage;
   initialMaxIterationsReached?: boolean;
   initialAiProviderId?: string | null;
+  /** null = Ava; set from Chat row or default */
+  initialPersonaId?: string | null;
+  initialHidePersonaPicker?: boolean;
+  initialDefaultPersonaId?: string | null;
+  /** Resolved short label for customs (SSR). */
+  initialPersonaShortName?: string | null;
+  isGuestUser?: boolean;
 }) {
   const { visibilityType } = useChatVisibility({
     chatId: id,
@@ -59,6 +123,7 @@ export function Chat({
   });
 
   const { mutate } = useSWRConfig();
+  const { open: portalOpen } = useAppPortal();
 
   const [input, setInput] = useState<string>("");
   const [usage, setUsage] = useState<AppUsage | undefined>(initialLastContext);
@@ -70,8 +135,42 @@ export function Chat({
   const [aiProviderId, setAiProviderId] = useState<string | null>(
     initialAiProviderId,
   );
+  const [personaId, setPersonaId] = useState<string | null>(initialPersonaId);
+  /** False until user picks (or hide-picker / existing chat applies). */
+  const [personaReady, setPersonaReady] = useState(
+    () => initialMessages.length > 0 || Boolean(initialHidePersonaPicker),
+  );
+  const [showPersonaPicker, setShowPersonaPicker] = useState(
+    () =>
+      !isReadonly && initialMessages.length === 0 && !initialHidePersonaPicker,
+  );
+  /** Re-open picker after a persona was already chosen (empty chat only). */
+  const [isChangingPersona, setIsChangingPersona] = useState(false);
+  const [showPersonaSave, setShowPersonaSave] = useState(false);
+  const [personaLabelOverride, setPersonaLabelOverride] = useState<
+    string | null
+  >(() => {
+    if (
+      initialPersonaShortName?.trim() &&
+      initialPersonaId &&
+      initialPersonaId !== PERSONA_BUILDER_ID
+    ) {
+      return initialPersonaShortName.trim();
+    }
+    return null;
+  });
+  const { data: personaSettings, mutate: mutatePersonaSettings } = useSWR(
+    !isReadonly ? "/api/personas" : null,
+    fetchPersonaSettings,
+  );
+
+  const pickerPersonas = useMemo(
+    () => mergePersonaLists(personaSettings?.personas),
+    [personaSettings?.personas],
+  );
   const currentModelIdRef = useRef(currentModelId);
   const aiProviderIdRef = useRef(aiProviderId);
+  const personaIdRef = useRef(personaId);
   const errorOccurredRef = useRef(false);
 
   // Update refs when values change (these are used inside transport callbacks)
@@ -82,6 +181,191 @@ export function Chat({
   useEffect(() => {
     aiProviderIdRef.current = aiProviderId;
   }, [aiProviderId]);
+
+  useEffect(() => {
+    personaIdRef.current = personaId;
+  }, [personaId]);
+
+  // Restore session pick or open modal on empty new chats
+  useEffect(() => {
+    if (isReadonly || initialMessages.length > 0) {
+      setPersonaReady(true);
+      setShowPersonaPicker(false);
+      setIsChangingPersona(false);
+      return;
+    }
+
+    // Once the user has picked for this chat, never reopen from settings churn
+    // (e.g. SWR revalidate while connecting Skills in the App Portal).
+    // Badge click sets isChangingPersona to reopen intentionally.
+    if (personaReady && !isChangingPersona) {
+      setShowPersonaPicker(false);
+      return;
+    }
+
+    if (isChangingPersona) {
+      setShowPersonaPicker(true);
+      return;
+    }
+
+    const stored = readSessionPersonaId(id);
+    if (stored) {
+      setPersonaId(stored === AVA_PERSONA_ID ? null : stored);
+      setPersonaReady(true);
+      setShowPersonaPicker(false);
+      return;
+    }
+
+    const hide = personaSettings?.hidePersonaPicker ?? initialHidePersonaPicker;
+    if (hide) {
+      const def =
+        personaSettings?.defaultPersonaId ??
+        initialDefaultPersonaId ??
+        AVA_PERSONA_ID;
+      setPersonaId(def === AVA_PERSONA_ID ? null : def);
+      setPersonaReady(true);
+      setShowPersonaPicker(false);
+      return;
+    }
+
+    // Wait for settings load before showing modal (avoid flash wrong state)
+    if (personaSettings === undefined && !initialHidePersonaPicker) {
+      setShowPersonaPicker(true);
+      return;
+    }
+
+    setShowPersonaPicker(true);
+  }, [
+    id,
+    isReadonly,
+    initialMessages.length,
+    initialHidePersonaPicker,
+    initialDefaultPersonaId,
+    personaSettings,
+    personaReady,
+    isChangingPersona,
+  ]);
+
+  const applyPersonaSelection = (nextId: string, doNotShowAgain: boolean) => {
+    if (nextId === PERSONA_BUILDER_ID) {
+      if (isGuestUser) {
+        toast({
+          type: "error",
+          description: "Sign in to create a persona with the interview.",
+        });
+        return;
+      }
+      void (async () => {
+        try {
+          const response = await fetch("/api/chat/persona-builder/start", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ chatId: id }),
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) {
+            throw new Error(
+              typeof data.error === "string"
+                ? data.error
+                : "Failed to start persona interview",
+            );
+          }
+          writeSessionPersonaId(id, PERSONA_BUILDER_ID);
+          window.location.href = `/chat/${data.id ?? id}`;
+        } catch (error) {
+          toast({
+            type: "error",
+            description:
+              error instanceof Error
+                ? error.message
+                : "Failed to start persona interview",
+          });
+        }
+      })();
+      return;
+    }
+
+    const normalized = nextId === AVA_PERSONA_ID ? null : nextId;
+    setPersonaId(normalized);
+    setPersonaLabelOverride(null);
+    setPersonaReady(true);
+    setIsChangingPersona(false);
+    setShowPersonaPicker(false);
+    writeSessionPersonaId(id, nextId);
+
+    if (!doNotShowAgain) {
+      return;
+    }
+
+    if (isGuestUser) {
+      persistGuestPersonaPreferences({
+        hidePersonaPicker: true,
+        defaultPersonaId: nextId,
+      });
+      return;
+    }
+
+    void fetch("/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        hidePersonaPicker: true,
+        defaultPersonaId: nextId === AVA_PERSONA_ID ? null : nextId,
+      }),
+    }).then(() => {
+      void mutate("/api/personas");
+      void mutate("/api/settings");
+    });
+  };
+
+  const personaDisplayName = useMemo(() => {
+    if (personaId === PERSONA_BUILDER_ID) {
+      return "Interview";
+    }
+    const match = pickerPersonas.find(
+      (p) => p.id === (personaId ?? AVA_PERSONA_ID),
+    );
+    if (match) {
+      // Customs: badge shows display name; builtins keep compact shortName.
+      if (match.source === "custom") {
+        return match.name || match.shortName;
+      }
+      return match.shortName;
+    }
+    if (personaLabelOverride) {
+      return personaLabelOverride;
+    }
+    return clientPersonaShortName(personaId);
+  }, [personaId, pickerPersonas, personaLabelOverride]);
+
+  const isPersonaBuilder = personaId === PERSONA_BUILDER_ID;
+
+  const handleCancelInterview = () => {
+    void (async () => {
+      try {
+        const response = await fetch(`/api/chat/${id}/persona-cancel`, {
+          method: "POST",
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(
+            typeof payload.error === "string"
+              ? payload.error
+              : "Failed to cancel interview",
+          );
+        }
+        window.location.reload();
+      } catch (error) {
+        toast({
+          type: "error",
+          description:
+            error instanceof Error
+              ? error.message
+              : "Failed to cancel interview",
+        });
+      }
+    })();
+  };
 
   const visibilityTypeRef = useRef(visibilityType);
   useEffect(() => {
@@ -102,6 +386,7 @@ export function Chat({
               selectedChatModel: currentModelIdRef.current,
               selectedVisibilityType: visibilityTypeRef.current,
               aiProviderId: aiProviderIdRef.current,
+              personaId: personaIdRef.current ?? "ava",
               ...request.body,
             },
           };
@@ -278,6 +563,63 @@ export function Chat({
     },
   });
 
+  const canChangePersona =
+    !isReadonly && messages.length === 0 && personaReady;
+
+  const personaSaveDraft = useMemo(
+    () => draftFromAssistantMessages(messages),
+    [messages],
+  );
+
+  useEffect(() => {
+    const onPersonaSaved = (event: Event) => {
+      const detail = (event as CustomEvent).detail as
+        | {
+            personaId?: string;
+            name?: string;
+            shortName?: string;
+            kickoffMessage?: {
+              id: string;
+              role: "assistant";
+              parts: Array<{ type: "text"; text: string }>;
+            };
+          }
+        | undefined;
+      if (!detail?.personaId) {
+        return;
+      }
+      setPersonaId(detail.personaId);
+      const label = detail.name?.trim() || detail.shortName?.trim();
+      if (label) {
+        setPersonaLabelOverride(label);
+      }
+      if (detail.kickoffMessage?.id) {
+        const kickoffMessage = detail.kickoffMessage;
+        setMessages((previous) => {
+          if (previous.some((message) => message.id === kickoffMessage.id)) {
+            return previous;
+          }
+          return [
+            ...previous,
+            {
+              id: kickoffMessage.id,
+              role: "assistant" as const,
+              parts: kickoffMessage.parts,
+            },
+          ];
+        });
+      }
+      void mutatePersonaSettings();
+      void mutate("/api/personas");
+      void mutate("/api/settings");
+      void mutate(unstable_serialize(getChatHistoryPaginationKey));
+    };
+    window.addEventListener("persona-saved", onPersonaSaved);
+    return () => {
+      window.removeEventListener("persona-saved", onPersonaSaved);
+    };
+  }, [mutate, mutatePersonaSettings, setMessages]);
+
   // Reset error flag when a new message is submitted (status becomes "submitted")
   // This ensures the error state doesn't interfere with the next message
   useEffect(() => {
@@ -297,7 +639,7 @@ export function Chat({
   const [hasAppendedQuery, setHasAppendedQuery] = useState(false);
 
   useEffect(() => {
-    if (!query || hasAppendedQuery) return;
+    if (!query || hasAppendedQuery || !personaReady) return;
     // Do not send query-param message when thread is locked or stream is active
     if (
       maxIterationsReached ||
@@ -314,7 +656,15 @@ export function Chat({
     });
     setHasAppendedQuery(true);
     window.history.replaceState({}, "", `/chat/${id}`);
-  }, [query, sendMessage, hasAppendedQuery, id, maxIterationsReached, status]);
+  }, [
+    query,
+    sendMessage,
+    hasAppendedQuery,
+    id,
+    maxIterationsReached,
+    status,
+    personaReady,
+  ]);
 
   const { data: votes } = useSWR<Vote[]>(
     messages.length >= 2 ? `/api/vote?chatId=${id}` : null,
@@ -443,6 +793,15 @@ export function Chat({
         <ChatHeader
           chatId={id}
           isReadonly={isReadonly}
+          onPersonaClick={
+            canChangePersona
+              ? () => {
+                  setIsChangingPersona(true);
+                  setShowPersonaPicker(true);
+                }
+              : undefined
+          }
+          personaName={personaDisplayName}
           selectedVisibilityType={initialVisibilityType}
         />
 
@@ -453,12 +812,24 @@ export function Chat({
               <MultimodalInput
                 aiProviderId={aiProviderId}
                 chatId={id}
-                disabled={maxIterationsReached}
+                disabled={maxIterationsReached || !personaReady}
                 followSettingsDefault
                 input={input}
+                isPersonaBuilder={isPersonaBuilder}
                 key={id}
                 onAiProviderChange={setAiProviderId}
+                onCancelInterview={
+                  isPersonaBuilder ? handleCancelInterview : undefined
+                }
                 onModelChange={setCurrentModelId}
+                onSavePersona={
+                  isPersonaBuilder
+                    ? () => {
+                        setShowPersonaSave(true);
+                      }
+                    : undefined
+                }
+                personaName={personaDisplayName}
                 selectedModelId={currentModelId}
                 selectedVisibilityType={visibilityType}
                 sendMessage={sendMessage}
@@ -584,10 +955,22 @@ export function Chat({
               <MultimodalInput
                 aiProviderId={aiProviderId}
                 chatId={id}
-                disabled={maxIterationsReached}
+                disabled={maxIterationsReached || !personaReady}
                 input={input}
+                isPersonaBuilder={isPersonaBuilder}
                 onAiProviderChange={setAiProviderId}
+                onCancelInterview={
+                  isPersonaBuilder ? handleCancelInterview : undefined
+                }
                 onModelChange={setCurrentModelId}
+                onSavePersona={
+                  isPersonaBuilder
+                    ? () => {
+                        setShowPersonaSave(true);
+                      }
+                    : undefined
+                }
+                personaName={personaDisplayName}
                 selectedModelId={currentModelId}
                 selectedVisibilityType={visibilityType}
                 sendMessage={sendMessage}
@@ -601,6 +984,64 @@ export function Chat({
           </div>
         )}
       </div>
+
+      {!isReadonly ? (
+        <PersonaPickerDialog
+          dismissible={isChangingPersona}
+          onDismiss={() => {
+            setIsChangingPersona(false);
+            setShowPersonaPicker(false);
+          }}
+          onSelect={applyPersonaSelection}
+          open={
+            showPersonaPicker &&
+            (!personaReady || isChangingPersona) &&
+            !portalOpen
+          }
+          personas={pickerPersonas}
+          showCreateOwn={!isGuestUser}
+        />
+      ) : null}
+
+      {isPersonaBuilder && !isReadonly ? (
+        <PersonaSaveDialog
+          chatId={id}
+          initial={personaSaveDraft}
+          onOpenChange={setShowPersonaSave}
+          onSaved={(payload) => {
+            setPersonaId(payload.personaId);
+            const label = payload.name?.trim() || payload.shortName?.trim();
+            if (label) {
+              setPersonaLabelOverride(label);
+            }
+            setShowPersonaSave(false);
+            if (payload.kickoffMessage?.id) {
+              setMessages((previous) => {
+                if (
+                  previous.some(
+                    (message) => message.id === payload.kickoffMessage.id,
+                  )
+                ) {
+                  return previous;
+                }
+                return [
+                  ...previous,
+                  {
+                    id: payload.kickoffMessage.id,
+                    role: "assistant",
+                    parts: payload.kickoffMessage.parts,
+                  },
+                ];
+              });
+            }
+            void mutatePersonaSettings();
+            void mutate("/api/personas");
+            void mutate("/api/settings");
+            void mutate(unstable_serialize(getChatHistoryPaginationKey));
+          }}
+          open={showPersonaSave}
+        />
+      ) : null}
 
       <AlertDialog
         onOpenChange={setShowCreditCardAlert}

@@ -2,6 +2,13 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
 import {
+  AVA_PERSONA_ID,
+  isDefaultablePersonaId,
+  isValidPersonaId,
+  listPersonasForClient,
+  normalizeCustomPersonas,
+} from "@/lib/ai/personas/catalog";
+import {
   ensureSeededProviderConfig,
   legacyColumnsFromConfig,
   parseAiProviderConfig,
@@ -72,6 +79,15 @@ const customSkillSchema = z.object({
   enabled: z.boolean().optional(),
 });
 
+const customPersonaSchema = z.object({
+  id: z.string().min(1).max(128),
+  name: z.string().max(200),
+  shortName: z.string().max(40).optional(),
+  primaryRole: z.string().max(300).optional(),
+  content: z.string().max(32_000),
+  updatedAt: z.string().optional(),
+});
+
 const settingsSchema = z.object({
   googleApiKey: z.string().optional().nullable(),
   anthropicApiKey: z.string().optional().nullable(),
@@ -97,10 +113,13 @@ const settingsSchema = z.object({
     .optional()
     .nullable(),
   customInstructions: z.string().max(32_000).optional().nullable(),
-  enabledSkillIds: z.array(z.string().max(128)).max(64).optional().nullable(),
+  enabledSkillIds: z.array(z.string().max(128)).max(128).optional().nullable(),
   customSkills: z.array(customSkillSchema).max(32).optional().nullable(),
   aiProviders: aiProviderConfigSchema.optional().nullable(),
   netsuiteMcpTools: netsuiteMcpToolsSchema.optional().nullable(),
+  defaultPersonaId: z.string().max(64).optional().nullable(),
+  hidePersonaPicker: z.boolean().optional().nullable(),
+  customPersonas: z.array(customPersonaSchema).max(32).optional().nullable(),
 });
 
 function normalizeAiProvider(
@@ -120,6 +139,7 @@ function resolveSkillSettings(
       ? {
           enabledSkillIds: settings.enabledSkillIds ?? [],
           customSkills: settings.customSkills ?? [],
+          connectedSkillSources: settings.connectedSkillSources ?? [],
         }
       : null,
     settings?.customInstructions,
@@ -179,8 +199,13 @@ export async function GET() {
         customInstructions: null,
         enabledSkillIds: emptySkills.enabledSkillIds,
         customSkills: emptySkills.customSkills,
+        connectedSkillSources: emptySkills.connectedSkillSources,
         aiProviders: ensureSeededProviderConfig(null),
         netsuiteMcpTools: { byAccount: {} },
+        defaultPersonaId: null,
+        hidePersonaPicker: false,
+        customPersonas: [],
+        personas: listPersonasForClient([]),
       });
     }
 
@@ -315,8 +340,15 @@ export async function GET() {
       customInstructions: settings.customInstructions ?? null,
       enabledSkillIds: skillSettings.enabledSkillIds,
       customSkills: skillSettings.customSkills,
+      connectedSkillSources: skillSettings.connectedSkillSources,
       aiProviders: seededProviderConfig,
       netsuiteMcpTools: parseNetsuiteMcpToolSettings(settings.netsuiteMcpTools),
+      defaultPersonaId: settings.defaultPersonaId ?? null,
+      hidePersonaPicker: settings.hidePersonaPicker ?? false,
+      customPersonas: normalizeCustomPersonas(settings.customPersonas),
+      personas: listPersonasForClient(
+        normalizeCustomPersonas(settings.customPersonas),
+      ),
     };
 
     console.log("[Settings API] Sending response:", {
@@ -494,6 +526,74 @@ export async function POST(request: Request) {
           }).enabledSkillIds
         : undefined;
 
+    const nextCustomPersonas =
+      validated.customPersonas !== undefined
+        ? normalizeCustomPersonas(validated.customPersonas)
+        : undefined;
+
+    let nextDefaultPersonaId =
+      validated.defaultPersonaId !== undefined
+        ? validated.defaultPersonaId?.trim() || null
+        : undefined;
+    const nextHidePersonaPicker =
+      validated.hidePersonaPicker !== undefined
+        ? Boolean(validated.hidePersonaPicker)
+        : undefined;
+
+    const personasForValidation =
+      nextCustomPersonas ?? normalizeCustomPersonas(existing?.customPersonas);
+
+    // If deleting a custom that was the default, fall back to Ava
+    if (nextCustomPersonas !== undefined && existing?.defaultPersonaId) {
+      const def = existing.defaultPersonaId;
+      if (
+        def !== AVA_PERSONA_ID &&
+        !isValidPersonaId(def, nextCustomPersonas)
+      ) {
+        nextDefaultPersonaId = null;
+      }
+    }
+
+    const effectiveHide =
+      nextHidePersonaPicker !== undefined
+        ? nextHidePersonaPicker
+        : (existing?.hidePersonaPicker ?? false);
+    const effectiveDefault =
+      nextDefaultPersonaId !== undefined
+        ? nextDefaultPersonaId
+        : (existing?.defaultPersonaId ?? null);
+
+    if (effectiveHide) {
+      const defId = effectiveDefault?.trim() || AVA_PERSONA_ID;
+      if (!isDefaultablePersonaId(defId, personasForValidation)) {
+        return NextResponse.json(
+          {
+            error:
+              "A valid default persona is required when the persona picker is hidden",
+          },
+          { status: 400 },
+        );
+      }
+      if (nextDefaultPersonaId === undefined && !effectiveDefault) {
+        nextDefaultPersonaId = AVA_PERSONA_ID;
+      }
+    }
+
+    if (
+      nextDefaultPersonaId !== undefined &&
+      nextDefaultPersonaId !== null &&
+      !isDefaultablePersonaId(nextDefaultPersonaId, personasForValidation)
+    ) {
+      return NextResponse.json(
+        { error: "Unknown default persona" },
+        { status: 400 },
+      );
+    }
+
+    if (nextDefaultPersonaId === AVA_PERSONA_ID) {
+      nextDefaultPersonaId = null;
+    }
+
     let nextAiProviders:
       | Awaited<ReturnType<typeof persistProviderConfig>>
       | undefined;
@@ -566,6 +666,9 @@ export async function POST(request: Request) {
               validated.netsuiteMcpTools,
             )
           : undefined,
+      defaultPersonaId: nextDefaultPersonaId,
+      hidePersonaPicker: nextHidePersonaPicker,
+      customPersonas: nextCustomPersonas,
     });
 
     return NextResponse.json({

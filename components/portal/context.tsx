@@ -12,6 +12,7 @@ import {
 export type PortalSectionId =
   | "chats"
   | "skills"
+  | "personas"
   | "prompts"
   | "provider"
   | "netsuite"
@@ -27,6 +28,7 @@ export type PortalNavItem = {
 
 export const PORTAL_NAV: PortalNavItem[] = [
   { id: "chats", label: "Chats", group: "Workspace" },
+  { id: "personas", label: "Personas", group: "Customize" },
   { id: "skills", label: "Skills", group: "Customize" },
   { id: "prompts", label: "Prompts", group: "Customize" },
   { id: "provider", label: "AI Provider", group: "Settings" },

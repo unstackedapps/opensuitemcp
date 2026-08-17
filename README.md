@@ -20,28 +20,42 @@ _Main chat UI._
 
 - **App Portal** — Chats, Skills, Prompts, AI Provider, NetSuite, Web Search, Timezone, and Account in one panel
 - **Multiple AI providers** — named Google / Anthropic / OpenAI (or a custom OpenAI-compatible endpoint) keys; Speed / Reasoning per chat
-- **SuiteCloud Agent Skills** — Oracle pack + custom `SKILL.md`; toggles apply to new messages
+- **SuiteCloud Agent Skills** — Oracle + Community packs, custom `SKILL.md`, and Connected GitHub packs (slash-invoked)
 - **Companion Prompt Library** — Browse, fill placeholders, send into chat
 - **NetSuite MCP** — Multiple connected accounts, per-account tools, encrypted OAuth tokens
 - **BYOLLM** — Your API keys; no shared multi-tenant model account in this app
 
 ## Skills
 
-Open **Skills** from the App Portal (or the sidebar). Enable Oracle SuiteCloud Agent Skills and/or your own custom skills. Enabled skills are injected into the system prompt for **new** messages — useful for finance analyst workflows, SuiteScript / SDF guidance, OWASP patterns, and more.
+Open **Skills** from the App Portal (or the sidebar). Four sources:
 
-Oracle skills are **not** vendored in git. One shared on-disk pack is the source of truth for every user:
+| Source | How it works |
+| --- | --- |
+| **Oracle** | Shared pack; opt-in toggles; injected when enabled |
+| **Community** | Shared pack from [opensuitemcp-community-skills](https://github.com/unstackedapps/opensuitemcp-community-skills); opt-in toggles |
+| **Connected** | Paste a public GitHub repo/folder URL; invoke with `/skill-name` in chat (one skill, this turn only) |
+| **Custom** | Paste/import custom `SKILL.md`; per-skill enable |
+
+Enabled Oracle/Community/custom skills are injected into the system prompt for **new** messages. Connected skills are **not** toggled on — type `/` in the composer to pick one for that message.
+
+Shared packs are **not** vendored in git. Sync them with:
 
 ```bash
 pnpm skills:sync
 ```
 
-That downloads `SKILL.md` files from Oracle’s [agent-skills](https://github.com/oracle/netsuite-suitecloud-sdk/tree/master/packages/agent-skills) pack into `.data/oracle-skills` (or `ORACLE_SKILLS_DIR`). Run it after setup, on deploy (production entrypoint does this), and on a **weekly cron**. New upstream skills appear as new toggles (off by default); removed upstream skills are pruned. Optional: `GITHUB_TOKEN` for higher GitHub API limits.
+That downloads Oracle’s [agent-skills](https://github.com/oracle/netsuite-suitecloud-sdk/tree/master/packages/agent-skills) into `.data/oracle-skills` (or `ORACLE_SKILLS_DIR`) and Community skills into `.data/community-skills` (or `COMMUNITY_SKILLS_DIR`). Run after setup, on deploy (production entrypoint), and on a **weekly cron**. New upstream skills appear as new toggles (off by default); removed upstream skills are pruned. Optional: `GITHUB_TOKEN` for higher GitHub API limits.
 
-Custom skills: add a `SKILL.md`-style document in the portal; toggle it like any Oracle skill.
+**Connected** examples:
+
+- `https://github.com/mattpocock/skills/tree/main/skills/productivity`
+- `owner/repo` shorthand
+
+Public repos only in v1. Synced files live under `.data/connected-skills/<userId>/…`.
 
 <img src="./docs/screenshot-skills.png" alt="OpenSuiteMCP Skills panel" width="100%" />
 
-_Skills panel — Oracle pack and custom skills._
+_Skills panel — Oracle, Community, Connected, and Custom._
 
 ## Prompts
 
@@ -98,7 +112,7 @@ _NetSuite MCP tools in a conversation._
 
    Use your project name instead of `opensuitemcp` if you chose a custom name during setup.
 
-3. **Sync Oracle skills**
+3. **Sync Oracle + Community skills**
 
    ```bash
    pnpm skills:sync

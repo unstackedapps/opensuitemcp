@@ -12,8 +12,18 @@ import {
   useRef,
   useState,
 } from "react";
+import useSWR from "swr";
 import { useWindowSize } from "usehooks-ts";
 import { ComposerModelMenu } from "@/components/composer-model-menu";
+import {
+  ConnectedSkillSlashMenu,
+  filterSlashSkills,
+  insertSlashSkillToken,
+  parseTrailingSlashQuery,
+  resolveSlashSkillsInText,
+  type SlashConnectedSkill,
+  stripResolvedSkillTokens,
+} from "@/components/connected-skill-slash-menu";
 import { NetSuiteAccountSwitcher } from "@/components/netsuite-account-switcher";
 import { useAppPortal } from "@/components/portal/context";
 import { myProvider } from "@/lib/ai/providers";
@@ -40,6 +50,30 @@ import {
 } from "./ui/tooltip";
 import type { VisibilityType } from "./visibility-selector";
 
+async function fetchConnectedSlashSkills(): Promise<SlashConnectedSkill[]> {
+  const response = await fetch("/api/skills");
+  if (!response.ok) {
+    return [];
+  }
+  const payload = (await response.json()) as {
+    connectedSkills?: Array<{
+      id: string;
+      name: string;
+      description: string;
+      slug?: string;
+      connectionLabel?: string;
+    }>;
+  };
+  return (payload.connectedSkills ?? [])
+    .filter((skill) => typeof skill.slug === "string" && skill.slug.length > 0)
+    .map((skill) => ({
+      id: skill.id,
+      name: skill.name,
+      description: skill.description,
+      slug: skill.slug as string,
+      connectionLabel: skill.connectionLabel ?? "Connected",
+    }));
+}
 function PureMultimodalInput({
   chatId,
   input,
@@ -57,6 +91,10 @@ function PureMultimodalInput({
   usage,
   disabled = false,
   followSettingsDefault = false,
+  personaName,
+  isPersonaBuilder = false,
+  onSavePersona,
+  onCancelInterview,
 }: {
   chatId: string;
   input: string;
@@ -74,11 +112,50 @@ function PureMultimodalInput({
   usage?: AppUsage;
   disabled?: boolean;
   followSettingsDefault?: boolean;
+  personaName?: string;
+  isPersonaBuilder?: boolean;
+  onSavePersona?: () => void;
+  onCancelInterview?: () => void;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { width } = useWindowSize();
   const [mounted, setMounted] = useState(false);
   const { openPortal, registerPromptHandler } = useAppPortal();
+  /** Disambiguates duplicate slugs across connected packs after a menu pick. */
+  const [preferredSkillIdsBySlug, setPreferredSkillIdsBySlug] = useState<
+    Record<string, string>
+  >({});
+  const [slashActiveIndex, setSlashActiveIndex] = useState(0);
+
+  const { data: connectedSkills = [] } = useSWR(
+    mounted && !disabled && !isPersonaBuilder ? "connected-slash-skills" : null,
+    fetchConnectedSlashSkills,
+    { revalidateOnFocus: true },
+  );
+
+  const slashQuery = useMemo(() => parseTrailingSlashQuery(input), [input]);
+
+  const slashFiltered = useMemo(
+    () =>
+      slashQuery ? filterSlashSkills(connectedSkills, slashQuery.query) : [],
+    [connectedSkills, slashQuery],
+  );
+
+  const selectSlashSkill = useCallback(
+    (skill: SlashConnectedSkill) => {
+      if (!slashQuery) {
+        return;
+      }
+      setPreferredSkillIdsBySlug((current) => ({
+        ...current,
+        [skill.slug.toLowerCase()]: skill.id,
+      }));
+      setInput(insertSlashSkillToken(input, slashQuery.start, skill));
+      setSlashActiveIndex(0);
+      textareaRef.current?.focus();
+    },
+    [input, setInput, slashQuery],
+  );
 
   useEffect(() => {
     setMounted(true);
@@ -136,23 +213,57 @@ function PureMultimodalInput({
 
   const handleInput = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(event.target.value);
+    setSlashActiveIndex(0);
   };
 
   const submitForm = useCallback(() => {
     window.history.pushState({}, "", `/chat/${chatId}`);
 
-    sendMessage({
-      role: "user",
-      parts: [
-        {
-          type: "text",
-          text: input,
-        },
-      ],
-    });
+    const resolved = resolveSlashSkillsInText(
+      input,
+      connectedSkills,
+      preferredSkillIdsBySlug,
+    );
+    if (!resolved.ok) {
+      toast({
+        type: "error",
+        description: `Multiple skills share /${resolved.slug} — pick one from the / menu.`,
+      });
+      return;
+    }
+
+    const invokedSkills = resolved.skills;
+    const text = stripResolvedSkillTokens(input, resolved.resolvedSlugs);
+    const trimmed = text.trim();
+    if (!trimmed && invokedSkills.length === 0) {
+      return;
+    }
+
+    const fallbackNames = invokedSkills.map((skill) => skill.name).join(", ");
+    sendMessage(
+      {
+        role: "user",
+        parts: [
+          {
+            type: "text",
+            text:
+              trimmed ||
+              `Use the ${fallbackNames || "connected"} skill${invokedSkills.length === 1 ? "" : "s"}.`,
+          },
+        ],
+      },
+      invokedSkills.length > 0
+        ? {
+            body: {
+              invokedConnectedSkillIds: invokedSkills.map((skill) => skill.id),
+            },
+          }
+        : undefined,
+    );
 
     resetHeight();
     setInput("");
+    setPreferredSkillIdsBySlug({});
 
     // Clear localStorage after clearing input
     if (mounted) {
@@ -166,7 +277,17 @@ function PureMultimodalInput({
     if (mounted && width && width > 768) {
       textareaRef.current?.focus();
     }
-  }, [input, setInput, sendMessage, width, chatId, resetHeight, mounted]);
+  }, [
+    input,
+    setInput,
+    sendMessage,
+    width,
+    chatId,
+    resetHeight,
+    mounted,
+    preferredSkillIdsBySlug,
+    connectedSkills,
+  ]);
 
   const _modelResolver = useMemo(() => {
     return myProvider.languageModel(selectedModelId);
@@ -221,18 +342,30 @@ function PureMultimodalInput({
         className="rounded-3xl border border-border bg-background p-3 shadow-xs transition-all duration-200 focus-within:border-border hover:border-muted-foreground/50"
         onSubmit={(event) => {
           event.preventDefault();
-          // Only block if actively streaming - allow ready, error, and submitted states
-          // (submitted after an error means the stream stopped but status hasn't reset yet)
-          if (status === "streaming") {
-            toast({
-              type: "error",
-              description: "Please wait for the model to finish its response!",
-            });
-          } else {
-            submitForm();
+          // Stop is a separate control while submitted/streaming; ignore Enter/submit then.
+          if (status === "streaming" || status === "submitted") {
+            return;
           }
+          if (slashQuery && slashFiltered.length > 0) {
+            const pick =
+              slashFiltered.at(slashActiveIndex) ?? slashFiltered.at(0);
+            if (pick) {
+              selectSlashSkill(pick);
+              return;
+            }
+          }
+          submitForm();
         }}
       >
+        {slashQuery ? (
+          <ConnectedSkillSlashMenu
+            activeIndex={slashActiveIndex}
+            onHoverIndex={setSlashActiveIndex}
+            onSelect={selectSlashSkill}
+            query={slashQuery.query}
+            skills={connectedSkills}
+          />
+        ) : null}
         <div className="flex flex-row items-start gap-1 sm:gap-2">
           <PromptInputTextarea
             {...(mounted && { autoFocus: true })}
@@ -243,7 +376,37 @@ function PureMultimodalInput({
             maxHeight={200}
             minHeight={44}
             onChange={handleInput}
-            placeholder="Ask Ava anything…"
+            onKeyDown={(event) => {
+              if (!slashQuery || slashFiltered.length === 0) {
+                return;
+              }
+              if (event.key === "ArrowDown") {
+                event.preventDefault();
+                setSlashActiveIndex(
+                  (index) => (index + 1) % slashFiltered.length,
+                );
+              } else if (event.key === "ArrowUp") {
+                event.preventDefault();
+                setSlashActiveIndex(
+                  (index) =>
+                    (index - 1 + slashFiltered.length) % slashFiltered.length,
+                );
+              } else if (event.key === "Escape") {
+                event.preventDefault();
+                if (slashQuery.start >= 0) {
+                  setInput(
+                    input.slice(0, slashQuery.start).replace(/\s+$/, ""),
+                  );
+                }
+              }
+            }}
+            placeholder={
+              disabled && !personaName
+                ? "Choose a persona to continue…"
+                : personaName
+                  ? `Ask ${personaName} anything…`
+                  : "Ask Ava anything…"
+            }
             ref={(node) => {
               (
                 textareaRef as React.MutableRefObject<HTMLTextAreaElement | null>
@@ -253,9 +416,29 @@ function PureMultimodalInput({
             value={input}
           />{" "}
           <Context {...contextProps} />
-        </div>
+        </div>{" "}
         <PromptInputToolbar className="border-top-0! border-t-0! p-0 shadow-none dark:border-0 dark:border-transparent!">
           <PromptInputTools className="gap-0 sm:gap-0.5">
+            {isPersonaBuilder ? (
+              <>
+                <Button
+                  className="h-8 px-2 text-xs"
+                  onClick={onSavePersona}
+                  type="button"
+                  variant="default"
+                >
+                  Save persona
+                </Button>
+                <Button
+                  className="h-8 px-2 text-xs"
+                  onClick={onCancelInterview}
+                  type="button"
+                  variant="ghost"
+                >
+                  Cancel interview
+                </Button>
+              </>
+            ) : null}
             <ComposerModelMenu
               aiProviderId={aiProviderId}
               chatId={chatId}
@@ -301,7 +484,7 @@ function PureMultimodalInput({
             {(status === "submitted" || status === "streaming") && (
               <Spinner className="text-muted-foreground" />
             )}
-            {status === "submitted" ? (
+            {status === "submitted" || status === "streaming" ? (
               <StopButton setMessages={setMessages} stop={stop} />
             ) : (
               <PromptInputSubmit
@@ -342,6 +525,12 @@ export const MultimodalInput = memo(
       return false;
     }
     if (prevProps.disabled !== nextProps.disabled) {
+      return false;
+    }
+    if (prevProps.personaName !== nextProps.personaName) {
+      return false;
+    }
+    if (prevProps.isPersonaBuilder !== nextProps.isPersonaBuilder) {
       return false;
     }
 

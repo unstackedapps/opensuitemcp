@@ -170,5 +170,25 @@ export const getResponseChunksByPrompt = (
     ];
   }
 
-  return [{ id: "6", type: "text-delta", delta: "Unknown test prompt!" }];
+  if (compareMessages(recentMessage, TEST_PROMPTS.USER_WEATHER)) {
+    return [
+      ...textToDeltas("The current temperature in San Francisco is 17°C."),
+      {
+        type: "finish",
+        finishReason: "stop",
+        usage: { inputTokens: 3, outputTokens: 10, totalTokens: 13 },
+      },
+    ];
+  }
+
+  return [
+    { id: "6", type: "text-start" },
+    { id: "6", type: "text-delta", delta: "Unknown test prompt!" },
+    { id: "6", type: "text-end" },
+    {
+      type: "finish",
+      finishReason: "stop",
+      usage: { inputTokens: 3, outputTokens: 10, totalTokens: 13 },
+    },
+  ];
 };

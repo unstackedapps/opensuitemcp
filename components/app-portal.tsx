@@ -6,6 +6,7 @@ import type { User } from "next-auth";
 import { useState } from "react";
 import { useSWRConfig } from "swr";
 import { unstable_serialize } from "swr/infinite";
+import { PersonasPanel } from "@/components/personas-panel";
 import {
   PORTAL_NAV,
   type PortalSectionId,
@@ -108,6 +109,7 @@ export function AppPortal({ user }: { user: User | undefined }) {
       >
         <DialogContent
           className="flex h-[min(85vh,42rem)] w-[calc(100vw-1.5rem)] max-w-4xl flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl"
+          data-testid="app-portal"
           onInteractOutside={(event) => {
             event.preventDefault();
           }}
@@ -146,6 +148,7 @@ export function AppPortal({ user }: { user: User | undefined }) {
                             ? "bg-accent font-medium text-accent-foreground"
                             : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
                         )}
+                        data-testid={`portal-nav-${item.id}`}
                         key={item.id}
                         onClick={() => setSection(item.id)}
                         type="button"
@@ -210,6 +213,10 @@ export function AppPortal({ user }: { user: User | undefined }) {
 
               {section === "skills" ? (
                 <SkillsPanel active={open && section === "skills"} />
+              ) : null}
+
+              {section === "personas" ? (
+                <PersonasPanel active={open && section === "personas"} />
               ) : null}
 
               {section === "prompts" ? (

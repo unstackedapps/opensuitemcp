@@ -4,19 +4,37 @@ import {
   createUIMessageStream,
   JsonToSseTransformStream,
   type LanguageModel,
+  type ToolSet,
   smoothStream,
   stepCountIs,
   streamText,
 } from "ai";
 import { unstable_cache as cache } from "next/cache";
+import { after } from "next/server";
 import type { ModelCatalog } from "tokenlens/core";
 import { fetchModels } from "tokenlens/fetch";
 import { getUsage } from "tokenlens/helpers";
 import { auth, type UserType } from "@/app/(auth)/auth";
-import { generateTitleFromUserMessage } from "@/app/(chat)/actions";
+import { refineChatTitle } from "@/app/(chat)/actions";
 import type { VisibilityType } from "@/components/visibility-selector";
 import { entitlementsByUserType } from "@/lib/ai/entitlements";
 import type { ChatModel } from "@/lib/ai/models";
+import { buildPersonaBuilderPrompt } from "@/lib/ai/personas/builder-prompt";
+import {
+  AVA_PERSONA_ID,
+  isPersonaBuilderId,
+  isValidPersonaId,
+  MAX_CUSTOM_PERSONAS,
+  normalizeCustomPersonas,
+  PERSONA_BUILDER_ID,
+  resolvePersona,
+} from "@/lib/ai/personas/catalog";
+import {
+  builderChatTitle,
+  emptyPersonaInterviewState,
+  normalizePersonaInterviewState,
+  type PersonaInterviewState,
+} from "@/lib/ai/personas/interview";
 import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
 import type { AiProviderType } from "@/lib/ai/provider-entries";
 import { getUserProvider } from "@/lib/ai/providers";
@@ -28,9 +46,13 @@ import {
   normalizeUserSkillSettings,
 } from "@/lib/ai/skills/catalog";
 import { createGetCurrentConfigTool } from "@/lib/ai/tools/get-current-config";
+import {
+  createProposeCustomPersonaTool,
+  createUpdatePersonaInterviewTool,
+} from "@/lib/ai/tools/persona-interview";
 import { createReadWebpageTool } from "@/lib/ai/tools/read-webpage";
 import { createSearchNetsuiteDocsTool } from "@/lib/ai/tools/search-netsuite-docs";
-import { isProductionEnvironment } from "@/lib/constants";
+import { isProductionEnvironment, isTestEnvironment } from "@/lib/constants";
 import {
   createStreamId,
   deleteChatById,
@@ -45,19 +67,32 @@ import {
 } from "@/lib/db/queries";
 import type { DBMessage } from "@/lib/db/schema";
 import { ChatSDKError } from "@/lib/errors";
+import { normalizeNetSuiteAccountId } from "@/lib/netsuite/accounts";
 import { loadNetSuiteMCPTools } from "@/lib/netsuite/mcp";
 import { allowChatBurst } from "@/lib/rate-limit";
 import type { ChatMessage } from "@/lib/types";
 import type { AppUsage } from "@/lib/usage";
-import { convertToUIMessages, generateUUID } from "@/lib/utils";
+import {
+  convertToUIMessages,
+  generateUUID,
+  getTextFromMessage,
+} from "@/lib/utils";
 import { type PostRequestBody, postRequestBodySchema } from "./schema";
 
 export const maxDuration = 60;
 
 type AiProvider = AiProviderType;
 
+function placeholderChatTitle(message: ChatMessage): string {
+  const text = getTextFromMessage(message).trim();
+  return text.slice(0, 50) || "New Chat";
+}
+
 const getTokenlensCatalog = cache(
   async (): Promise<ModelCatalog | undefined> => {
+    if (isTestEnvironment) {
+      return;
+    }
     try {
       return await fetchModels();
     } catch (err) {
@@ -89,12 +124,18 @@ export async function POST(request: Request) {
       selectedChatModel,
       selectedVisibilityType,
       aiProviderId,
+      personaId: requestPersonaId,
+      refiningPersonaId: requestRefiningPersonaId,
+      invokedConnectedSkillIds: requestInvokedConnectedSkillIds,
     }: {
       id: string;
       message: ChatMessage;
       selectedChatModel: ChatModel["id"];
       selectedVisibilityType: VisibilityType;
       aiProviderId?: string | null;
+      personaId?: string | null;
+      refiningPersonaId?: string | null;
+      invokedConnectedSkillIds?: string[];
     } = requestBody;
 
     const session = await auth();
@@ -124,6 +165,10 @@ export async function POST(request: Request) {
 
     const chat = await getChatById({ id });
     let messagesFromDb: DBMessage[] = [];
+    let stampedPersonaId: string | null = null;
+    let stampedRefiningPersonaId: string | null = null;
+    let interviewState: PersonaInterviewState | null = null;
+    let cachedSettings: Awaited<ReturnType<typeof getUserSettings>> | undefined;
 
     if (chat) {
       if (chat.userId !== session.user.id) {
@@ -131,6 +176,14 @@ export async function POST(request: Request) {
       }
       // Only fetch messages if chat already exists
       messagesFromDb = await getMessagesByChatId({ id });
+      // Persona locked after create — ignore client personaId
+      stampedPersonaId = chat.personaId ?? null;
+      stampedRefiningPersonaId = chat.refiningPersonaId ?? null;
+      interviewState = chat.personaInterview
+        ? normalizePersonaInterviewState(chat.personaInterview)
+        : isPersonaBuilderId(stampedPersonaId)
+          ? emptyPersonaInterviewState()
+          : null;
     } else {
       // Get user API key and provider for title generation
       let titleApiKey: string | null = null;
@@ -141,10 +194,10 @@ export async function POST(request: Request) {
       let stampedProviderId = aiProviderId?.trim() || null;
       if (session.user?.id) {
         try {
-          const settings = await getUserSettings({ userId: session.user.id });
+          cachedSettings = await getUserSettings({ userId: session.user.id });
           const resolved = resolveUserChatProvider({
             chatAiProviderId: aiProviderId ?? null,
-            settings,
+            settings: cachedSettings,
           });
           if (resolved.type) {
             titleProvider = resolved.type;
@@ -160,23 +213,101 @@ export async function POST(request: Request) {
           console.error("[Settings] Error loading settings for title:", error);
         }
       }
-      const { title, summary } = await generateTitleFromUserMessage({
-        message,
-        apiKey: titleApiKey,
-        provider: titleProvider,
-        baseUrl: titleBaseUrl,
-        speedModelId: titleSpeedModelId,
-        reasoningModelId: titleReasoningModelId,
-      });
 
-      await saveChat({
-        id,
-        userId: session.user.id,
-        title,
-        summary,
-        visibility: selectedVisibilityType,
-        aiProviderId: stampedProviderId,
-      });
+      const customPersonas = normalizeCustomPersonas(
+        cachedSettings?.customPersonas,
+      );
+      const requested = requestPersonaId?.trim() || null;
+      if (requested) {
+        if (!isValidPersonaId(requested, customPersonas)) {
+          return new ChatSDKError(
+            "bad_request:api",
+            "Unknown persona. Pick a valid persona and try again.",
+          ).toResponse();
+        }
+        stampedPersonaId = requested === AVA_PERSONA_ID ? null : requested;
+      } else if (cachedSettings?.defaultPersonaId) {
+        const def = cachedSettings.defaultPersonaId.trim();
+        if (
+          isValidPersonaId(def, customPersonas) &&
+          def !== AVA_PERSONA_ID &&
+          !isPersonaBuilderId(def)
+        ) {
+          stampedPersonaId = def;
+        }
+      }
+
+      if (isPersonaBuilderId(stampedPersonaId)) {
+        if (userType !== "regular") {
+          return new ChatSDKError(
+            "forbidden:chat",
+            "Sign in to create a persona with the interview.",
+          ).toResponse();
+        }
+
+        const refineId = requestRefiningPersonaId?.trim() || null;
+        if (refineId) {
+          const target = customPersonas.find((p) => p.id === refineId);
+          if (!target) {
+            return new ChatSDKError(
+              "bad_request:api",
+              "Unknown persona to refine.",
+            ).toResponse();
+          }
+          stampedRefiningPersonaId = refineId;
+        } else if (customPersonas.length >= MAX_CUSTOM_PERSONAS) {
+          return new ChatSDKError(
+            "bad_request:api",
+            "Custom persona limit reached. Delete or refine an existing persona.",
+          ).toResponse();
+        }
+
+        interviewState = emptyPersonaInterviewState();
+        const refineName = stampedRefiningPersonaId
+          ? customPersonas.find((p) => p.id === stampedRefiningPersonaId)?.name
+          : null;
+        const title = builderChatTitle({ refiningName: refineName });
+
+        await saveChat({
+          id,
+          userId: session.user.id,
+          title,
+          summary: null,
+          visibility: selectedVisibilityType,
+          aiProviderId: stampedProviderId,
+          personaId: PERSONA_BUILDER_ID,
+          refiningPersonaId: stampedRefiningPersonaId,
+          personaInterview: interviewState,
+        });
+      } else {
+        await saveChat({
+          id,
+          userId: session.user.id,
+          title: placeholderChatTitle(message),
+          summary: null,
+          visibility: selectedVisibilityType,
+          aiProviderId: stampedProviderId,
+          personaId: stampedPersonaId,
+        });
+
+        if (titleProvider !== "custom" && titleApiKey) {
+          after(async () => {
+            try {
+              await refineChatTitle({
+                chatId: id,
+                message,
+                apiKey: titleApiKey,
+                provider: titleProvider,
+                baseUrl: titleBaseUrl,
+                speedModelId: titleSpeedModelId,
+                reasoningModelId: titleReasoningModelId,
+              });
+            } catch (error) {
+              console.error("[Title] Error refining title:", error);
+            }
+          });
+        }
+      }
       // New chat - no need to fetch messages, it's empty
     }
 
@@ -226,11 +357,19 @@ export async function POST(request: Request) {
           let customSpeedModelId: string | undefined;
           let customReasoningModelId: string | undefined;
           let userProviderLabel: string | null = null;
+          let netsuiteAccountId: string | null = null;
+          let customPersonasForPrompt = normalizeCustomPersonas([]);
+          let sessionSettings: Awaited<ReturnType<typeof getUserSettings>> =
+            null;
           if (session.user?.id) {
             try {
-              const settings = await getUserSettings({
-                userId: session.user.id,
-              });
+              const settings =
+                cachedSettings === undefined
+                  ? await getUserSettings({
+                      userId: session.user.id,
+                    })
+                  : cachedSettings;
+              sessionSettings = settings;
               console.log("[Settings] Loaded settings for user:", {
                 userId: session.user.id,
                 hasSettings: !!settings,
@@ -241,7 +380,27 @@ export async function POST(request: Request) {
                 maxIterations: settings?.maxIterations,
               });
               if (settings) {
+                netsuiteAccountId = settings.netsuiteAccountId?.trim()
+                  ? normalizeNetSuiteAccountId(settings.netsuiteAccountId)
+                  : null;
                 const latestChat = await getChatById({ id });
+                if (latestChat?.personaId !== undefined) {
+                  stampedPersonaId = latestChat.personaId ?? null;
+                }
+                if (latestChat) {
+                  stampedRefiningPersonaId =
+                    latestChat.refiningPersonaId ?? null;
+                  interviewState = latestChat.personaInterview
+                    ? normalizePersonaInterviewState(
+                        latestChat.personaInterview,
+                      )
+                    : isPersonaBuilderId(stampedPersonaId)
+                      ? emptyPersonaInterviewState()
+                      : null;
+                }
+                customPersonasForPrompt = normalizeCustomPersonas(
+                  settings.customPersonas,
+                );
                 const resolved = resolveUserChatProvider({
                   chatAiProviderId: latestChat?.aiProviderId,
                   settings,
@@ -269,17 +428,35 @@ export async function POST(request: Request) {
                   {
                     enabledSkillIds: settings.enabledSkillIds ?? [],
                     customSkills: settings.customSkills ?? [],
+                    connectedSkillSources: settings.connectedSkillSources ?? [],
                   },
                   settings.customInstructions,
                 );
-                skillsPromptSection = buildSkillsPromptSection(skillSettings);
-                enabledSkillNames = listEnabledSkillNames(skillSettings);
+                const invokedConnectedSkillIds = (
+                  requestInvokedConnectedSkillIds ?? []
+                ).filter(
+                  (skillId) =>
+                    typeof skillId === "string" &&
+                    skillId.startsWith("connected:") &&
+                    skillSettings.connectedSkillSources.some((source) =>
+                      skillId.startsWith(`connected:${source.id}:`),
+                    ),
+                );
+                skillsPromptSection = buildSkillsPromptSection(skillSettings, {
+                  invokedConnectedSkillIds,
+                  userId: session.user.id,
+                });
+                enabledSkillNames = listEnabledSkillNames(skillSettings, {
+                  invokedConnectedSkillIds,
+                  userId: session.user.id,
+                });
                 console.log("[Skills] Session skills:", {
                   enabledIds: skillSettings.enabledSkillIds,
                   enabledNames: enabledSkillNames,
                   customCount: skillSettings.customSkills.filter(
                     (skill) => skill.enabled !== false,
                   ).length,
+                  invokedConnectedSkillIds,
                   injectedChars: skillsPromptSection.length,
                 });
               } else {
@@ -293,6 +470,17 @@ export async function POST(request: Request) {
               throw error;
             }
           }
+
+          const activePersona = resolvePersona({
+            personaId: stampedPersonaId,
+            customPersonas: customPersonasForPrompt,
+          });
+          const isBuilderSession = isPersonaBuilderId(stampedPersonaId);
+          const refiningPersona = stampedRefiningPersonaId
+            ? customPersonasForPrompt.find(
+                (p) => p.id === stampedRefiningPersonaId,
+              )
+            : null;
 
           // Create provider with user's API key and provider type
           console.log("[Settings] Creating provider:", {
@@ -328,12 +516,14 @@ export async function POST(request: Request) {
             throw new Error(errorMessage);
           }
 
-          // Load NetSuite MCP tools if user is authenticated
+          // Load NetSuite MCP tools if user is authenticated (skipped in builder)
           let netsuiteTools: Record<string, unknown> = {};
           let netsuiteActiveToolKeys: string[] = [];
-          if (session.user?.id) {
+          if (session.user?.id && !isBuilderSession) {
             try {
-              const loaded = await loadNetSuiteMCPTools(session.user.id);
+              const loaded = await loadNetSuiteMCPTools(session.user.id, {
+                settings: sessionSettings,
+              });
               netsuiteTools = loaded.tools;
               netsuiteActiveToolKeys = loaded.activeToolKeys;
               if (Object.keys(netsuiteTools).length > 0) {
@@ -355,7 +545,10 @@ export async function POST(request: Request) {
           // Custom web search tools: only register tools for domains enabled in settings
           const enabledSearchDomainIds = new Set(selectedSearchDomainIds);
           const searchToolEntries: [string, unknown][] = [];
-          if (enabledSearchDomainIds.has("oracle-netsuite-help")) {
+          if (
+            !isBuilderSession &&
+            enabledSearchDomainIds.has("oracle-netsuite-help")
+          ) {
             searchToolEntries.push([
               "searchNetsuiteDocs",
               createSearchNetsuiteDocsTool(),
@@ -363,21 +556,46 @@ export async function POST(request: Request) {
           }
           const searchTools = Object.fromEntries(searchToolEntries);
 
-          // Merge base tools with NetSuite tools
-          const allTools = {
-            ...searchTools,
-            readWebpage: createReadWebpageTool(),
-            ...netsuiteTools,
-          };
+          // Merge base tools with NetSuite tools (builder: interview tools only)
+          const interviewTools = isBuilderSession
+            ? {
+                updatePersonaInterview: createUpdatePersonaInterviewTool({
+                  chatId: id,
+                  getPreviousState: () => interviewState,
+                  onUpdated: (state) => {
+                    interviewState = state;
+                  },
+                }),
+                proposeCustomPersona: createProposeCustomPersonaTool({
+                  chatId: id,
+                  getInterviewState: () => interviewState,
+                  onCoverageUpdated: (state) => {
+                    interviewState = state;
+                  },
+                }),
+              }
+            : {};
+
+          const allTools = isBuilderSession
+            ? { ...interviewTools }
+            : {
+                ...searchTools,
+                readWebpage: createReadWebpageTool(),
+                ...netsuiteTools,
+              };
 
           // Offer only allowed NetSuite tools to the model; disabled tools stay
           // registered so an invoke returns a clear error instead of 404.
-          const netsuiteToolNames = netsuiteActiveToolKeys;
-          const baseToolNames = [
-            ...Object.keys(searchTools),
-            "readWebpage",
-            "getCurrentConfig",
-          ];
+          const netsuiteToolNames = isBuilderSession
+            ? []
+            : netsuiteActiveToolKeys;
+          const baseToolNames = isBuilderSession
+            ? [
+                "updatePersonaInterview",
+                "proposeCustomPersona",
+                "getCurrentConfig",
+              ]
+            : [...Object.keys(searchTools), "readWebpage", "getCurrentConfig"];
           console.log(
             `[NetSuite] Active NetSuite tools (${netsuiteToolNames.length}):`,
             netsuiteToolNames,
@@ -388,19 +606,32 @@ export async function POST(request: Request) {
             ...netsuiteToolNames,
           ];
 
-          const systemPromptText = `${systemPrompt({
-            selectedChatModel,
-            requestHints,
-            netsuiteTools: netsuiteToolNames,
-            timezone: userTimezone,
-            enabledSearchToolNames: Object.keys(searchTools),
-            maxSteps: userMaxIterations,
-          })}${skillsPromptSection}`;
+          const systemPromptText = isBuilderSession
+            ? buildPersonaBuilderPrompt({
+                refiningPersona: refiningPersona ?? null,
+              })
+            : `${systemPrompt({
+                selectedChatModel,
+                requestHints,
+                netsuiteTools: netsuiteToolNames,
+                timezone: userTimezone,
+                enabledSearchToolNames: Object.keys(searchTools),
+                maxSteps: userMaxIterations,
+                netsuiteAccountId,
+                persona: {
+                  name: activePersona.name,
+                  instructions: activePersona.instructions,
+                  confirmBeforeSuiteQL: activePersona.confirmBeforeSuiteQL,
+                },
+              })}${skillsPromptSection}`;
           console.log(
-            `[NetSuite] System prompt includes ${netsuiteToolNames.length} NetSuite tools` +
-              (skillsPromptSection
-                ? ` + ${skillsPromptSection.length} chars of skills`
-                : ""),
+            isBuilderSession
+              ? `[PersonaBuilder] Interview session; refine=${stampedRefiningPersonaId ?? "create"}`
+              : `[NetSuite] System prompt includes ${netsuiteToolNames.length} NetSuite tools` +
+                  (skillsPromptSection
+                    ? ` + ${skillsPromptSection.length} chars of skills`
+                    : "") +
+                  ` + persona ${activePersona.id}`,
           );
 
           // Both providers use the same model keys (chat-model, chat-model-reasoning, title-model)
@@ -418,6 +649,10 @@ export async function POST(request: Request) {
                 .filter((d) => enabledSearchDomainIds.has(d.id))
                 .map((d) => d.label),
               enabledSkills: enabledSkillNames,
+              persona: {
+                id: activePersona.id,
+                name: activePersona.name,
+              },
               modelName:
                 userProviderType === "custom"
                   ? `${userProviderLabel ?? "custom"} · ${
@@ -433,7 +668,7 @@ export async function POST(request: Request) {
                     : "Speed mode — custom endpoint"
                   : undefined,
             }),
-          };
+          } as ToolSet;
 
           // Verify the model exists before calling streamText
           let languageModel: LanguageModel;
@@ -457,10 +692,12 @@ export async function POST(request: Request) {
 
           // Clear maxIterationsReached at start of each request so we never show
           // the card for a response that didn't hit the limit (avoids stale flag).
-          await updateChatMaxIterationsReached({
-            chatId: id,
-            maxIterationsReached: false,
-          });
+          if (chat?.maxIterationsReached) {
+            await updateChatMaxIterationsReached({
+              chatId: id,
+              maxIterationsReached: false,
+            });
+          }
 
           console.log("[Chat] Starting streamText:", {
             provider: userProviderType,
@@ -479,6 +716,7 @@ export async function POST(request: Request) {
               system: systemPromptText,
               messages: modelMessages,
               stopWhen: stepCountIs(userMaxIterations),
+              abortSignal: request.signal,
               experimental_activeTools: activeTools as never,
               experimental_transform: smoothStream({ chunking: "word" }),
               tools: allToolsWithConfig,

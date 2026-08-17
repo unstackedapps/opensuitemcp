@@ -15,8 +15,12 @@ import {
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import type { VisibilityType } from "@/components/visibility-selector";
+import type {
+  CustomPersona,
+  PersonaInterviewState,
+} from "../ai/personas/types";
 import type { AiProviderConfig } from "../ai/provider-entries";
-import type { CustomSkill } from "../ai/skills/catalog";
+import type { ConnectedSkillSource, CustomSkill } from "../ai/skills/catalog";
 import { ChatSDKError } from "../errors";
 import type { NetsuiteMcpToolSettings } from "../netsuite/mcp-tool-settings";
 import type { AppUsage } from "../usage";
@@ -128,6 +132,9 @@ export async function saveChat({
   summary,
   visibility,
   aiProviderId,
+  personaId,
+  refiningPersonaId,
+  personaInterview,
 }: {
   id: string;
   userId: string;
@@ -135,6 +142,9 @@ export async function saveChat({
   summary?: string | null;
   visibility: VisibilityType;
   aiProviderId?: string | null;
+  personaId?: string | null;
+  refiningPersonaId?: string | null;
+  personaInterview?: PersonaInterviewState | null;
 }) {
   try {
     return await db.insert(chat).values({
@@ -145,6 +155,9 @@ export async function saveChat({
       summary,
       visibility,
       aiProviderId: aiProviderId ?? null,
+      personaId: personaId ?? null,
+      refiningPersonaId: refiningPersonaId ?? null,
+      personaInterview: personaInterview ?? null,
     });
   } catch (_error) {
     throw new ChatSDKError("bad_request:database", "Failed to save chat");
@@ -463,6 +476,76 @@ export async function updateChatAiProviderId({
   }
 }
 
+export async function updateChatPersonaInterview({
+  chatId,
+  personaInterview,
+}: {
+  chatId: string;
+  personaInterview: PersonaInterviewState | null;
+}) {
+  try {
+    return await db
+      .update(chat)
+      .set({ personaInterview })
+      .where(eq(chat.id, chatId));
+  } catch (_error) {
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to update persona interview state",
+    );
+  }
+}
+
+export async function updateChatPersonaConversion({
+  chatId,
+  personaId,
+  refiningPersonaId = null,
+  personaInterview = null,
+}: {
+  chatId: string;
+  personaId: string | null;
+  refiningPersonaId?: string | null;
+  personaInterview?: PersonaInterviewState | null;
+}) {
+  try {
+    return await db
+      .update(chat)
+      .set({
+        personaId,
+        refiningPersonaId,
+        personaInterview,
+      })
+      .where(eq(chat.id, chatId));
+  } catch (_error) {
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to convert chat persona",
+    );
+  }
+}
+
+export async function updateChatTitleById({
+  chatId,
+  title,
+  summary,
+}: {
+  chatId: string;
+  title: string;
+  summary?: string | null;
+}) {
+  try {
+    return await db
+      .update(chat)
+      .set(summary === undefined ? { title } : { title, summary })
+      .where(eq(chat.id, chatId));
+  } catch (_error) {
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to update chat title",
+    );
+  }
+}
+
 export async function updateChatMaxIterationsReached({
   chatId,
   maxIterationsReached,
@@ -593,8 +676,12 @@ export async function upsertUserSettings({
   customInstructions,
   enabledSkillIds,
   customSkills,
+  connectedSkillSources,
   aiProviders,
   netsuiteMcpTools,
+  defaultPersonaId,
+  hidePersonaPicker,
+  customPersonas,
 }: {
   userId: string;
   googleApiKey?: string | null;
@@ -617,8 +704,12 @@ export async function upsertUserSettings({
   customInstructions?: string | null;
   enabledSkillIds?: string[] | null;
   customSkills?: CustomSkill[] | null;
+  connectedSkillSources?: ConnectedSkillSource[] | null;
   aiProviders?: AiProviderConfig | null;
   netsuiteMcpTools?: NetsuiteMcpToolSettings | null;
+  defaultPersonaId?: string | null;
+  hidePersonaPicker?: boolean | null;
+  customPersonas?: CustomPersona[] | null;
 }): Promise<UserSettings> {
   try {
     const now = new Date();
@@ -682,6 +773,10 @@ export async function upsertUserSettings({
             customSkills !== undefined
               ? (customSkills ?? [])
               : (existing.customSkills ?? []),
+          connectedSkillSources:
+            connectedSkillSources !== undefined
+              ? (connectedSkillSources ?? [])
+              : (existing.connectedSkillSources ?? []),
           aiProviders:
             aiProviders !== undefined
               ? (aiProviders ?? {
@@ -696,6 +791,18 @@ export async function upsertUserSettings({
             netsuiteMcpTools !== undefined
               ? (netsuiteMcpTools ?? { byAccount: {} })
               : (existing.netsuiteMcpTools ?? { byAccount: {} }),
+          defaultPersonaId:
+            defaultPersonaId !== undefined
+              ? defaultPersonaId
+              : existing.defaultPersonaId,
+          hidePersonaPicker:
+            hidePersonaPicker !== undefined
+              ? Boolean(hidePersonaPicker)
+              : (existing.hidePersonaPicker ?? false),
+          customPersonas:
+            customPersonas !== undefined
+              ? (customPersonas ?? [])
+              : (existing.customPersonas ?? []),
           updatedAt: now,
         })
         .where(eq(userSettings.userId, userId))
@@ -723,11 +830,15 @@ export async function upsertUserSettings({
         customInstructions: customInstructions ?? null,
         enabledSkillIds: enabledSkillIds ?? [],
         customSkills: customSkills ?? [],
+        connectedSkillSources: connectedSkillSources ?? [],
         aiProviders: aiProviders ?? {
           defaultId: null,
           providers: [],
         },
         netsuiteMcpTools: netsuiteMcpTools ?? { byAccount: {} },
+        defaultPersonaId: defaultPersonaId ?? null,
+        hidePersonaPicker: hidePersonaPicker ?? false,
+        customPersonas: customPersonas ?? [],
         createdAt: now,
         updatedAt: now,
       })

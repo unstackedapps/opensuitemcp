@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getUserSettings } from "@/lib/db/queries";
 import { publicAppUrl } from "@/lib/http/public-origin";
 import { normalizeNetSuiteAccountId } from "@/lib/netsuite/accounts";
+import { invalidateMcpToolsListCache } from "@/lib/netsuite/mcp";
 import { callbackSchema, exchangeCodeForToken } from "@/lib/netsuite/oauth";
 import { saveNetSuiteToken } from "@/lib/netsuite/tokens";
 
@@ -71,6 +72,7 @@ export async function GET(request: Request) {
       refreshToken: tokenResponse.refresh_token,
       expiresIn: tokenResponse.expires_in,
     });
+    invalidateMcpToolsListCache(userId, accountId);
 
     cookieStore.delete("netsuite_code_verifier");
     cookieStore.delete("netsuite_state");

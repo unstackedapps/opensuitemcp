@@ -785,8 +785,11 @@ function ModelSlotsSection({
     lastReloadToken.current = null;
   }, [startInEditMode]);
 
+  // Hosted overrides still fetch when the API key is present and the user
+  // opens the override editor. Custom providers never auto-hit the URL —
+  // the user must click Load models.
   useEffect(() => {
-    if (!editing || !reloadToken) {
+    if (variant === "custom" || !editing || !reloadToken) {
       return;
     }
     if (lastReloadToken.current === reloadToken) {
@@ -794,11 +797,11 @@ function ModelSlotsSection({
     }
     lastReloadToken.current = reloadToken;
     onReloadModels();
-  }, [editing, onReloadModels, reloadToken]);
+  }, [editing, onReloadModels, reloadToken, variant]);
 
   const handleBeginEditing = () => {
     setEditing(true);
-    if (!reloadToken) {
+    if (variant === "custom" || !reloadToken) {
       return;
     }
     lastReloadToken.current = reloadToken;
@@ -881,8 +884,17 @@ function ModelSlotsSection({
         <p className="text-muted-foreground text-xs">
           {HOSTED_MODEL_OVERRIDE_DISCLAIMER}
         </p>
-      ) : null}
-      {loadingModels ? (
+      ) : (
+        <Button
+          disabled={loadingModels || !reloadToken}
+          onClick={onReloadModels}
+          type="button"
+          variant="outline"
+        >
+          {loadingModels ? "Loading models..." : "Load models"}
+        </Button>
+      )}
+      {loadingModels && variant !== "custom" ? (
         <p className="flex items-center gap-2 text-muted-foreground text-xs">
           <span className="inline-block animate-spin">
             <LoaderIcon size={14} />
@@ -1006,7 +1018,7 @@ function validateDraft(
       return "Enter a base URL.";
     }
     if (!draft.speedModelId?.trim() || !draft.reasoningModelId?.trim()) {
-      return "Reload models and pick Speed and Reasoning.";
+      return "Load models and pick Speed and Reasoning.";
     }
   }
   return null;

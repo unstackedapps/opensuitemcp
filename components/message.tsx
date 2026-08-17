@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { memo, useEffect, useState } from "react";
 import { useAppPortal } from "@/components/portal/context";
 import { useSidebar } from "@/components/ui/sidebar";
+import type { ProposeCustomPersonaResult } from "@/lib/ai/personas/interview";
 import type { GetCurrentConfigToolResult } from "@/lib/ai/tools/get-current-config";
 import type { ReadWebpageToolResult } from "@/lib/ai/tools/read-webpage";
 import type { WebSearchToolResult } from "@/lib/ai/web-search";
@@ -18,6 +19,7 @@ import { Response } from "./message-elements/response";
 import { MessageReasoning } from "./message-reasoning";
 import { MessageTool } from "./message-tool";
 import { GetCurrentConfigToolOutput } from "./tool-outputs/get-current-config-tool-output";
+import { ProposeCustomPersonaToolOutput } from "./tool-outputs/propose-custom-persona-tool-output";
 import { ReadWebpageToolOutput } from "./tool-outputs/read-webpage-tool-output";
 import { WebSearchToolOutput } from "./tool-outputs/web-search-tool-output";
 import { Button } from "./ui/button";
@@ -435,6 +437,93 @@ const PurePreviewMessage = ({
                   state={state}
                   toolCallId={toolCallId}
                   type="tool-getCurrentConfig"
+                />
+              );
+            }
+
+            if (type === "tool-proposeCustomPersona") {
+              const toolPart = part as {
+                type: string;
+                toolCallId: string;
+                state:
+                  | "input-streaming"
+                  | "input-available"
+                  | "output-available"
+                  | "output-error";
+                input: Record<string, unknown>;
+                output?: ProposeCustomPersonaResult;
+              };
+              const { toolCallId, state } = toolPart;
+              return (
+                <MessageTool
+                  input={toolPart.input}
+                  key={toolCallId}
+                  output={
+                    toolPart.output ? (
+                      <ProposeCustomPersonaToolOutput
+                        chatId={chatId}
+                        onRevise={(feedback) => {
+                          onMcpAppUserMessage?.(feedback);
+                        }}
+                        onSaved={(payload) => {
+                          // Soft convert without full reload (avoids Streamdown hydration flash)
+                          if (typeof window !== "undefined") {
+                            window.dispatchEvent(
+                              new CustomEvent("persona-saved", {
+                                detail: payload,
+                              }),
+                            );
+                          }
+                        }}
+                        result={toolPart.output}
+                      />
+                    ) : null
+                  }
+                  state={state}
+                  toolCallId={toolCallId}
+                  type="tool-proposeCustomPersona"
+                />
+              );
+            }
+
+            if (type === "tool-updatePersonaInterview") {
+              const toolPart = part as {
+                type: string;
+                toolCallId: string;
+                state:
+                  | "input-streaming"
+                  | "input-available"
+                  | "output-available"
+                  | "output-error";
+                input: Record<string, unknown>;
+                output?: {
+                  ok?: boolean;
+                  covered?: string[];
+                  missing?: string[];
+                  complete?: boolean;
+                };
+              };
+              const { toolCallId, state } = toolPart;
+              const covered = toolPart.output?.covered?.length ?? 0;
+              return (
+                <MessageTool
+                  input={toolPart.input}
+                  key={toolCallId}
+                  output={
+                    toolPart.output ? (
+                      <div className="rounded-md border p-2 text-muted-foreground text-xs">
+                        Interview progress: {covered}/7
+                        {toolPart.output.complete
+                          ? " — ready to propose"
+                          : toolPart.output.missing?.length
+                            ? ` · still need ${toolPart.output.missing.join(", ")}`
+                            : ""}
+                      </div>
+                    ) : null
+                  }
+                  state={state}
+                  toolCallId={toolCallId}
+                  type="tool-updatePersonaInterview"
                 />
               );
             }

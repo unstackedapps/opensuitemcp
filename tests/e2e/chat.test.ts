@@ -139,7 +139,9 @@ test.describe("Chat activity", () => {
 
   test("Create message from url query", async ({ page }) => {
     await page.goto("/?query=Why is the sky blue?");
-
+    const generation = chatPage.waitForChatPost();
+    await chatPage.selectPersona("ava");
+    await generation;
     await chatPage.isGenerationComplete();
 
     const userMessage = await chatPage.getRecentUserMessage();
