@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   ArrowRight,
   BookOpen,
+  ChevronDown,
   ExternalLink,
   Loader2,
   Search,
@@ -19,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ORACLE_DOC_LINKS } from "@/lib/netsuite/integration-checklist";
 import {
   applyPromptPlaceholders,
   extractPromptPlaceholders,
@@ -128,6 +130,37 @@ function emptyValuesForFields(
   return Object.fromEntries(fields.map((field) => [field.id, ""]));
 }
 
+function CompanionSuiteAppMissing({
+  title,
+  onClose,
+}: {
+  title?: string | null;
+  onClose?: () => void;
+}) {
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 py-8 text-center">
+      {title ? (
+        <p className="max-w-sm text-destructive text-sm">{title}</p>
+      ) : null}
+      <Button asChild>
+        <a
+          href={ORACLE_DOC_LINKS.companionSuiteApp}
+          rel="noopener noreferrer"
+          target="_blank"
+        >
+          Install Companion SuiteApp
+          <ExternalLink className="size-3.5" />
+        </a>
+      </Button>
+      {onClose ? (
+        <Button onClick={onClose} type="button" variant="outline">
+          Close
+        </Button>
+      ) : null}
+    </div>
+  );
+}
+
 export function PromptLibraryPanel({
   active,
   title = "NetSuite Prompt Library",
@@ -145,6 +178,7 @@ export function PromptLibraryPanel({
   const [category, setCategory] = useState<string>("all");
   const [industry, setIndustry] = useState<string>("all");
   const [role, setRole] = useState<string>("all");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [step, setStep] = useState<"browse" | "fill">("browse");
   const [selectedPrompt, setSelectedPrompt] = useState<PromptRecord | null>(
     null,
@@ -177,6 +211,7 @@ export function PromptLibraryPanel({
       setCategory("all");
       setIndustry("all");
       setRole("all");
+      setFiltersOpen(false);
       resetFillState();
       return;
     }
@@ -294,6 +329,10 @@ export function PromptLibraryPanel({
     });
   }, [prompts, searchQuery, category, industry, role]);
 
+  const activeFilterCount = [category, industry, role].filter(
+    (value) => value !== "all",
+  ).length;
+
   const selectedPlaceholders = useMemo(
     () =>
       selectedPrompt ? extractPromptPlaceholders(selectedPrompt.prompt) : [],
@@ -364,7 +403,7 @@ export function PromptLibraryPanel({
         {step === "browse" ? (
           <a
             className="hidden shrink-0 items-center gap-1 text-muted-foreground text-xs underline-offset-4 hover:text-foreground hover:underline sm:inline-flex"
-            href="https://docs.oracle.com/en/cloud/saas/netsuite/ns-online-help/article_9091153093.html"
+            href={ORACLE_DOC_LINKS.companion}
             rel="noopener noreferrer"
             target="_blank"
           >
@@ -382,23 +421,21 @@ export function PromptLibraryPanel({
       ) : null}
 
       {status === "error" ? (
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
-          <p className="text-destructive text-sm">{error}</p>
-          <Button
-            onClick={() => onRequestClose?.()}
-            type="button"
-            variant="outline"
-          >
-            Close
-          </Button>
-        </div>
+        <CompanionSuiteAppMissing
+          onClose={() => onRequestClose?.()}
+          title={error}
+        />
       ) : null}
 
-      {status === "ready" && step === "browse" ? (
+      {status === "ready" && step === "browse" && prompts.length === 0 ? (
+        <CompanionSuiteAppMissing />
+      ) : null}
+
+      {status === "ready" && step === "browse" && prompts.length > 0 ? (
         <div className="flex min-h-0 flex-1 flex-col">
           <div className="shrink-0 space-y-2.5 border-border/60 border-b px-4 py-3 sm:px-5">
-            <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="space-y-1 sm:col-span-2 lg:col-span-1">
+            <div className="space-y-2.5">
+              <div className="space-y-1">
                 <Label
                   className="text-xs text-muted-foreground"
                   htmlFor={searchInputId}
@@ -406,9 +443,9 @@ export function PromptLibraryPanel({
                   Search
                 </Label>
                 <div className="relative">
-                  <Search className="pointer-events-none absolute top-2.5 left-2.5 size-4 text-muted-foreground" />
+                  <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
-                    className="h-9 pl-8"
+                    className="h-9 pl-10 md:pl-10"
                     id={searchInputId}
                     onChange={(event) => setSearchQuery(event.target.value)}
                     placeholder="Search title, role, industry, or prompt"
@@ -416,57 +453,84 @@ export function PromptLibraryPanel({
                   />
                 </div>
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">
-                  Category
-                </Label>
-                <Select onValueChange={setCategory} value={category}>
-                  <SelectTrigger className="h-9">
-                    <SelectValue placeholder="All Categories" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Categories</SelectItem>
-                    {categories.map((value) => (
-                      <SelectItem key={value} value={value}>
-                        {value}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">
-                  Industry
-                </Label>
-                <Select onValueChange={setIndustry} value={industry}>
-                  <SelectTrigger className="h-9">
-                    <SelectValue placeholder="All Industries" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Industries</SelectItem>
-                    {industries.map((value) => (
-                      <SelectItem key={value} value={value}>
-                        {value}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground">Role</Label>
-                <Select onValueChange={setRole} value={role}>
-                  <SelectTrigger className="h-9">
-                    <SelectValue placeholder="All Roles" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Roles</SelectItem>
-                    {roles.map((value) => (
-                      <SelectItem key={value} value={value}>
-                        {value}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <Button
+                aria-expanded={filtersOpen}
+                className="h-8 w-full justify-between text-xs sm:hidden"
+                onClick={() => {
+                  setFiltersOpen((open) => !open);
+                }}
+                type="button"
+                variant="outline"
+              >
+                <span>
+                  Filters
+                  {activeFilterCount > 0 ? ` · ${activeFilterCount}` : ""}
+                </span>
+                <ChevronDown
+                  className={cn(
+                    "size-4 shrink-0 transition-transform",
+                    filtersOpen && "rotate-180",
+                  )}
+                />
+              </Button>
+              <div
+                className={cn(
+                  "grid gap-2.5 sm:grid-cols-3",
+                  !filtersOpen && "max-sm:hidden",
+                )}
+              >
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">
+                    Category
+                  </Label>
+                  <Select onValueChange={setCategory} value={category}>
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="All Categories" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Categories</SelectItem>
+                      {categories.map((value) => (
+                        <SelectItem key={value} value={value}>
+                          {value}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">
+                    Industry
+                  </Label>
+                  <Select onValueChange={setIndustry} value={industry}>
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="All Industries" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Industries</SelectItem>
+                      {industries.map((value) => (
+                        <SelectItem key={value} value={value}>
+                          {value}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Role</Label>
+                  <Select onValueChange={setRole} value={role}>
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="All Roles" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Roles</SelectItem>
+                      {roles.map((value) => (
+                        <SelectItem key={value} value={value}>
+                          {value}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
 

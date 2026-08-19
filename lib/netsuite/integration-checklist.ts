@@ -103,6 +103,8 @@ export const ORACLE_DOC_LINKS = {
     "https://docs.oracle.com/en/cloud/saas/netsuite/ns-online-help/article_0902023450.html",
   companion:
     "https://docs.oracle.com/en/cloud/saas/netsuite/ns-online-help/article_9091153093.html",
+  companionSuiteApp:
+    "https://system.netsuite.com/suiteapp/ui/marketplace.nl?#/app?id=com.suitesuccess.nsaicompanion",
   agentSkills:
     "https://docs.oracle.com/en/cloud/saas/netsuite/ns-online-help/article_7122549123.html",
 } as const;

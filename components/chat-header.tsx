@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { memo, useEffect, useState } from "react";
 import { useWindowSize } from "usehooks-ts";
@@ -17,10 +18,15 @@ function PureChatHeader({
   chatId,
   selectedVisibilityType,
   isReadonly,
+  personaName,
+  onPersonaClick,
 }: {
   chatId: string;
   selectedVisibilityType: VisibilityType;
   isReadonly: boolean;
+  personaName?: string;
+  /** When set, the persona badge is a button that opens the picker. */
+  onPersonaClick?: () => void;
 }) {
   const router = useRouter();
 
@@ -35,6 +41,13 @@ function PureChatHeader({
   const isMobile =
     mounted && windowWidth !== undefined ? windowWidth < 768 : false;
 
+  const personaBadgeClassName = cn(
+    "order-3 truncate rounded-md border px-2 py-1 text-muted-foreground text-xs",
+    onPersonaClick
+      ? "inline-flex cursor-pointer transition-colors hover:border-primary hover:bg-primary/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      : "hidden md:inline-flex",
+  );
+
   return (
     <header className="sticky top-0 flex items-center gap-2 bg-background px-2 py-1.5 md:px-2">
       {isMobile ? <SidebarToggle /> : null}
@@ -47,7 +60,7 @@ function PureChatHeader({
         />
       )}
 
-      <div className="pointer-events-none order-2 flex h-8 select-none flex-row items-center justify-center gap-0 rounded-md text-xl md:order-3">
+      <div className="pointer-events-none order-2 hidden h-8 select-none flex-row items-center justify-center gap-0 rounded-md text-xl md:flex">
         <span
           className="font-light"
           style={{ fontFamily: "var(--font-raleway)" }}
@@ -57,26 +70,55 @@ function PureChatHeader({
         </span>
       </div>
 
+      {personaName ? (
+        onPersonaClick ? (
+          <button
+            aria-label={`Change persona (currently ${personaName})`}
+            className={personaBadgeClassName}
+            data-testid="persona-badge"
+            onClick={onPersonaClick}
+            title="Change persona"
+            type="button"
+          >
+            {personaName}
+          </button>
+        ) : (
+          <span className={personaBadgeClassName} data-testid="persona-badge">
+            {personaName}
+          </span>
+        )
+      ) : null}
+
       <div
         className={cn(
           "ml-auto flex items-center gap-1.5",
-          "order-3 md:order-4",
+          "order-4 md:order-4",
         )}
       >
         {!isReadonly ? <NetSuiteStatusChip /> : null}
         {/* Desktop New Chat lives in the sidebar rail; header + only when the
             mobile sheet is closed and that control isn't visible. */}
         {isMobile ? (
-          <Button
-            className="h-8 px-2"
-            onClick={() => {
-              router.push("/");
-              router.refresh();
-            }}
-            variant="outline"
-          >
-            <PlusIcon />
-            <span className="md:sr-only">New Chat</span>
+          <Button asChild className="size-8 px-0" variant="outline">
+            <Link
+              aria-label="New Chat"
+              href="/"
+              onClick={(event) => {
+                if (
+                  event.button !== 0 ||
+                  event.metaKey ||
+                  event.ctrlKey ||
+                  event.shiftKey ||
+                  event.altKey
+                ) {
+                  return;
+                }
+                router.refresh();
+              }}
+            >
+              <PlusIcon />
+              <span className="sr-only">New Chat</span>
+            </Link>
           </Button>
         ) : null}
       </div>
@@ -88,6 +130,8 @@ export const ChatHeader = memo(PureChatHeader, (prevProps, nextProps) => {
   return (
     prevProps.chatId === nextProps.chatId &&
     prevProps.selectedVisibilityType === nextProps.selectedVisibilityType &&
-    prevProps.isReadonly === nextProps.isReadonly
+    prevProps.isReadonly === nextProps.isReadonly &&
+    prevProps.personaName === nextProps.personaName &&
+    prevProps.onPersonaClick === nextProps.onPersonaClick
   );
 });

@@ -8,6 +8,7 @@ import { getUserProvider } from "@/lib/ai/providers";
 import {
   deleteMessagesByChatIdAfterTimestamp,
   getMessageById,
+  updateChatTitleById,
   updateChatVisibilityById,
 } from "@/lib/db/queries";
 import { getTextFromMessage } from "@/lib/utils";
@@ -31,6 +32,11 @@ function cleanText(text: string): string {
   );
 }
 
+function placeholderChatTitle(message: UIMessage): string {
+  const text = getTextFromMessage(message).trim();
+  return text.slice(0, 50) || "New Chat";
+}
+
 export async function generateTitleFromUserMessage({
   message,
   apiKey,
@@ -50,8 +56,7 @@ export async function generateTitleFromUserMessage({
 
   // If no API key is provided, use a default title based on message content
   if (!apiKey && provider !== "custom") {
-    const defaultTitle = text.trim().slice(0, 50) || "New Chat";
-    return { title: defaultTitle, summary: null };
+    return { title: placeholderChatTitle(message), summary: null };
   }
 
   try {
@@ -89,15 +94,42 @@ export async function generateTitleFromUserMessage({
     }
 
     return {
-      title: cleanedTitle || text.trim().slice(0, 50) || "New Chat",
+      title: cleanedTitle || placeholderChatTitle(message),
       summary: cleanedSummary || null,
     };
   } catch (error) {
     // If title generation fails (e.g., API key issue), fall back to default
     console.error("[Title] Error generating title:", error);
-    const defaultTitle = text.trim().slice(0, 50) || "New Chat";
-    return { title: defaultTitle, summary: null };
+    return { title: placeholderChatTitle(message), summary: null };
   }
+}
+
+export async function refineChatTitle({
+  chatId,
+  message,
+  apiKey,
+  provider = "google",
+  baseUrl,
+  speedModelId,
+  reasoningModelId,
+}: {
+  chatId: string;
+  message: UIMessage;
+  apiKey?: string | null;
+  provider?: AiProviderType;
+  baseUrl?: string;
+  speedModelId?: string;
+  reasoningModelId?: string;
+}): Promise<void> {
+  const { title, summary } = await generateTitleFromUserMessage({
+    message,
+    apiKey,
+    provider,
+    baseUrl,
+    speedModelId,
+    reasoningModelId,
+  });
+  await updateChatTitleById({ chatId, title, summary });
 }
 
 export async function deleteTrailingMessages({ id }: { id: string }) {

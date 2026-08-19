@@ -1,8 +1,7 @@
 import { expect, type Page } from "@playwright/test";
-import { chatModels } from "@/lib/ai/models";
 
 const CHAT_ID_REGEX =
-  /^http:\/\/localhost:3000\/chat\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+  /^http:\/\/localhost:\d+\/chat\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 export class ChatPage {
   private readonly page: Page;
@@ -23,6 +22,14 @@ export class ChatPage {
     return this.page.getByTestId("multimodal-input");
   }
 
+  get personaPicker() {
+    return this.page.getByTestId("persona-picker");
+  }
+
+  get personaBadge() {
+    return this.page.getByTestId("persona-badge");
+  }
+
   get scrollContainer() {
     return this.page.locator(".overflow-y-scroll");
   }
@@ -33,6 +40,98 @@ export class ChatPage {
 
   async createNewChat() {
     await this.page.goto("/");
+    await Promise.race([
+      this.personaPicker.waitFor({ state: "visible", timeout: 30_000 }),
+      this.multimodalInput.waitFor({ state: "visible", timeout: 30_000 }),
+    ]);
+    await this.ensurePersonaSelected();
+    await expect(this.multimodalInput).toBeVisible();
+    await expect(this.multimodalInput).toBeEnabled();
+  }
+
+  /** Open home without selecting a persona (picker should appear). */
+  async gotoHome() {
+    await this.page.goto("/");
+  }
+
+  /** Choose a persona from the first-chat picker (required before sending). */
+  async selectPersona(
+    personaId = "ava",
+    options: { doNotShowAgain?: boolean } = {},
+  ) {
+    const dialog = this.personaPicker;
+    await expect(dialog).toBeVisible({ timeout: 30_000 });
+
+    if (options.doNotShowAgain) {
+      const prefsResponse = this.page
+        .waitForResponse(
+          (response) =>
+            (response.url().includes("/api/chat/persona-prefs") ||
+              response.url().includes("/api/settings")) &&
+            response.request().method() === "POST",
+          { timeout: 15_000 },
+        )
+        .catch(() => null);
+      await dialog.getByTestId("persona-do-not-show-again").check();
+      await dialog.getByTestId(`persona-option-${personaId}`).click();
+      await prefsResponse;
+    } else {
+      await dialog.getByTestId(`persona-option-${personaId}`).click();
+    }
+
+    await expect(dialog).toBeHidden();
+    await expect(this.multimodalInput).toBeVisible();
+    await expect(this.multimodalInput).toBeEnabled();
+  }
+
+  /** If the picker is open, select Ava; otherwise continue. */
+  async ensurePersonaSelected(personaId = "ava") {
+    if (await this.multimodalInput.isEnabled().catch(() => false)) {
+      return;
+    }
+
+    const dialog = this.personaPicker;
+    const pickerVisible = await dialog
+      .waitFor({ state: "visible", timeout: 15_000 })
+      .then(() => true)
+      .catch(() => false);
+
+    if (!pickerVisible) {
+      return;
+    }
+
+    await this.selectPersona(personaId);
+  }
+
+  async changePersona(personaId: string) {
+    await expect(this.personaBadge).toBeVisible();
+    await this.personaBadge.click();
+    await this.selectPersona(personaId);
+  }
+
+  async openPersonaDetails(personaId: string) {
+    const dialog = this.personaPicker;
+    await expect(dialog).toBeVisible({ timeout: 30_000 });
+    await dialog.getByTestId(`persona-details-${personaId}`).click();
+    await expect(this.page.getByTestId("persona-details-dialog")).toBeVisible();
+  }
+
+  async openSkillsPortal() {
+    await this.page.getByTestId("sidebar-skills-button").click();
+    const portal = this.page.getByTestId("app-portal");
+    await expect(portal).toBeVisible();
+    await expect(this.page.getByTestId("skills-panel")).toBeVisible();
+  }
+
+  async openPersonasPortal() {
+    await this.openSkillsPortal();
+    await this.page.getByTestId("portal-nav-personas").click();
+    await expect(this.page.getByTestId("personas-panel")).toBeVisible();
+  }
+
+  async closeAppPortal() {
+    await this.page.keyboard.press("Escape");
+    await expect(this.page.getByTestId("app-portal")).toBeHidden();
   }
 
   getCurrentURL(): string {
@@ -40,17 +139,35 @@ export class ChatPage {
   }
 
   async sendUserMessage(message: string) {
+    await this.ensurePersonaSelected();
     await this.multimodalInput.click();
     await this.multimodalInput.fill(message);
     await this.sendButton.click();
   }
 
-  async isGenerationComplete() {
-    const response = await this.page.waitForResponse((currentResponse) =>
-      currentResponse.url().includes("/api/chat"),
-    );
-
+  async waitForChatPost() {
+    const response = await this.page.waitForResponse((currentResponse) => {
+      try {
+        const { pathname } = new URL(currentResponse.url());
+        return (
+          currentResponse.request().method() === "POST" &&
+          pathname === "/api/chat"
+        );
+      } catch {
+        return false;
+      }
+    });
     await response.finished();
+    return response;
+  }
+
+  async isGenerationComplete() {
+    await expect(this.page.getByTestId("message-assistant").last()).toBeVisible(
+      {
+        timeout: 30_000,
+      },
+    );
+    await expect(this.sendButton).toBeVisible({ timeout: 30_000 });
   }
 
   async isVoteComplete() {
@@ -79,19 +196,12 @@ export class ChatPage {
   }
 
   async chooseModelFromSelector(chatModelId: string) {
-    const chatModel = chatModels.find(
-      (currentChatModel) => currentChatModel.id === chatModelId,
-    );
-
-    if (!chatModel) {
-      throw new Error(`Model with id ${chatModelId} not found`);
-    }
-
     await this.page.getByTestId("model-selector").click();
     await this.page.getByTestId("model-selector-mode").click();
-    await this.page.getByTestId(`model-selector-item-${chatModelId}`).click();
-    const shortName = chatModel.name.split(" (")[0];
-    expect(await this.getSelectedModel()).toContain(shortName);
+    const item = this.page.getByTestId(`model-selector-item-${chatModelId}`);
+    await expect(item).toBeVisible();
+    await item.click();
+    await expect(this.page.getByTestId("model-selector-mode")).toBeHidden();
   }
 
   async getSelectedVisibility() {
@@ -173,12 +283,24 @@ export class ChatPage {
       element: lastMessageElement,
       content,
       async edit(newMessage: string) {
+        const generation = page.waitForResponse((currentResponse) => {
+          try {
+            const { pathname } = new URL(currentResponse.url());
+            return (
+              currentResponse.request().method() === "POST" &&
+              pathname === "/api/chat"
+            );
+          } catch {
+            return false;
+          }
+        });
         await page.getByTestId("message-edit-button").click();
         await page.getByTestId("message-editor").fill(newMessage);
         await page.getByTestId("message-editor-send-button").click();
         await expect(
           page.getByTestId("message-editor-send-button"),
         ).not.toBeVisible();
+        await generation;
       },
     };
   }

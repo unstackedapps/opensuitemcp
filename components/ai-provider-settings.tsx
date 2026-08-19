@@ -336,8 +336,8 @@ export function AiProviderSettings({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="space-y-1">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+        <div className="min-w-0 space-y-1">
           <p className="font-medium text-sm">Configured providers</p>
           <p className="text-muted-foreground text-xs leading-relaxed">
             Add API keys and model options. The default is for new chats;
@@ -345,6 +345,7 @@ export function AiProviderSettings({
           </p>
         </div>
         <Button
+          className="w-full shrink-0 sm:w-auto"
           onClick={openAddModal}
           size="sm"
           type="button"
@@ -448,7 +449,7 @@ export function AiProviderSettings({
                   ) : (
                     <Button
                       aria-label={`Remove ${entry.label}`}
-                      className="size-7 text-muted-foreground hover:text-destructive"
+                      className="size-7 text-muted-foreground hover:text-red-500 dark:hover:text-red-400"
                       onClick={() => {
                         void handleDelete(entry);
                       }}
@@ -572,8 +573,8 @@ function ProviderConfigDialog({
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent className="max-h-[min(90vh,800px)] gap-0 overflow-hidden p-0 sm:max-w-2xl">
-        <DialogHeader className="space-y-1 border-border/60 border-b px-4 py-3 text-left sm:px-5">
+      <DialogContent className="flex max-h-[calc(100dvh-5.5rem)] flex-col gap-0 overflow-hidden p-0 sm:max-h-[min(90vh,800px)] sm:max-w-2xl">
+        <DialogHeader className="shrink-0 space-y-1 border-border/60 border-b px-4 py-3 text-left sm:px-5">
           <DialogTitle className="text-base">{title}</DialogTitle>
           {description ? (
             <DialogDescription className="text-xs">
@@ -581,7 +582,7 @@ function ProviderConfigDialog({
             </DialogDescription>
           ) : null}
         </DialogHeader>
-        <div className="max-h-[min(70vh,640px)] overflow-y-auto px-4 py-4 sm:px-5">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
           <div className="space-y-4">
             {mode === "add" ? (
               <div className="space-y-2">
@@ -661,7 +662,7 @@ function ProviderConfigDialog({
             ) : null}
           </div>
         </div>
-        <DialogFooter className="gap-2 border-border/60 border-t px-4 py-3 sm:justify-end sm:px-5">
+        <DialogFooter className="shrink-0 gap-2 border-border/60 border-t px-4 py-3 sm:justify-end sm:px-5">
           <Button
             onClick={() => onOpenChange(false)}
             type="button"
@@ -785,8 +786,11 @@ function ModelSlotsSection({
     lastReloadToken.current = null;
   }, [startInEditMode]);
 
+  // Hosted overrides still fetch when the API key is present and the user
+  // opens the override editor. Custom providers never auto-hit the URL —
+  // the user must click Load models.
   useEffect(() => {
-    if (!editing || !reloadToken) {
+    if (variant === "custom" || !editing || !reloadToken) {
       return;
     }
     if (lastReloadToken.current === reloadToken) {
@@ -794,11 +798,11 @@ function ModelSlotsSection({
     }
     lastReloadToken.current = reloadToken;
     onReloadModels();
-  }, [editing, onReloadModels, reloadToken]);
+  }, [editing, onReloadModels, reloadToken, variant]);
 
   const handleBeginEditing = () => {
     setEditing(true);
-    if (!reloadToken) {
+    if (variant === "custom" || !reloadToken) {
       return;
     }
     lastReloadToken.current = reloadToken;
@@ -881,8 +885,17 @@ function ModelSlotsSection({
         <p className="text-muted-foreground text-xs">
           {HOSTED_MODEL_OVERRIDE_DISCLAIMER}
         </p>
-      ) : null}
-      {loadingModels ? (
+      ) : (
+        <Button
+          disabled={loadingModels || !reloadToken}
+          onClick={onReloadModels}
+          type="button"
+          variant="outline"
+        >
+          {loadingModels ? "Loading models..." : "Load models"}
+        </Button>
+      )}
+      {loadingModels && variant !== "custom" ? (
         <p className="flex items-center gap-2 text-muted-foreground text-xs">
           <span className="inline-block animate-spin">
             <LoaderIcon size={14} />
@@ -1006,7 +1019,7 @@ function validateDraft(
       return "Enter a base URL.";
     }
     if (!draft.speedModelId?.trim() || !draft.reasoningModelId?.trim()) {
-      return "Reload models and pick Speed and Reasoning.";
+      return "Load models and pick Speed and Reasoning.";
     }
   }
   return null;
@@ -1252,14 +1265,14 @@ function OpenAiWarning() {
         <div className="mt-0.5 shrink-0 text-yellow-600 dark:text-yellow-400/70">
           <WarningIcon size={16} />
         </div>
-        <div className="flex-1 space-y-1">
+        <div className="min-w-0 flex-1 space-y-1">
           <p className="font-medium text-sm text-yellow-900 dark:text-yellow-200">
             Organization Verification Required
           </p>
           <p className="text-xs text-yellow-800 dark:text-yellow-200/80">
             For enhanced reasoning features, verify your organization at{" "}
             <a
-              className="text-primary underline hover:no-underline"
+              className="break-all text-primary underline hover:no-underline"
               href="https://platform.openai.com/settings/organization/general"
               rel="noopener noreferrer"
               target="_blank"

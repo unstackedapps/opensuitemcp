@@ -8,6 +8,7 @@ import {
   Sparkles,
   SunMoon,
 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { User } from "next-auth";
 import { useTheme } from "next-themes";
@@ -32,23 +33,35 @@ export function AppSidebar({ user }: { user: User | undefined }) {
   const { openPortal } = useAppPortal();
   const sidebarCollapsed = state === "collapsed";
 
-  const handleNewChat = () => {
-    setOpenMobile(false);
-    router.push("/");
-    router.refresh();
-  };
-
   return (
     <Sidebar className="group-data-[side=left]:border-r-0" collapsible="icon">
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton onClick={handleNewChat} tooltip="New Chat">
-              <Plus />
-              <span>New Chat</span>
+            <SidebarMenuButton asChild tooltip="New Chat">
+              <Link
+                href="/"
+                onClick={(event) => {
+                  // Let the browser handle new-tab / modified clicks.
+                  if (
+                    event.button !== 0 ||
+                    event.metaKey ||
+                    event.ctrlKey ||
+                    event.shiftKey ||
+                    event.altKey
+                  ) {
+                    return;
+                  }
+                  setOpenMobile(false);
+                  router.refresh();
+                }}
+              >
+                <Plus />
+                <span>New Chat</span>
+              </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
-          {!isMobile && (
+          {!isMobile && sidebarCollapsed ? (
             <SidebarMenuItem>
               <SidebarMenuButton
                 onClick={() => openPortal("chats")}
@@ -58,9 +71,10 @@ export function AppSidebar({ user }: { user: User | undefined }) {
                 <span>Chats</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
-          )}
+          ) : null}
           <SidebarMenuItem>
             <SidebarMenuButton
+              data-testid="sidebar-skills-button"
               onClick={() => openPortal("skills")}
               tooltip="Skills"
             >
@@ -93,7 +107,7 @@ export function AppSidebar({ user }: { user: User | undefined }) {
 
       {/* flex-1 spacer pins the user footer to the bottom (Claude-style) */}
       <SidebarContent className="gap-0">
-        {isMobile ? <SidebarHistory user={user} /> : null}
+        {isMobile || !sidebarCollapsed ? <SidebarHistory user={user} /> : null}
       </SidebarContent>
 
       <SidebarFooter className="mt-auto">

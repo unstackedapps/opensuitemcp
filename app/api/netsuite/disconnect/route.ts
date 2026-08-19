@@ -3,6 +3,7 @@ import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
 import { getUserSettings } from "@/lib/db/queries";
 import { normalizeNetSuiteAccountId } from "@/lib/netsuite/accounts";
+import { invalidateMcpToolsListCache } from "@/lib/netsuite/mcp";
 import { deleteNetSuiteToken } from "@/lib/netsuite/tokens";
 
 const bodySchema = z.object({
@@ -41,6 +42,7 @@ export async function POST(request: Request) {
     }
 
     await deleteNetSuiteToken(session.user.id, accountId);
+    invalidateMcpToolsListCache(session.user.id, accountId);
     return NextResponse.json({ success: true, accountId });
   } catch (error) {
     if (error instanceof z.ZodError) {

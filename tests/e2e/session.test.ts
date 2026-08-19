@@ -25,15 +25,17 @@ test.describe
         request = request.redirectedFrom();
       }
 
+      const origin = new URL(response.url()).origin;
       expect(chain).toEqual([
-        "http://localhost:3000/",
-        "http://localhost:3000/api/auth/guest?redirectUrl=http%3A%2F%2Flocalhost%3A3000%2F",
-        "http://localhost:3000/",
+        `${origin}/`,
+        `${origin}/api/auth/guest?redirectUrl=${encodeURIComponent(`${origin}/`)}`,
+        `${origin}/`,
       ]);
     });
 
     test("Log out is not available for guest users", async ({ page }) => {
-      await page.goto("/");
+      const chatPage = new ChatPage(page);
+      await chatPage.createNewChat();
 
       const sidebarToggleButton = page.getByTestId("sidebar-toggle-button");
       await sidebarToggleButton.click();
@@ -68,7 +70,7 @@ test.describe
         request = request.redirectedFrom();
       }
 
-      expect(chain).toEqual(["http://localhost:3000/"]);
+      expect(chain).toEqual([`${new URL(response.url()).origin}/`]);
     });
 
     test("Allow navigating to /login as guest user", async ({ page }) => {
@@ -84,7 +86,8 @@ test.describe
     });
 
     test("Do not show email in user menu for guest user", async ({ page }) => {
-      await page.goto("/");
+      const chatPage = new ChatPage(page);
+      await chatPage.createNewChat();
 
       const sidebarToggleButton = page.getByTestId("sidebar-toggle-button");
       await sidebarToggleButton.click();
@@ -118,15 +121,13 @@ test.describe
     test("Log into account that exists", async ({ page }) => {
       await authPage.login(testUser.email, testUser.password);
 
-      await page.waitForURL("/");
-      await expect(page.getByPlaceholder("Send a message...")).toBeVisible();
+      await expect(page.getByTestId("multimodal-input")).toBeVisible();
     });
 
     test("Display user email in user menu", async ({ page }) => {
       await authPage.login(testUser.email, testUser.password);
 
-      await page.waitForURL("/");
-      await expect(page.getByPlaceholder("Send a message...")).toBeVisible();
+      await expect(page.getByTestId("multimodal-input")).toBeVisible();
 
       authPage.openSidebar();
       await page.getByTestId("user-nav-button").click();
@@ -142,7 +143,6 @@ test.describe
       page,
     }) => {
       await authPage.login(testUser.email, testUser.password);
-      await page.waitForURL("/");
 
       authPage.openSidebar();
       await page.getByTestId("user-nav-button").click();
@@ -151,6 +151,7 @@ test.describe
 
       await page.goto("/api/auth/guest");
       await page.waitForURL("/");
+      await new ChatPage(page).selectPersona("ava");
 
       authPage.openSidebar();
       await page.getByTestId("user-nav-button").click();
@@ -160,7 +161,6 @@ test.describe
 
     test("Log out is available for non-guest users", async ({ page }) => {
       await authPage.login(testUser.email, testUser.password);
-      await page.waitForURL("/");
 
       authPage.openSidebar();
 
@@ -179,7 +179,6 @@ test.describe
       page,
     }) => {
       await authPage.login(testUser.email, testUser.password);
-      await page.waitForURL("/");
 
       await page.goto("/register");
       await expect(page).toHaveURL("/");
@@ -187,7 +186,6 @@ test.describe
 
     test("Do not navigate to /login for non-guest users", async ({ page }) => {
       await authPage.login(testUser.email, testUser.password);
-      await page.waitForURL("/");
 
       await page.goto("/login");
       await expect(page).toHaveURL("/");

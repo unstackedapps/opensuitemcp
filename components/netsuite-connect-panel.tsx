@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { Pencil, Plug, Plus, Trash2, Unplug } from "lucide-react";
-import { useId, useState } from "react";
+import { type KeyboardEvent, useId, useState } from "react";
 import { LoaderIcon, WarningIcon } from "@/components/icons";
 import { NetSuiteIntegrationChecklist } from "@/components/netsuite-integration-checklist";
 import {
@@ -95,7 +95,7 @@ function AccountMcpToolsToggle({
   return (
     <Button
       aria-expanded={expanded}
-      className="h-auto px-1.5 py-0.5 text-muted-foreground text-xs"
+      className="h-auto w-fit shrink-0 self-start justify-start px-1.5 py-0.5 text-left text-muted-foreground text-xs sm:self-center"
       onClick={(event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -329,23 +329,22 @@ export function NetSuiteConnectPanel({
               OAuth.
             </p>
           </div>
-          <AddAccountForm
-            accountId={newAccountId}
-            accountIdFieldId={accountIdFieldId}
-            accountLabel={newAccountLabel}
-            accountLabelFieldId={accountLabelFieldId}
-            onAccountIdChange={onNewAccountIdChange}
-            onAccountLabelChange={onNewAccountLabelChange}
-            onSubmit={onAddAccount}
-            submitLabel="Add account"
-          />
+          <Button
+            onClick={() => setShowAddForm(true)}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            <Plus className="size-4" />
+            Add Account
+          </Button>
         </div>
       ) : null}
 
       {hasAccounts ? (
         <div className="space-y-3">
-          <div className="flex items-start justify-between gap-3">
-            <div className="space-y-1">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+            <div className="min-w-0 space-y-1">
               <p className="font-medium text-sm">Configured accounts</p>
               <p className="text-muted-foreground text-xs leading-relaxed">
                 Choose the active account for chat. Connect OAuth and configure
@@ -353,6 +352,7 @@ export function NetSuiteConnectPanel({
               </p>
             </div>
             <Button
+              className="w-full shrink-0 sm:w-auto"
               onClick={() => setShowAddForm(true)}
               size="sm"
               type="button"
@@ -374,11 +374,11 @@ export function NetSuiteConnectPanel({
                 const radioId = `ns-account-${account.accountId}`;
                 const displayName = formatNetSuiteAccountDisplay(account);
                 return (
-                  <li className="px-2.5 py-2" key={account.accountId}>
-                    <div className="flex items-center gap-2.5">
+                  <li className="px-2.5 py-2.5 sm:py-2" key={account.accountId}>
+                    <div className="flex items-center gap-2 sm:gap-2.5">
                       <input
                         checked={isActive}
-                        className="size-3.5 shrink-0 accent-foreground"
+                        className="mt-1 size-3.5 shrink-0 self-start accent-foreground sm:mt-0 sm:self-center"
                         id={radioId}
                         name="netsuite-active-account"
                         onChange={() => {
@@ -389,12 +389,12 @@ export function NetSuiteConnectPanel({
                         type="radio"
                         value={account.accountId}
                       />
-                      <label
-                        className="min-w-0 flex-1 cursor-pointer"
-                        htmlFor={radioId}
-                      >
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="truncate font-medium text-sm">
+                      <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:items-center sm:gap-2.5">
+                        <label
+                          className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5"
+                          htmlFor={radioId}
+                        >
+                          <span className="min-w-0 truncate font-medium text-sm">
                             {displayName}
                           </span>
                           <span
@@ -407,21 +407,21 @@ export function NetSuiteConnectPanel({
                           >
                             {accountConnected ? "Connected" : "Not connected"}
                           </span>
-                        </div>
-                      </label>
-                      <AccountMcpToolsToggle
-                        accountId={account.accountId}
-                        enabled={accountConnected && settingsActive}
-                        expanded={toolsExpanded}
-                        onToggle={() => {
-                          setToolsOpenAccountId((current) =>
-                            current === account.accountId
-                              ? null
-                              : account.accountId,
-                          );
-                        }}
-                      />
-                      <div className="flex shrink-0 items-center gap-0.5">
+                        </label>
+                        <AccountMcpToolsToggle
+                          accountId={account.accountId}
+                          enabled={accountConnected && settingsActive}
+                          expanded={toolsExpanded}
+                          onToggle={() => {
+                            setToolsOpenAccountId((current) =>
+                              current === account.accountId
+                                ? null
+                                : account.accountId,
+                            );
+                          }}
+                        />
+                      </div>
+                      <div className="flex shrink-0 items-center gap-0.5 self-center">
                         <Button
                           aria-label={`Rename ${displayName}`}
                           className="size-7"
@@ -441,7 +441,7 @@ export function NetSuiteConnectPanel({
                         {accountConnected ? (
                           <Button
                             aria-label={`Disconnect ${displayName}`}
-                            className="size-7 text-muted-foreground hover:text-destructive"
+                            className="size-7 text-muted-foreground hover:text-red-500 dark:hover:text-red-400"
                             onClick={() => {
                               setToolsOpenAccountId((current) =>
                                 current === account.accountId ? null : current,
@@ -485,7 +485,7 @@ export function NetSuiteConnectPanel({
                         )}
                         <Button
                           aria-label={`Remove ${displayName}`}
-                          className="size-7 text-muted-foreground hover:text-destructive"
+                          className="size-7 text-muted-foreground hover:text-red-500 dark:hover:text-red-400"
                           onClick={() => onRemoveAccount(account.accountId)}
                           size="icon"
                           type="button"
@@ -510,34 +510,6 @@ export function NetSuiteConnectPanel({
                 );
               })}
             </ul>
-
-            {showAddForm ? (
-              <div className="space-y-2 rounded-md border border-border/60 p-2.5">
-                <AddAccountForm
-                  accountId={newAccountId}
-                  accountIdFieldId={`${accountIdFieldId}-another`}
-                  accountLabel={newAccountLabel}
-                  accountLabelFieldId={`${accountLabelFieldId}-another`}
-                  onAccountIdChange={onNewAccountIdChange}
-                  onAccountLabelChange={onNewAccountLabelChange}
-                  onSubmit={() => {
-                    onAddAccount();
-                    setShowAddForm(false);
-                  }}
-                  submitLabel="Add"
-                />
-                <div className="flex justify-end">
-                  <Button
-                    onClick={() => setShowAddForm(false)}
-                    size="sm"
-                    type="button"
-                    variant="ghost"
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            ) : null}
           </div>
         </div>
       ) : null}
@@ -554,6 +526,57 @@ export function NetSuiteConnectPanel({
           redirectUri={redirectUri}
         />
       ) : null}
+
+      <Dialog onOpenChange={setShowAddForm} open={showAddForm}>
+        <DialogContent className="flex max-h-[calc(100dvh-5.5rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-md">
+          <DialogHeader className="shrink-0 space-y-1 border-border/60 border-b px-4 py-3 text-left sm:px-5">
+            <DialogTitle className="text-base">
+              Add NetSuite account
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Enter the account ID. Label is optional and shown in the switcher.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 px-4 py-4 sm:px-5">
+            <AddAccountForm
+              accountId={newAccountId}
+              accountIdFieldId={accountIdFieldId}
+              accountLabel={newAccountLabel}
+              accountLabelFieldId={accountLabelFieldId}
+              onAccountIdChange={onNewAccountIdChange}
+              onAccountLabelChange={onNewAccountLabelChange}
+              onSubmit={() => {
+                if (!newAccountId.trim()) {
+                  return;
+                }
+                onAddAccount();
+                setShowAddForm(false);
+              }}
+            />
+          </div>
+          <DialogFooter className="shrink-0 gap-2 border-border/60 border-t px-4 py-3 sm:justify-end sm:px-5">
+            <Button
+              onClick={() => setShowAddForm(false)}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={!newAccountId.trim()}
+              onClick={() => {
+                onAddAccount();
+                setShowAddForm(false);
+              }}
+              size="sm"
+              type="button"
+            >
+              Add account
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         onOpenChange={(open) => {
@@ -639,7 +662,6 @@ function AddAccountForm({
   onAccountIdChange,
   onAccountLabelChange,
   onSubmit,
-  submitLabel,
 }: {
   accountIdFieldId: string;
   accountLabelFieldId: string;
@@ -648,10 +670,16 @@ function AddAccountForm({
   onAccountIdChange: (value: string) => void;
   onAccountLabelChange: (value: string) => void;
   onSubmit: () => void;
-  submitLabel: string;
 }) {
+  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter" && accountId.trim()) {
+      event.preventDefault();
+      onSubmit();
+    }
+  };
+
   return (
-    <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+    <div className="space-y-3">
       <div className="space-y-1">
         <Label className="text-xs" htmlFor={accountIdFieldId}>
           Account ID
@@ -661,6 +689,7 @@ function AddAccountForm({
           className={compactInputClass}
           id={accountIdFieldId}
           onChange={(e) => onAccountIdChange(e.target.value)}
+          onKeyDown={handleKeyDown}
           placeholder="1234567-sb1"
           value={accountId}
         />
@@ -674,19 +703,10 @@ function AddAccountForm({
           className={compactInputClass}
           id={accountLabelFieldId}
           onChange={(e) => onAccountLabelChange(e.target.value)}
+          onKeyDown={handleKeyDown}
           placeholder="Sandbox"
           value={accountLabel}
         />
-      </div>
-      <div className="flex items-end">
-        <Button
-          disabled={!accountId.trim()}
-          onClick={onSubmit}
-          size="sm"
-          type="button"
-        >
-          {submitLabel}
-        </Button>
       </div>
     </div>
   );

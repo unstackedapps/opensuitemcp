@@ -30,6 +30,9 @@ export async function GET(
       {
         maxIterationsReached: chat.maxIterationsReached,
         aiProviderId: chat.aiProviderId ?? null,
+        personaId: chat.personaId ?? null,
+        refiningPersonaId: chat.refiningPersonaId ?? null,
+        personaInterview: chat.personaInterview ?? null,
       },
       { status: 200 },
     );

@@ -220,7 +220,7 @@ export function ComposerModelMenu({
       <DropdownMenuTrigger asChild>
         <Button
           aria-label={`${providerLabel}, ${currentOption?.name ?? "model"}`}
-          className="h-8 px-2"
+          className="h-8 px-2 focus-visible:ring-0"
           data-testid="model-selector"
           type="button"
           variant="ghost"

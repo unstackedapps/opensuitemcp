@@ -1,6 +1,10 @@
 import type { InferUITool, UIMessage } from "ai";
 import { z } from "zod";
 import type { createGetCurrentConfigTool } from "./ai/tools/get-current-config";
+import type {
+  createProposeCustomPersonaTool,
+  createUpdatePersonaInterviewTool,
+} from "./ai/tools/persona-interview";
 import type { createReadWebpageTool } from "./ai/tools/read-webpage";
 import type { createSearchNetsuiteDocsTool } from "./ai/tools/search-netsuite-docs";
 import type { AppUsage } from "./usage";
@@ -20,16 +24,29 @@ type readWebpageTool = InferUITool<ReturnType<typeof createReadWebpageTool>>;
 type getCurrentConfigTool = InferUITool<
   ReturnType<typeof createGetCurrentConfigTool>
 >;
+type updatePersonaInterviewTool = InferUITool<
+  ReturnType<typeof createUpdatePersonaInterviewTool>
+>;
+type proposeCustomPersonaTool = InferUITool<
+  ReturnType<typeof createProposeCustomPersonaTool>
+>;
 
 export type ChatTools = {
   searchNetsuiteDocs: searchNetsuiteDocsTool;
   readWebpage: readWebpageTool;
   getCurrentConfig: getCurrentConfigTool;
+  updatePersonaInterview: updatePersonaInterviewTool;
+  proposeCustomPersona: proposeCustomPersonaTool;
 };
 
 export type CustomUIDataTypes = {
   appendMessage: string;
   usage: AppUsage;
+  invokedConnectedSkills: Array<{
+    id: string;
+    slug: string;
+    name: string;
+  }>;
 };
 
 export type ChatMessage = UIMessage<

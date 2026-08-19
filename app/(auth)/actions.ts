@@ -3,6 +3,7 @@
 import { z } from "zod";
 
 import { createUser, getUser } from "@/lib/db/queries";
+import { allowAuthAttempt } from "@/lib/rate-limit";
 
 import { signIn } from "./auth";
 
@@ -24,6 +25,10 @@ export const login = async (
       email: formData.get("email"),
       password: formData.get("password"),
     });
+
+    if (!(await allowAuthAttempt(validatedData.email))) {
+      return { status: "failed" };
+    }
 
     await signIn("credentials", {
       email: validatedData.email,
@@ -60,6 +65,10 @@ export const register = async (
       email: formData.get("email"),
       password: formData.get("password"),
     });
+
+    if (!(await allowAuthAttempt(validatedData.email))) {
+      return { status: "failed" };
+    }
 
     const [user] = await getUser(validatedData.email);
 

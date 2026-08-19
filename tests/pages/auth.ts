@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
 import { expect } from "../fixtures";
+import { ChatPage } from "./chat";
 
 export class AuthPage {
   private readonly page: Page;
@@ -10,12 +11,16 @@ export class AuthPage {
 
   async gotoLogin() {
     await this.page.goto("/login");
-    await expect(this.page.getByRole("heading")).toContainText("Sign In");
+    await expect(
+      this.page.getByRole("heading", { name: "Sign In" }),
+    ).toBeVisible();
   }
 
   async gotoRegister() {
     await this.page.goto("/register");
-    await expect(this.page.getByRole("heading")).toContainText("Sign Up");
+    await expect(
+      this.page.getByRole("heading", { name: "Sign Up" }),
+    ).toBeVisible();
   }
 
   async register(email: string, password: string) {
@@ -34,11 +39,12 @@ export class AuthPage {
     await this.page.getByLabel("Password").click();
     await this.page.getByLabel("Password").fill(password);
     await this.page.getByRole("button", { name: "Sign In" }).click();
+    await this.page.waitForURL("/");
+    await new ChatPage(this.page).selectPersona("ava");
   }
 
   async logout(email: string, password: string) {
     await this.login(email, password);
-    await this.page.waitForURL("/");
 
     await this.openSidebar();
 

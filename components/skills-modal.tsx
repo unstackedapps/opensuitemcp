@@ -6,12 +6,14 @@ import {
   Loader2,
   Pencil,
   Plus,
+  RefreshCw,
   Sparkles,
   Trash2,
+  Unplug,
   Upload,
 } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import useSWR from "swr";
+import useSWR, { useSWRConfig } from "swr";
 import { useAppPortal } from "@/components/portal/context";
 import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
@@ -32,6 +34,9 @@ const ORACLE_SKILLS_GITHUB_URL =
 const ORACLE_SKILLS_DOCS_URL =
   "https://docs.oracle.com/en/cloud/saas/netsuite/ns-online-help/article_7122549123.html";
 
+const COMMUNITY_SKILLS_GITHUB_URL =
+  "https://github.com/unstackedapps/opensuitemcp-community-skills";
+
 type CatalogSkill = {
   id: string;
   name: string;
@@ -41,6 +46,9 @@ type CatalogSkill = {
   alwaysOn?: boolean;
   updatedAt: string;
   contentLength: number;
+  slug?: string;
+  sourceId?: string;
+  connectionLabel?: string;
 };
 
 type CustomSkill = {
@@ -51,10 +59,25 @@ type CustomSkill = {
   enabled?: boolean;
 };
 
+type ConnectedSource = {
+  id: string;
+  url: string;
+  owner: string;
+  repo: string;
+  ref: string;
+  path: string;
+  label: string;
+  lastSyncedAt: string;
+  skillCount: number;
+  lastError?: string | null;
+};
+
 type SkillsResponse = {
   catalog: CatalogSkill[];
   enabledSkillIds: string[];
   customSkills: CustomSkill[];
+  connectedSources: ConnectedSource[];
+  connectedSkills: CatalogSkill[];
 };
 
 type SkillsPanelProps = {
@@ -125,9 +148,11 @@ type SkillRowProps = {
   disabled?: boolean;
   onCheckedChange?: (checked: boolean) => void;
   actions?: React.ReactNode;
+  /** Hide enable switch (Connected skills are slash-invoked) */
+  hideSwitch?: boolean;
   /** When set, row can expand to preview SKILL.md / custom content */
   preview?:
-    | { kind: "oracle"; skillId: string }
+    | { kind: "remote"; skillId: string }
     | { kind: "inline"; content: string };
 };
 
@@ -140,6 +165,7 @@ function SkillRow({
   disabled,
   onCheckedChange,
   actions,
+  hideSwitch,
   preview,
 }: SkillRowProps) {
   const [expanded, setExpanded] = useState(false);
@@ -164,7 +190,9 @@ function SkillRow({
     setIsLoadingContent(true);
     setContentError(null);
     try {
-      const response = await fetch(`/api/skills/${preview.skillId}`);
+      const response = await fetch(
+        `/api/skills/${encodeURIComponent(preview.skillId)}`,
+      );
       if (!response.ok) {
         throw new Error("Failed to load skill content");
       }
@@ -215,12 +243,14 @@ function SkillRow({
         </button>
         <div className="flex shrink-0 items-center gap-1">
           {actions}
-          <Switch
-            aria-label={`Toggle ${name}`}
-            checked={checked}
-            disabled={disabled}
-            onCheckedChange={onCheckedChange}
-          />
+          {hideSwitch ? null : (
+            <Switch
+              aria-label={`Toggle ${name}`}
+              checked={checked}
+              disabled={disabled}
+              onCheckedChange={onCheckedChange}
+            />
+          )}
         </div>
       </div>
 
@@ -388,6 +418,7 @@ function CustomSkillEditor({
 
 export function SkillsPanel({ active }: SkillsPanelProps) {
   const { closePortal } = useAppPortal();
+  const { mutate: globalMutate } = useSWRConfig();
   const { data, error, isLoading, mutate } = useSWR(
     active ? "skills-settings" : null,
     fetchSkills,
@@ -395,15 +426,34 @@ export function SkillsPanel({ active }: SkillsPanelProps) {
 
   const [enabledSkillIds, setEnabledSkillIds] = useState<string[]>([]);
   const [customSkills, setCustomSkills] = useState<CustomSkill[]>([]);
+  const [connectedSources, setConnectedSources] = useState<ConnectedSource[]>(
+    [],
+  );
+  const [connectedSkills, setConnectedSkills] = useState<CatalogSkill[]>([]);
+  const [connectUrl, setConnectUrl] = useState("");
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [refreshingSourceId, setRefreshingSourceId] = useState<string | null>(
+    null,
+  );
+  const [refreshingPack, setRefreshingPack] = useState<
+    "oracle" | "community" | null
+  >(null);
+  const [disconnectingSourceId, setDisconnectingSourceId] = useState<
+    string | null
+  >(null);
+  const [expandedConnectedIds, setExpandedConnectedIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingSkill, setEditingSkill] = useState<CustomSkill | null>(null);
-  const [activeSection, setActiveSection] = useState<"oracle" | "custom">(
-    "oracle",
-  );
+  const [activeSection, setActiveSection] = useState<
+    "oracle" | "community" | "custom" | "connected"
+  >("oracle");
   const [pendingToggles, setPendingToggles] = useState<Set<string>>(
     () => new Set(),
   );
   const initializedRef = useRef(false);
+  const connectUrlId = useId();
 
   useEffect(() => {
     if (!active) {
@@ -411,12 +461,16 @@ export function SkillsPanel({ active }: SkillsPanelProps) {
       setEditorOpen(false);
       setEditingSkill(null);
       setActiveSection("oracle");
+      setConnectUrl("");
+      setExpandedConnectedIds(new Set());
       return;
     }
 
     if (data && !initializedRef.current) {
       setEnabledSkillIds(data.enabledSkillIds);
       setCustomSkills(data.customSkills);
+      setConnectedSources(data.connectedSources ?? []);
+      setConnectedSkills(data.connectedSkills ?? []);
       initializedRef.current = true;
     }
   }, [active, data]);
@@ -431,15 +485,20 @@ export function SkillsPanel({ active }: SkillsPanelProps) {
   }, [error]);
 
   const catalog = data?.catalog ?? [];
-  const sortedCatalog = [...catalog].sort((a, b) => {
-    if (a.alwaysOn && !b.alwaysOn) {
-      return -1;
-    }
-    if (!a.alwaysOn && b.alwaysOn) {
-      return 1;
-    }
-    return a.name.localeCompare(b.name);
-  });
+  const oracleCatalog = [...catalog]
+    .filter((skill) => skill.source === "oracle")
+    .sort((a, b) => {
+      if (a.alwaysOn && !b.alwaysOn) {
+        return -1;
+      }
+      if (!a.alwaysOn && b.alwaysOn) {
+        return 1;
+      }
+      return a.name.localeCompare(b.name);
+    });
+  const communityCatalog = [...catalog]
+    .filter((skill) => skill.source === "community")
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   const runPersist = useCallback(
     async (
@@ -548,10 +607,189 @@ export function SkillsPanel({ active }: SkillsPanelProps) {
     setEditorOpen(false);
   };
 
+  const applyConnectedPayload = (payload: {
+    connectedSources?: ConnectedSource[];
+    connectedSkills?: CatalogSkill[];
+  }) => {
+    if (payload.connectedSources) {
+      setConnectedSources(payload.connectedSources);
+    }
+    if (payload.connectedSkills) {
+      setConnectedSkills(payload.connectedSkills);
+    }
+    void mutate(
+      (current) =>
+        current
+          ? {
+              ...current,
+              connectedSources:
+                payload.connectedSources ?? current.connectedSources,
+              connectedSkills:
+                payload.connectedSkills ?? current.connectedSkills,
+            }
+          : current,
+      { revalidate: false },
+    );
+    // Keep chat composer slash menu in sync
+    void globalMutate("connected-slash-skills");
+  };
+
+  const handleConnect = async () => {
+    const url = connectUrl.trim();
+    if (!url) {
+      toast({ type: "error", description: "Paste a GitHub repository URL." });
+      return;
+    }
+    setIsConnecting(true);
+    try {
+      const response = await fetch("/api/skills/connected", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(
+          typeof payload.error === "string"
+            ? payload.error
+            : "Failed to connect skills",
+        );
+      }
+      applyConnectedPayload(payload);
+      setConnectUrl("");
+      if (typeof payload.source?.id === "string") {
+        setExpandedConnectedIds((current) =>
+          new Set(current).add(payload.source.id),
+        );
+      }
+      toast({
+        type: "success",
+        description: `Connected ${payload.source?.skillCount ?? 0} skill(s). Invoke with / in chat.`,
+      });
+    } catch (connectError) {
+      toast({
+        type: "error",
+        description:
+          connectError instanceof Error
+            ? connectError.message
+            : "Failed to connect skills",
+      });
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const handleRefreshSource = async (sourceId: string) => {
+    setRefreshingSourceId(sourceId);
+    try {
+      const response = await fetch(
+        `/api/skills/connected/${encodeURIComponent(sourceId)}/refresh`,
+        { method: "POST" },
+      );
+      const payload = await response.json().catch(() => ({}));
+      applyConnectedPayload(payload);
+      if (!response.ok) {
+        throw new Error(
+          typeof payload.error === "string"
+            ? payload.error
+            : "Failed to refresh",
+        );
+      }
+      toast({ type: "success", description: "Skills refreshed." });
+    } catch (refreshError) {
+      toast({
+        type: "error",
+        description:
+          refreshError instanceof Error
+            ? refreshError.message
+            : "Failed to refresh",
+      });
+    } finally {
+      setRefreshingSourceId(null);
+    }
+  };
+
+  const handleRefreshPack = async (pack: "oracle" | "community") => {
+    setRefreshingPack(pack);
+    try {
+      const response = await fetch("/api/skills/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pack }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(
+          typeof payload.error === "string"
+            ? payload.error
+            : "Failed to refresh",
+        );
+      }
+      await mutate();
+      toast({
+        type: "success",
+        description:
+          pack === "oracle"
+            ? "Oracle skills refreshed."
+            : "Community skills refreshed.",
+      });
+    } catch (refreshError) {
+      toast({
+        type: "error",
+        description:
+          refreshError instanceof Error
+            ? refreshError.message
+            : "Failed to refresh",
+      });
+    } finally {
+      setRefreshingPack(null);
+    }
+  };
+
+  const handleDisconnectSource = async (sourceId: string) => {
+    setDisconnectingSourceId(sourceId);
+    try {
+      const response = await fetch(
+        `/api/skills/connected/${encodeURIComponent(sourceId)}`,
+        { method: "DELETE" },
+      );
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(
+          typeof payload.error === "string"
+            ? payload.error
+            : "Failed to disconnect",
+        );
+      }
+      applyConnectedPayload(payload);
+      setExpandedConnectedIds((current) => {
+        const next = new Set(current);
+        next.delete(sourceId);
+        return next;
+      });
+      toast({ type: "success", description: "Disconnected." });
+    } catch (disconnectError) {
+      toast({
+        type: "error",
+        description:
+          disconnectError instanceof Error
+            ? disconnectError.message
+            : "Failed to disconnect",
+      });
+    } finally {
+      setDisconnectingSourceId(null);
+    }
+  };
+
   const showSkeletons = isLoading && !data;
 
-  const skillsNav: Array<{ id: "oracle" | "custom"; label: string }> = [
+  const skillsNav: Array<{
+    id: "oracle" | "community" | "custom" | "connected";
+    label: string;
+  }> = [
     { id: "oracle", label: "Oracle" },
+    { id: "community", label: "Community" },
+    { id: "connected", label: "Connected" },
     { id: "custom", label: "Custom" },
   ];
 
@@ -571,7 +809,10 @@ export function SkillsPanel({ active }: SkillsPanelProps) {
   }
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+    <div
+      className="flex min-h-0 min-w-0 flex-1 flex-col"
+      data-testid="skills-panel"
+    >
       <div className="flex items-start justify-between gap-3 border-border/60 border-b px-4 py-3 sm:px-5">
         <div className="min-w-0 space-y-1">
           <p className="flex items-center gap-1.5 font-medium text-sm">
@@ -579,7 +820,8 @@ export function SkillsPanel({ active }: SkillsPanelProps) {
             Skills
           </p>
           <p className="text-muted-foreground text-xs leading-relaxed">
-            Changes apply to new messages. Click a skill to preview.
+            Changes apply to new messages. Click a skill to preview. Connected
+            skills are invoked with / in chat.
           </p>
         </div>
         <div className="hidden shrink-0 flex-col gap-1 text-xs sm:flex">
@@ -592,24 +834,39 @@ export function SkillsPanel({ active }: SkillsPanelProps) {
             OpenSuiteMCP guide
             <ExternalLink className="size-3" />
           </a>
-          <a
-            className="inline-flex items-center gap-1 text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-            href={ORACLE_SKILLS_GITHUB_URL}
-            rel="noopener noreferrer"
-            target="_blank"
-          >
-            GitHub
-            <ExternalLink className="size-3" />
-          </a>
-          <a
-            className="inline-flex items-center gap-1 text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-            href={ORACLE_SKILLS_DOCS_URL}
-            rel="noopener noreferrer"
-            target="_blank"
-          >
-            SuiteCloud docs
-            <ExternalLink className="size-3" />
-          </a>
+          {activeSection === "oracle" ? (
+            <>
+              <a
+                className="inline-flex items-center gap-1 text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                href={ORACLE_SKILLS_GITHUB_URL}
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                GitHub
+                <ExternalLink className="size-3" />
+              </a>
+              <a
+                className="inline-flex items-center gap-1 text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                href={ORACLE_SKILLS_DOCS_URL}
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                SuiteCloud docs
+                <ExternalLink className="size-3" />
+              </a>
+            </>
+          ) : null}
+          {activeSection === "community" ? (
+            <a
+              className="inline-flex items-center gap-1 text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+              href={COMMUNITY_SKILLS_GITHUB_URL}
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              Community GitHub
+              <ExternalLink className="size-3" />
+            </a>
+          ) : null}
         </div>
       </div>
 
@@ -622,6 +879,7 @@ export function SkillsPanel({ active }: SkillsPanelProps) {
                 ? "bg-accent font-medium text-accent-foreground"
                 : "text-muted-foreground hover:bg-accent/50",
             )}
+            data-testid={`skills-tab-${item.id}`}
             key={item.id}
             onClick={() => setActiveSection(item.id)}
             type="button"
@@ -636,7 +894,7 @@ export function SkillsPanel({ active }: SkillsPanelProps) {
           <SkillsListSkeleton />
         ) : activeSection === "oracle" ? (
           <>
-            {sortedCatalog.map((skill) => (
+            {oracleCatalog.map((skill) => (
               <SkillRow
                 author={skill.author}
                 checked={skill.alwaysOn || enabledSkillIds.includes(skill.id)}
@@ -649,17 +907,40 @@ export function SkillsPanel({ active }: SkillsPanelProps) {
                     ? undefined
                     : (checked) => void handleCatalogToggle(skill.id, checked)
                 }
-                preview={{ kind: "oracle", skillId: skill.id }}
+                preview={{ kind: "remote", skillId: skill.id }}
                 updatedAt={skill.updatedAt}
               />
             ))}
-            {sortedCatalog.length === 0 ? (
+            {oracleCatalog.length === 0 ? (
               <div className="py-8 text-center text-muted-foreground text-sm">
-                No Oracle skills available yet.
+                No Oracle skills yet. Use Refresh to pull the pack.
               </div>
             ) : null}
           </>
-        ) : (
+        ) : activeSection === "community" ? (
+          <>
+            {communityCatalog.map((skill) => (
+              <SkillRow
+                author={skill.author}
+                checked={enabledSkillIds.includes(skill.id)}
+                description={skill.description}
+                disabled={pendingToggles.has(skill.id)}
+                key={skill.id}
+                name={skill.name}
+                onCheckedChange={(checked) =>
+                  void handleCatalogToggle(skill.id, checked)
+                }
+                preview={{ kind: "remote", skillId: skill.id }}
+                updatedAt={skill.updatedAt}
+              />
+            ))}
+            {communityCatalog.length === 0 ? (
+              <div className="py-8 text-center text-muted-foreground text-sm">
+                No Community skills yet. Use Refresh to pull the pack.
+              </div>
+            ) : null}
+          </>
+        ) : activeSection === "custom" ? (
           <>
             {customSkills.map((skill) => (
               <SkillRow
@@ -680,7 +961,7 @@ export function SkillsPanel({ active }: SkillsPanelProps) {
                     </Button>
                     <Button
                       aria-label={`Delete ${skill.name}`}
-                      className="size-7 text-muted-foreground hover:text-destructive"
+                      className="size-7 text-muted-foreground hover:text-red-500 dark:hover:text-red-400"
                       onClick={() => void handleDeleteCustomSkill(skill.id)}
                       size="icon"
                       type="button"
@@ -708,6 +989,164 @@ export function SkillsPanel({ active }: SkillsPanelProps) {
               </div>
             ) : null}
           </>
+        ) : (
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor={connectUrlId}>GitHub skills URL</Label>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Input
+                  id={connectUrlId}
+                  onChange={(event) => setConnectUrl(event.target.value)}
+                  placeholder="https://github.com/owner/repo/tree/main/skills/…"
+                  value={connectUrl}
+                />
+                <Button
+                  disabled={isConnecting}
+                  onClick={() => void handleConnect()}
+                  type="button"
+                >
+                  {isConnecting ? (
+                    <Loader2 className="mr-1.5 size-3.5 animate-spin" />
+                  ) : (
+                    <Plus className="mr-1.5 size-3.5" />
+                  )}
+                  Connect
+                </Button>
+              </div>
+              <p className="text-muted-foreground text-xs">
+                Public repos only. Invoke synced skills with{" "}
+                <code className="rounded bg-muted px-1">/skill-name</code> in
+                chat (multiple allowed inline).
+              </p>
+            </div>
+
+            {connectedSources.length === 0 ? (
+              <div className="py-6 text-center text-muted-foreground text-sm">
+                No connected skill packs yet.
+              </div>
+            ) : (
+              connectedSources.map((source) => {
+                const skillsForSource = connectedSkills.filter(
+                  (skill) => skill.sourceId === source.id,
+                );
+                const skillCount =
+                  skillsForSource.length > 0
+                    ? skillsForSource.length
+                    : source.skillCount;
+                const expanded = expandedConnectedIds.has(source.id);
+                return (
+                  <div
+                    className="rounded-md border border-border/60"
+                    key={source.id}
+                  >
+                    <div className="flex items-start gap-1 px-2 py-2">
+                      <button
+                        aria-expanded={expanded}
+                        className="min-w-0 flex-1 rounded-md px-1 py-0.5 text-left hover:bg-muted/40"
+                        onClick={() => {
+                          setExpandedConnectedIds((current) => {
+                            const next = new Set(current);
+                            if (next.has(source.id)) {
+                              next.delete(source.id);
+                            } else {
+                              next.add(source.id);
+                            }
+                            return next;
+                          });
+                        }}
+                        type="button"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <ChevronDown
+                            className={cn(
+                              "size-3.5 shrink-0 text-muted-foreground transition-transform",
+                              expanded && "rotate-180",
+                            )}
+                          />
+                          <p className="truncate font-medium text-sm">
+                            {source.label}
+                          </p>
+                        </div>
+                        <p className="mt-0.5 pl-5 text-muted-foreground text-[11px]">
+                          {skillCount} skill{skillCount === 1 ? "" : "s"}
+                          <span className="mx-1.5 text-border">·</span>
+                          synced {formatSkillDate(source.lastSyncedAt)}
+                        </p>
+                        {source.lastError ? (
+                          <p className="mt-1 pl-5 text-destructive text-xs">
+                            {source.lastError}
+                          </p>
+                        ) : null}
+                      </button>
+                      <div className="flex shrink-0 gap-1 pt-0.5">
+                        <Button
+                          aria-label={`Refresh ${source.label}`}
+                          className="size-7"
+                          disabled={
+                            refreshingSourceId === source.id ||
+                            disconnectingSourceId === source.id
+                          }
+                          onClick={() => void handleRefreshSource(source.id)}
+                          size="icon"
+                          type="button"
+                          variant="ghost"
+                        >
+                          {refreshingSourceId === source.id ? (
+                            <Loader2 className="size-3.5 animate-spin" />
+                          ) : (
+                            <RefreshCw className="size-3.5" />
+                          )}
+                        </Button>
+                        <Button
+                          aria-label={`Disconnect ${source.label}`}
+                          className="size-7 text-muted-foreground hover:text-red-500 dark:hover:text-red-400"
+                          disabled={
+                            refreshingSourceId === source.id ||
+                            disconnectingSourceId === source.id
+                          }
+                          onClick={() => void handleDisconnectSource(source.id)}
+                          size="icon"
+                          type="button"
+                          variant="ghost"
+                        >
+                          {disconnectingSourceId === source.id ? (
+                            <Loader2 className="size-3.5 animate-spin" />
+                          ) : (
+                            <Unplug className="size-3.5" />
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                    {expanded ? (
+                      <div className="border-border/60 border-t px-3">
+                        {skillsForSource.map((skill) => (
+                          <SkillRow
+                            author={source.label}
+                            checked={false}
+                            description={
+                              skill.slug
+                                ? `/${skill.slug} — ${skill.description}`
+                                : skill.description
+                            }
+                            hideSwitch
+                            key={skill.id}
+                            name={skill.name}
+                            preview={{ kind: "remote", skillId: skill.id }}
+                            updatedAt={skill.updatedAt}
+                          />
+                        ))}
+                        {skillsForSource.length === 0 ? (
+                          <p className="py-3 text-muted-foreground text-xs">
+                            No SKILL.md files cached. Try Refresh.
+                          </p>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })
+            )}
+          </div>
         )}
       </div>
 
@@ -716,18 +1155,35 @@ export function SkillsPanel({ active }: SkillsPanelProps) {
           "flex-row items-center justify-between gap-2 border-t border-border/60 px-4 py-3 sm:justify-between sm:px-5",
         )}
       >
-        <Button
-          onClick={() => {
-            setActiveSection("custom");
-            setEditingSkill(null);
-            setEditorOpen(true);
-          }}
-          type="button"
-          variant="outline"
-        >
-          <Plus className="mr-1.5 size-4" />
-          Add a custom skill
-        </Button>
+        {activeSection === "custom" ? (
+          <Button
+            onClick={() => {
+              setEditingSkill(null);
+              setEditorOpen(true);
+            }}
+            type="button"
+            variant="outline"
+          >
+            <Plus className="mr-1.5 size-4" />
+            Add a custom skill
+          </Button>
+        ) : activeSection === "oracle" || activeSection === "community" ? (
+          <Button
+            disabled={refreshingPack !== null}
+            onClick={() => void handleRefreshPack(activeSection)}
+            type="button"
+            variant="outline"
+          >
+            {refreshingPack === activeSection ? (
+              <Loader2 className="mr-1.5 size-4 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-1.5 size-4" />
+            )}
+            Refresh
+          </Button>
+        ) : (
+          <span />
+        )}
         <Button onClick={() => closePortal()} type="button">
           Done
         </Button>

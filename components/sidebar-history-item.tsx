@@ -2,6 +2,7 @@ import Link from "next/link";
 import { memo } from "react";
 import { useAppPortal } from "@/components/portal/context";
 import { useChatVisibility } from "@/hooks/use-chat-visibility";
+import { clientPersonaShortName } from "@/lib/ai/personas/ids";
 import type { Chat } from "@/lib/db/schema";
 import {
   CheckCircleFillIcon,
@@ -44,6 +45,7 @@ const PureChatItem = ({
     chatId: chat.id,
     initialVisibilityType: chat.visibility,
   });
+  const personaLabel = clientPersonaShortName(chat.personaId);
 
   return (
     <SidebarMenuItem>
@@ -51,7 +53,7 @@ const PureChatItem = ({
         <TooltipTrigger asChild>
           <SidebarMenuButton
             asChild
-            className="group-hover/menu-item:bg-sidebar-accent group-hover/menu-item:text-sidebar-accent-foreground"
+            className="h-auto py-1 group-hover/menu-item:bg-sidebar-accent group-hover/menu-item:text-sidebar-accent-foreground"
             isActive={isActive}
           >
             <Link
@@ -61,7 +63,14 @@ const PureChatItem = ({
                 closePortal();
               }}
             >
-              <span className="truncate block">{chat.title}</span>
+              <span className="flex min-w-0 flex-col leading-tight">
+                <span className="block truncate leading-snug">
+                  {chat.title}
+                </span>
+                <span className="truncate text-[10px] text-muted-foreground leading-none">
+                  {personaLabel}
+                </span>
+              </span>
             </Link>
           </SidebarMenuButton>
         </TooltipTrigger>

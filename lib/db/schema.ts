@@ -12,8 +12,12 @@ import {
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
+import type {
+  CustomPersona,
+  PersonaInterviewState,
+} from "../ai/personas/types";
 import type { AiProviderConfig } from "../ai/provider-entries";
-import type { CustomSkill } from "../ai/skills/catalog";
+import type { ConnectedSkillSource, CustomSkill } from "../ai/skills/catalog";
 import type { NetsuiteMcpToolSettings } from "../netsuite/mcp-tool-settings";
 import type { AppUsage } from "../usage";
 
@@ -43,6 +47,14 @@ export const chat = pgTable("Chat", {
     .default(false),
   /** Per-chat AI provider override; null uses Settings default / legacy */
   aiProviderId: varchar("aiProviderId", { length: 64 }),
+  /** Per-chat persona; null means Ava */
+  personaId: varchar("personaId", { length: 64 }),
+  /** When personaId is persona-builder, the custom id being refined (null = create). */
+  refiningPersonaId: varchar("refiningPersonaId", { length: 64 }),
+  /** Denormalized interview coverage for builder chats. */
+  personaInterview: jsonb(
+    "personaInterview",
+  ).$type<PersonaInterviewState | null>(),
 });
 
 export type Chat = InferSelectModel<typeof chat>;
@@ -165,6 +177,20 @@ export const userSettings = pgTable("UserSettings", {
     .default(sql`'[]'::jsonb`),
   customSkills: jsonb("customSkills")
     .$type<CustomSkill[]>()
+    .notNull()
+    .default(sql`'[]'::jsonb`),
+  /** User-connected public GitHub skill packs (slash-invoked) */
+  connectedSkillSources: jsonb("connectedSkillSources")
+    .$type<ConnectedSkillSource[]>()
+    .notNull()
+    .default(sql`'[]'::jsonb`),
+  /** Default persona for new chats when hidePersonaPicker is true; null = Ava */
+  defaultPersonaId: varchar("defaultPersonaId", { length: 64 }),
+  /** Skip new-chat persona modal; requires defaultPersonaId when true */
+  hidePersonaPicker: boolean("hidePersonaPicker").notNull().default(false),
+  /** User-authored personas */
+  customPersonas: jsonb("customPersonas")
+    .$type<CustomPersona[]>()
     .notNull()
     .default(sql`'[]'::jsonb`),
   createdAt: timestamp("createdAt").notNull(),

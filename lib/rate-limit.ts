@@ -69,3 +69,41 @@ export async function allowChatBurst(userId: string): Promise<boolean> {
     return true;
   }
 }
+
+/**
+ * Fixed 60s window burst limit for login/register attempts (per email).
+ * Returns true when the attempt is allowed.
+ * Disabled when AUTH_ATTEMPT_LIMIT_PER_MINUTE is unset/0, or Redis is unavailable
+ * (fail-open so self-host without Redis still works).
+ */
+export async function allowAuthAttempt(email: string): Promise<boolean> {
+  const limit = envPositiveInt("AUTH_ATTEMPT_LIMIT_PER_MINUTE", 0);
+  if (limit <= 0) {
+    return true;
+  }
+
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) {
+    return true;
+  }
+
+  const client = await getClient();
+  if (!client) {
+    return true;
+  }
+
+  const key = `ratelimit:auth:burst:${normalized}`;
+  try {
+    const count = await client.incr(key);
+    if (count === 1) {
+      await client.expire(key, 60);
+    }
+    return count <= limit;
+  } catch (error) {
+    console.warn(
+      "[RateLimit] auth check failed:",
+      error instanceof Error ? error.message : String(error),
+    );
+    return true;
+  }
+}
