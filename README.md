@@ -165,6 +165,13 @@ Self-host defaults are generous. Override with env vars if needed:
 | `MAX_MESSAGES_PER_DAY_GUEST` | `20` | Guest messages / 24h |
 | `CHAT_BURST_LIMIT_PER_MINUTE` | unset / `0` (off) | Redis burst cap; fail-open if Redis is down |
 
+## Contributors
+
+- [Caleb Moore](https://github.com/devszilla)
+- [Steven Scheppelman](https://github.com/scheppsr77)
+
+Third-party libraries and templates are listed in [ATTRIBUTION.md](ATTRIBUTION.md).
+
 ## License & notices
 
 **Free:** your organization may self-host for its own internal use. **Paid:** commercial delivery, paid implementation, or paid support of this product — only via [Unstacked Apps](https://www.unstackedapps.com/) (`support@unstackedapps.com`). Third parties may not charge to implement or commercially support this codebase.
