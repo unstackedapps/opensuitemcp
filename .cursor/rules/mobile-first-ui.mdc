@@ -1,0 +1,39 @@
+---
+description: Mobile-first UI for settings, dialogs, and lists — smaller type, stacked layouts, nested add dialogs
+globs: "**/*.{tsx,jsx}"
+alwaysApply: true
+---
+
+# Mobile-first UI
+
+Design for ~320–390px first, then `sm:` / `md:`. Do not assume a desktop row will fit on a phone.
+
+## Type and controls
+
+- On `max-sm`, prefer `text-xs` / `text-[11px]` over `text-sm` / `text-base`. Nested dialogs, sheets, and the mobile sidebar must get the same scale (they portal outside the settings panel).
+- Inputs, selects, and textareas: compact on mobile (`h-8`, `text-sm`). Do not use `text-base` on fields just to dodge iOS zoom if it makes settings look oversized.
+- If a field has a leading icon, set explicit `pl-*` **and** `md:pl-*` so `md:px-*` on `Input` cannot cover the placeholder.
+
+## Layout
+
+- Stack before clustering. One primary action row; extra actions wrap or sit on the next line.
+- Flex children that wrap text need `min-w-0`. Long URLs/IDs: `break-all` or `wrap-break-word`.
+- Do not put copy and a button in one `justify-between` row on mobile if the button will collide with the text — stack (`flex-col` → `sm:flex-row`).
+- Filter-heavy headers (search + multiple selects) should collapse on mobile so the list remains visible.
+- Dialogs must fit `100dvh` minus the floating close control. Pin footer actions (`shrink-0`); scroll the body (`min-h-0 flex-1 overflow-y-auto`). Never use a body `max-h-[70vh]` that plus header/footer overflows the screen.
+
+## Add operations
+
+- **Always** open a nested dialog for add flows (providers, accounts, personas, skills). Do not inline add forms into the parent list.
+
+```tsx
+// ❌ BAD — add form in the list
+{showAdd && <AddAccountForm />}
+
+// ✅ GOOD — nested dialog, Cancel/Save in the footer
+<Dialog open={showAdd} onOpenChange={setShowAdd}>
+  <DialogContent className="flex max-h-[calc(100dvh-5.5rem)] flex-col p-0">
+    …
+  </DialogContent>
+</Dialog>
+```

@@ -326,6 +326,9 @@ export function writeSkillPack(
   destDir: string,
   skills: Array<{ localId: string; markdown: string }>,
 ): number {
+  if (skills.length === 0) {
+    throw new Error("Refusing to write an empty skill pack");
+  }
   mkdirSync(destDir, { recursive: true });
   const seen = new Set<string>();
   let wrote = 0;

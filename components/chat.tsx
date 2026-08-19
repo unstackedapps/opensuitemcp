@@ -2,7 +2,7 @@
 
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import { unstable_serialize } from "swr/infinite";
@@ -14,6 +14,7 @@ import {
 import {
   draftFromAssistantMessages,
   PersonaSaveDialog,
+  type PersonaSaveDraft,
 } from "@/components/persona-save-dialog";
 import { useAppPortal } from "@/components/portal/context";
 import {
@@ -28,6 +29,10 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useAutoResume } from "@/hooks/use-auto-resume";
 import { useChatVisibility } from "@/hooks/use-chat-visibility";
+import {
+  extractPersonaPlaybookDraft,
+  interviewTranscriptFromMessages,
+} from "@/lib/ai/personas/draft";
 import {
   AVA_PERSONA_ID,
   CLIENT_BUILTIN_PERSONAS,
@@ -47,7 +52,10 @@ import { fetcher, fetchWithErrorHandlers, generateUUID } from "@/lib/utils";
 import { InfoIcon } from "./icons";
 import { Messages } from "./messages";
 import { MultimodalInput } from "./multimodal-input";
-import { getChatHistoryPaginationKey } from "./sidebar-history";
+import {
+  type ChatHistory,
+  getChatHistoryPaginationKey,
+} from "./sidebar-history";
 import { toast } from "./toast";
 import { Button } from "./ui/button";
 import { Card, CardContent } from "./ui/card";
@@ -124,6 +132,7 @@ export function Chat({
 
   const { mutate } = useSWRConfig();
   const { open: portalOpen } = useAppPortal();
+  const router = useRouter();
 
   const [input, setInput] = useState<string>("");
   const [usage, setUsage] = useState<AppUsage | undefined>(initialLastContext);
@@ -146,7 +155,14 @@ export function Chat({
   );
   /** Re-open picker after a persona was already chosen (empty chat only). */
   const [isChangingPersona, setIsChangingPersona] = useState(false);
+  const [startingInterview, setStartingInterview] = useState(false);
   const [showPersonaSave, setShowPersonaSave] = useState(false);
+  const [isDraftingPersona, setIsDraftingPersona] = useState(false);
+  const [personaDraftError, setPersonaDraftError] = useState<string | null>(
+    null,
+  );
+  const [personaSaveDraftOverride, setPersonaSaveDraftOverride] =
+    useState<PersonaSaveDraft | null>(null);
   const [personaLabelOverride, setPersonaLabelOverride] = useState<
     string | null
   >(() => {
@@ -172,6 +188,7 @@ export function Chat({
   const aiProviderIdRef = useRef(aiProviderId);
   const personaIdRef = useRef(personaId);
   const errorOccurredRef = useRef(false);
+  const startingInterviewRef = useRef(false);
 
   // Update refs when values change (these are used inside transport callbacks)
   useEffect(() => {
@@ -255,6 +272,11 @@ export function Chat({
         });
         return;
       }
+      if (startingInterviewRef.current) {
+        return;
+      }
+      startingInterviewRef.current = true;
+      setStartingInterview(true);
       void (async () => {
         try {
           const response = await fetch("/api/chat/persona-builder/start", {
@@ -273,6 +295,8 @@ export function Chat({
           writeSessionPersonaId(id, PERSONA_BUILDER_ID);
           window.location.href = `/chat/${data.id ?? id}`;
         } catch (error) {
+          startingInterviewRef.current = false;
+          setStartingInterview(false);
           toast({
             type: "error",
             description:
@@ -340,32 +364,12 @@ export function Chat({
 
   const isPersonaBuilder = personaId === PERSONA_BUILDER_ID;
 
-  const handleCancelInterview = () => {
-    void (async () => {
-      try {
-        const response = await fetch(`/api/chat/${id}/persona-cancel`, {
-          method: "POST",
-        });
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          throw new Error(
-            typeof payload.error === "string"
-              ? payload.error
-              : "Failed to cancel interview",
-          );
-        }
-        window.location.reload();
-      } catch (error) {
-        toast({
-          type: "error",
-          description:
-            error instanceof Error
-              ? error.message
-              : "Failed to cancel interview",
-        });
-      }
-    })();
-  };
+  useEffect(() => {
+    if (!isPersonaBuilder) {
+      return;
+    }
+    router.prefetch("/");
+  }, [isPersonaBuilder, router]);
 
   const visibilityTypeRef = useRef(visibilityType);
   useEffect(() => {
@@ -566,8 +570,8 @@ export function Chat({
   const canChangePersona = !isReadonly && messages.length === 0 && personaReady;
 
   const personaSaveDraft = useMemo(
-    () => draftFromAssistantMessages(messages),
-    [messages],
+    () => personaSaveDraftOverride ?? draftFromAssistantMessages(messages),
+    [messages, personaSaveDraftOverride],
   );
 
   useEffect(() => {
@@ -786,6 +790,90 @@ export function Chat({
     };
   }, [setMessages]);
 
+  const handleCancelInterview = () => {
+    if (status === "streaming" || status === "submitted") {
+      stop();
+    }
+
+    const chatId = id;
+    void mutate(
+      unstable_serialize(getChatHistoryPaginationKey),
+      (pages: ChatHistory[] | undefined) =>
+        pages?.map((page) => ({
+          ...page,
+          chats: page.chats.filter((chat) => chat.id !== chatId),
+        })),
+      { revalidate: false },
+    );
+    void fetch(`/api/chat/${chatId}/persona-cancel`, {
+      method: "POST",
+      keepalive: true,
+    });
+    router.replace("/");
+  };
+
+  const handleSavePersona = () => {
+    if (isDraftingPersona) {
+      return;
+    }
+    setPersonaDraftError(null);
+    setShowPersonaSave(true);
+    const existing =
+      personaSaveDraftOverride ?? extractPersonaPlaybookDraft(messages);
+    if (existing) {
+      setPersonaSaveDraftOverride(existing);
+      return;
+    }
+    setIsDraftingPersona(true);
+    void (async () => {
+      try {
+        const response = await fetch(`/api/chat/${id}/persona-draft`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            selectedChatModel: currentModelId,
+            transcript: interviewTranscriptFromMessages(messages),
+          }),
+        });
+        const payload = (await response.json().catch(() => ({}))) as {
+          error?: string;
+          name?: string;
+          shortName?: string;
+          primaryRole?: string;
+          content?: string;
+        };
+        if (!response.ok) {
+          throw new Error(
+            typeof payload.error === "string"
+              ? payload.error
+              : "Failed to draft persona playbook",
+          );
+        }
+        if (
+          typeof payload.name !== "string" ||
+          typeof payload.shortName !== "string" ||
+          typeof payload.content !== "string"
+        ) {
+          throw new Error("Failed to draft persona playbook");
+        }
+        setPersonaSaveDraftOverride({
+          name: payload.name,
+          shortName: payload.shortName,
+          primaryRole: payload.primaryRole,
+          content: payload.content,
+        });
+      } catch (error) {
+        setPersonaDraftError(
+          error instanceof Error
+            ? error.message
+            : "Failed to draft persona playbook",
+        );
+      } finally {
+        setIsDraftingPersona(false);
+      }
+    })();
+  };
+
   return (
     <>
       <div className="overscroll-behavior-contain flex h-dvh min-w-0 touch-pan-y flex-col bg-background">
@@ -821,13 +909,8 @@ export function Chat({
                   isPersonaBuilder ? handleCancelInterview : undefined
                 }
                 onModelChange={setCurrentModelId}
-                onSavePersona={
-                  isPersonaBuilder
-                    ? () => {
-                        setShowPersonaSave(true);
-                      }
-                    : undefined
-                }
+                onSavePersona={isPersonaBuilder ? handleSavePersona : undefined}
+                isDraftingPersona={isDraftingPersona}
                 personaName={personaDisplayName}
                 selectedModelId={currentModelId}
                 selectedVisibilityType={visibilityType}
@@ -962,13 +1045,8 @@ export function Chat({
                   isPersonaBuilder ? handleCancelInterview : undefined
                 }
                 onModelChange={setCurrentModelId}
-                onSavePersona={
-                  isPersonaBuilder
-                    ? () => {
-                        setShowPersonaSave(true);
-                      }
-                    : undefined
-                }
+                onSavePersona={isPersonaBuilder ? handleSavePersona : undefined}
+                isDraftingPersona={isDraftingPersona}
                 personaName={personaDisplayName}
                 selectedModelId={currentModelId}
                 selectedVisibilityType={visibilityType}
@@ -999,14 +1077,23 @@ export function Chat({
           }
           personas={pickerPersonas}
           showCreateOwn={!isGuestUser}
+          startingInterview={startingInterview}
         />
       ) : null}
 
       {isPersonaBuilder && !isReadonly ? (
         <PersonaSaveDialog
           chatId={id}
+          draftError={personaDraftError}
+          drafting={isDraftingPersona}
           initial={personaSaveDraft}
-          onOpenChange={setShowPersonaSave}
+          onOpenChange={(open) => {
+            setShowPersonaSave(open);
+            if (!open) {
+              setPersonaDraftError(null);
+            }
+          }}
+          onRetryDraft={handleSavePersona}
           onSaved={(payload) => {
             setPersonaId(payload.personaId);
             const label = payload.name?.trim() || payload.shortName?.trim();

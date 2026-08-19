@@ -1,5 +1,6 @@
 "use client";
 
+import { Loader2 } from "lucide-react";
 import { useId, useMemo, useState } from "react";
 import { PersonaDetailsLink } from "@/components/persona-details-dialog";
 import {
@@ -29,16 +30,20 @@ type PersonaPickerDialogProps = {
   showCreateOwn?: boolean;
   /** When true, Escape / outside click closes without choosing. */
   dismissible?: boolean;
+  /** True while a Create my own interview chat is being set up. */
+  startingInterview?: boolean;
   onSelect: (personaId: string, doNotShowAgain: boolean) => void;
   onDismiss?: () => void;
 };
 
 function PersonaOptionButton({
   persona,
+  disabled = false,
   onSelect,
   onDetailsOpenChange,
 }: {
   persona: PersonaListItem;
+  disabled?: boolean;
   onSelect: () => void;
   onDetailsOpenChange?: (open: boolean) => void;
 }) {
@@ -46,7 +51,9 @@ function PersonaOptionButton({
     <div
       className={cn(
         "flex h-full flex-col gap-2 rounded-lg border p-3 transition-colors",
-        "hover:border-primary hover:bg-primary/5",
+        disabled
+          ? "pointer-events-none opacity-60"
+          : "hover:border-primary hover:bg-primary/5",
       )}
     >
       <button
@@ -56,6 +63,7 @@ function PersonaOptionButton({
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         )}
         data-testid={`persona-option-${persona.id}`}
+        disabled={disabled}
         onClick={onSelect}
         role="option"
         type="button"
@@ -86,6 +94,7 @@ export function PersonaPickerDialog({
   personas,
   showCreateOwn = false,
   dismissible = false,
+  startingInterview = false,
   onSelect,
   onDismiss,
 }: PersonaPickerDialogProps) {
@@ -110,6 +119,9 @@ export function PersonaPickerDialog({
     <Dialog
       open={open}
       onOpenChange={(nextOpen) => {
+        if (startingInterview) {
+          return;
+        }
         if (!nextOpen && dismissible && !detailsOpen) {
           onDismiss?.();
         }
@@ -118,13 +130,15 @@ export function PersonaPickerDialog({
       <DialogContent
         className="flex h-[min(85vh,36rem)] w-[calc(100vw-1.5rem)] max-w-2xl flex-col gap-4 overflow-hidden sm:max-w-2xl"
         data-testid="persona-picker"
+        showCloseButton={dismissible && !startingInterview}
+        aria-busy={startingInterview}
         onEscapeKeyDown={(event) => {
-          if (!dismissible || detailsOpen) {
+          if (!dismissible || detailsOpen || startingInterview) {
             event.preventDefault();
           }
         }}
         onInteractOutside={(event) => {
-          if (!dismissible || detailsOpen) {
+          if (!dismissible || detailsOpen || startingInterview) {
             event.preventDefault();
           }
         }}
@@ -157,6 +171,7 @@ export function PersonaPickerDialog({
             >
               {builtinPersonas.map((persona) => (
                 <PersonaOptionButton
+                  disabled={startingInterview}
                   key={persona.id}
                   onDetailsOpenChange={setDetailsOpen}
                   onSelect={() => {
@@ -180,6 +195,7 @@ export function PersonaPickerDialog({
               >
                 {customPersonas.map((persona) => (
                   <PersonaOptionButton
+                    disabled={startingInterview}
                     key={persona.id}
                     onDetailsOpenChange={setDetailsOpen}
                     onSelect={() => {
@@ -197,22 +213,41 @@ export function PersonaPickerDialog({
 
             {showCreateOwn ? (
               <button
+                aria-busy={startingInterview}
                 aria-label="Create my own persona with an interview"
                 className={cn(
                   "flex w-full flex-col items-start gap-1 rounded-lg border border-dashed p-3 text-left transition-colors",
-                  "hover:border-primary hover:bg-primary/5",
+                  startingInterview
+                    ? "border-primary bg-primary/5"
+                    : "hover:border-primary hover:bg-primary/5",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  "disabled:cursor-wait",
                 )}
                 data-testid="persona-create-own"
+                disabled={startingInterview}
                 onClick={() => {
                   onSelect("persona-builder", false);
                 }}
                 type="button"
               >
-                <span className="font-medium text-sm">Create my own…</span>
-                <span className="text-muted-foreground text-xs">
-                  Interview · Guided questions to draft a custom persona
-                </span>
+                {startingInterview ? (
+                  <>
+                    <span className="flex items-center gap-2 font-medium text-sm">
+                      <Loader2 className="size-3.5 animate-spin" />
+                      Starting interview…
+                    </span>
+                    <span className="text-muted-foreground text-xs">
+                      Setting up a new chat
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="font-medium text-sm">Create my own…</span>
+                    <span className="text-muted-foreground text-xs">
+                      Interview · Guided questions to draft a custom persona
+                    </span>
+                  </>
+                )}
               </button>
             ) : null}
           </TabsContent>
@@ -234,13 +269,13 @@ export function PersonaPickerDialog({
               className="cursor-pointer font-normal text-sm"
               htmlFor={checkboxId}
             >
-              Do not show again (use this choice as my default)
+              Do not show again
             </Label>
           </div>
           <p className="text-muted-foreground text-xs">
             {dismissible
-              ? "Select a persona to switch, or dismiss to keep the current one."
-              : "Select a persona to continue. Sending is disabled until you choose."}
+              ? "Personas can be changed at anytime in Settings > Personas."
+              : "Select a persona to continue. Sending is disabled until you choose. Personas can be changed at anytime in Settings > Personas."}
           </p>
         </div>
       </DialogContent>

@@ -6,8 +6,10 @@ import {
   Loader2,
   Pencil,
   Plus,
+  RefreshCw,
   Sparkles,
   Trash2,
+  Unplug,
   Upload,
 } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
@@ -433,6 +435,9 @@ export function SkillsPanel({ active }: SkillsPanelProps) {
   const [refreshingSourceId, setRefreshingSourceId] = useState<string | null>(
     null,
   );
+  const [refreshingPack, setRefreshingPack] = useState<
+    "oracle" | "community" | null
+  >(null);
   const [disconnectingSourceId, setDisconnectingSourceId] = useState<
     string | null
   >(null);
@@ -704,6 +709,43 @@ export function SkillsPanel({ active }: SkillsPanelProps) {
     }
   };
 
+  const handleRefreshPack = async (pack: "oracle" | "community") => {
+    setRefreshingPack(pack);
+    try {
+      const response = await fetch("/api/skills/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pack }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(
+          typeof payload.error === "string"
+            ? payload.error
+            : "Failed to refresh",
+        );
+      }
+      await mutate();
+      toast({
+        type: "success",
+        description:
+          pack === "oracle"
+            ? "Oracle skills refreshed."
+            : "Community skills refreshed.",
+      });
+    } catch (refreshError) {
+      toast({
+        type: "error",
+        description:
+          refreshError instanceof Error
+            ? refreshError.message
+            : "Failed to refresh",
+      });
+    } finally {
+      setRefreshingPack(null);
+    }
+  };
+
   const handleDisconnectSource = async (sourceId: string) => {
     setDisconnectingSourceId(sourceId);
     try {
@@ -871,7 +913,7 @@ export function SkillsPanel({ active }: SkillsPanelProps) {
             ))}
             {oracleCatalog.length === 0 ? (
               <div className="py-8 text-center text-muted-foreground text-sm">
-                No Oracle skills available yet. Run pnpm skills:sync.
+                No Oracle skills yet. Use Refresh to pull the pack.
               </div>
             ) : null}
           </>
@@ -894,8 +936,7 @@ export function SkillsPanel({ active }: SkillsPanelProps) {
             ))}
             {communityCatalog.length === 0 ? (
               <div className="py-8 text-center text-muted-foreground text-sm">
-                No Community skills yet. Run pnpm skills:sync, or check the
-                community pack on GitHub.
+                No Community skills yet. Use Refresh to pull the pack.
               </div>
             ) : null}
           </>
@@ -920,7 +961,7 @@ export function SkillsPanel({ active }: SkillsPanelProps) {
                     </Button>
                     <Button
                       aria-label={`Delete ${skill.name}`}
-                      className="size-7 text-muted-foreground hover:text-destructive"
+                      className="size-7 text-muted-foreground hover:text-red-500 dark:hover:text-red-400"
                       onClick={() => void handleDeleteCustomSkill(skill.id)}
                       size="icon"
                       type="button"
@@ -1039,35 +1080,39 @@ export function SkillsPanel({ active }: SkillsPanelProps) {
                       </button>
                       <div className="flex shrink-0 gap-1 pt-0.5">
                         <Button
+                          aria-label={`Refresh ${source.label}`}
+                          className="size-7"
                           disabled={
                             refreshingSourceId === source.id ||
                             disconnectingSourceId === source.id
                           }
                           onClick={() => void handleRefreshSource(source.id)}
-                          size="sm"
+                          size="icon"
                           type="button"
-                          variant="outline"
+                          variant="ghost"
                         >
                           {refreshingSourceId === source.id ? (
                             <Loader2 className="size-3.5 animate-spin" />
                           ) : (
-                            "Refresh"
+                            <RefreshCw className="size-3.5" />
                           )}
                         </Button>
                         <Button
+                          aria-label={`Disconnect ${source.label}`}
+                          className="size-7 text-muted-foreground hover:text-red-500 dark:hover:text-red-400"
                           disabled={
                             refreshingSourceId === source.id ||
                             disconnectingSourceId === source.id
                           }
                           onClick={() => void handleDisconnectSource(source.id)}
-                          size="sm"
+                          size="icon"
                           type="button"
                           variant="ghost"
                         >
                           {disconnectingSourceId === source.id ? (
                             <Loader2 className="size-3.5 animate-spin" />
                           ) : (
-                            "Disconnect"
+                            <Unplug className="size-3.5" />
                           )}
                         </Button>
                       </div>
@@ -1121,6 +1166,20 @@ export function SkillsPanel({ active }: SkillsPanelProps) {
           >
             <Plus className="mr-1.5 size-4" />
             Add a custom skill
+          </Button>
+        ) : activeSection === "oracle" || activeSection === "community" ? (
+          <Button
+            disabled={refreshingPack !== null}
+            onClick={() => void handleRefreshPack(activeSection)}
+            type="button"
+            variant="outline"
+          >
+            {refreshingPack === activeSection ? (
+              <Loader2 className="mr-1.5 size-4 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-1.5 size-4" />
+            )}
+            Refresh
           </Button>
         ) : (
           <span />

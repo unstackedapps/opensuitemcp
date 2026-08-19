@@ -1,16 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/app/(auth)/auth";
-import {
-  AVA_PERSONA_ID,
-  isDefaultablePersonaId,
-  isPersonaBuilderId,
-  normalizeCustomPersonas,
-} from "@/lib/ai/personas/catalog";
-import {
-  getChatById,
-  getUserSettings,
-  updateChatPersonaConversion,
-} from "@/lib/db/queries";
+import { isPersonaBuilderId } from "@/lib/ai/personas/catalog";
+import { deleteChatById, getChatById } from "@/lib/db/queries";
 import { ChatSDKError } from "@/lib/errors";
 
 export async function POST(
@@ -38,22 +29,7 @@ export async function POST(
     );
   }
 
-  const settings = await getUserSettings({ userId: session.user.id });
-  const customs = normalizeCustomPersonas(settings?.customPersonas);
-  const def = settings?.defaultPersonaId?.trim() || null;
-  let nextPersonaId: string | null = null;
-  if (def && isDefaultablePersonaId(def, customs) && def !== AVA_PERSONA_ID) {
-    nextPersonaId = def;
-  }
+  await deleteChatById({ id: chatId });
 
-  await updateChatPersonaConversion({
-    chatId,
-    personaId: nextPersonaId,
-    refiningPersonaId: null,
-    personaInterview: null,
-  });
-
-  return NextResponse.json({
-    personaId: nextPersonaId,
-  });
+  return NextResponse.json({ ok: true, id: chatId });
 }

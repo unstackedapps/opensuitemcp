@@ -16,12 +16,12 @@ export function UserMessageTextWithSkillBadges({
 
   return (
     <div className={cn("whitespace-pre-wrap", className)}>
-      {segments.map((segment, index) => {
+      {segments.map((segment) => {
         if (segment.kind === "skill") {
           return (
             <span
               className="mx-0.5 inline-flex items-center rounded-full border border-border/60 bg-background/40 px-2 py-0.5 font-medium text-xs align-middle"
-              key={`${segment.slug}-${index}`}
+              key={`skill-${segment.start}-${segment.slug}`}
             >
               /{segment.slug}
             </span>
@@ -29,7 +29,9 @@ export function UserMessageTextWithSkillBadges({
         }
 
         return (
-          <span key={`text-${index}`}>{sanitizeText(segment.value)}</span>
+          <span key={`text-${segment.start}`}>
+            {sanitizeText(segment.value)}
+          </span>
         );
       })}
     </div>

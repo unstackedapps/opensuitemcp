@@ -1220,9 +1220,10 @@ export const WarningIcon = ({ size = 16 }: { size?: number }) => {
 export const OpenSuiteMCPLogo = ({ size = 16 }: { size?: number }) => {
   return (
     <svg
+      aria-hidden="true"
+      className="inline-block size-[1.1em] shrink-0 align-[-0.18em]"
       fill="currentColor"
       height={size}
-      style={{ width: size, height: size }}
       viewBox="0 0 16 16"
       width={size}
       xmlns="http://www.w3.org/2000/svg"

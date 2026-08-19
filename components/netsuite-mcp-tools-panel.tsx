@@ -100,7 +100,7 @@ function McpToolDescription({ description }: { description: string }) {
     trimmed.includes("\n");
 
   return (
-    <div className="space-y-0.5">
+    <div className="w-full min-w-0 space-y-0.5">
       <p
         className={cn(
           "text-muted-foreground text-xs leading-relaxed",
@@ -301,10 +301,10 @@ export function NetSuiteMcpToolsPanel({
       </div>
       {sortedTools.map((tool) => (
         <div
-          className="flex items-start justify-between gap-3 rounded-md border border-border/60 px-3 py-2.5"
+          className="flex flex-col gap-2 rounded-md border border-border/60 px-3 py-2.5"
           key={tool.originalName}
         >
-          <div className="min-w-0 space-y-0.5">
+          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
               <p className="font-medium text-sm">{tool.displayName}</p>
               {tool.originalName === tool.displayName ? null : (
@@ -313,28 +313,28 @@ export function NetSuiteMcpToolsPanel({
                 </p>
               )}
             </div>
-            <McpToolDescription description={tool.description} />
-          </div>
-          <Select
-            disabled={pending}
-            onValueChange={(value) => {
-              if (value === "allowed" || value === "disabled") {
-                void handleAccessChange(tool.originalName, value);
-              }
-            }}
-            value={tool.allowed === false ? "disabled" : "allowed"}
-          >
-            <SelectTrigger
-              aria-label={`${tool.displayName} access`}
-              className="h-8 w-30 shrink-0 text-xs"
+            <Select
+              disabled={pending}
+              onValueChange={(value) => {
+                if (value === "allowed" || value === "disabled") {
+                  void handleAccessChange(tool.originalName, value);
+                }
+              }}
+              value={tool.allowed === false ? "disabled" : "allowed"}
             >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="allowed">Allowed</SelectItem>
-              <SelectItem value="disabled">Disabled</SelectItem>
-            </SelectContent>
-          </Select>
+              <SelectTrigger
+                aria-label={`${tool.displayName} access`}
+                className="h-8 w-full text-xs sm:w-30 sm:shrink-0"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="allowed">Allowed</SelectItem>
+                <SelectItem value="disabled">Disabled</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <McpToolDescription description={tool.description} />
         </div>
       ))}
     </div>

@@ -115,7 +115,7 @@ export function NetSuiteAccountSwitcher() {
   if (accounts.length === 0) {
     return (
       <Button
-        className="h-8 px-2"
+        className="h-8 px-2 focus-visible:ring-0"
         onClick={() => openPortal("netsuite")}
         type="button"
         variant="ghost"
@@ -128,7 +128,11 @@ export function NetSuiteAccountSwitcher() {
   return (
     <DropdownMenu onOpenChange={setOpen} open={open}>
       <DropdownMenuTrigger asChild>
-        <Button className="h-8 px-2" type="button" variant="ghost">
+        <Button
+          className="h-8 px-2 focus-visible:ring-0"
+          type="button"
+          variant="ghost"
+        >
           <span className="max-w-35 truncate font-medium text-xs">
             {selected ? formatNetSuiteAccountDisplay(selected) : "NetSuite"}
           </span>

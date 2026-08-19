@@ -61,7 +61,7 @@ export function AppSidebar({ user }: { user: User | undefined }) {
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
-          {!isMobile && (
+          {!isMobile && sidebarCollapsed ? (
             <SidebarMenuItem>
               <SidebarMenuButton
                 onClick={() => openPortal("chats")}
@@ -71,7 +71,7 @@ export function AppSidebar({ user }: { user: User | undefined }) {
                 <span>Chats</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
-          )}
+          ) : null}
           <SidebarMenuItem>
             <SidebarMenuButton
               data-testid="sidebar-skills-button"
@@ -107,7 +107,7 @@ export function AppSidebar({ user }: { user: User | undefined }) {
 
       {/* flex-1 spacer pins the user footer to the bottom (Claude-style) */}
       <SidebarContent className="gap-0">
-        {isMobile ? <SidebarHistory user={user} /> : null}
+        {isMobile || !sidebarCollapsed ? <SidebarHistory user={user} /> : null}
       </SidebarContent>
 
       <SidebarFooter className="mt-auto">

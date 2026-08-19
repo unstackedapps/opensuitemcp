@@ -74,6 +74,87 @@ async function fetchConnectedSlashSkills(): Promise<SlashConnectedSkill[]> {
       connectionLabel: skill.connectionLabel ?? "Connected",
     }));
 }
+
+function PersonaInterviewActions({
+  className,
+  onSavePersona,
+  onCancelInterview,
+  isDraftingPersona = false,
+}: {
+  className?: string;
+  onSavePersona?: () => void;
+  onCancelInterview?: () => void;
+  isDraftingPersona?: boolean;
+}) {
+  return (
+    <div className={cn("flex items-center gap-2", className)}>
+      <Button
+        className="h-8 min-w-0 flex-1 px-3 text-xs sm:flex-none sm:px-2"
+        disabled={isDraftingPersona}
+        onClick={onSavePersona}
+        type="button"
+        variant="default"
+      >
+        {isDraftingPersona ? "Drafting playbook…" : "Save persona"}
+      </Button>
+      <Button
+        className="h-8 min-w-0 flex-1 px-3 text-xs sm:flex-none sm:px-2"
+        onClick={onCancelInterview}
+        type="button"
+        variant="ghost"
+      >
+        Cancel interview
+      </Button>
+    </div>
+  );
+}
+
+function ComposerSideTools({
+  className,
+  onOpenPromptLibrary,
+}: {
+  className?: string;
+  onOpenPromptLibrary: () => void;
+}) {
+  const { openPortal } = useAppPortal();
+
+  return (
+    <div className={cn("flex items-center gap-0.5", className)}>
+      <NetSuiteAccountSwitcher />
+      <TooltipProvider delayDuration={300}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              aria-label="Skills"
+              className="size-8 px-2 focus-visible:ring-0"
+              onClick={() => openPortal("skills")}
+              type="button"
+              variant="ghost"
+            >
+              <Sparkles className="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Skills</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              aria-label="Prompt Library"
+              className="size-8 px-2 focus-visible:ring-0"
+              onClick={onOpenPromptLibrary}
+              type="button"
+              variant="ghost"
+            >
+              <BookOpen className="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Prompt Library</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </div>
+  );
+}
+
 function PureMultimodalInput({
   chatId,
   input,
@@ -93,6 +174,7 @@ function PureMultimodalInput({
   followSettingsDefault = false,
   personaName,
   isPersonaBuilder = false,
+  isDraftingPersona = false,
   onSavePersona,
   onCancelInterview,
 }: {
@@ -114,6 +196,7 @@ function PureMultimodalInput({
   followSettingsDefault?: boolean;
   personaName?: string;
   isPersonaBuilder?: boolean;
+  isDraftingPersona?: boolean;
   onSavePersona?: () => void;
   onCancelInterview?: () => void;
 }) {
@@ -358,161 +441,136 @@ function PureMultimodalInput({
           skills={connectedSkills}
         />
       ) : null}
-      <PromptInput
-        className="rounded-3xl border border-border bg-background p-3 shadow-xs transition-all duration-200 focus-within:border-border hover:border-muted-foreground/50"
-        onSubmit={(event) => {
-          event.preventDefault();
-          // Stop is a separate control while submitted/streaming; ignore Enter/submit then.
-          if (status === "streaming" || status === "submitted") {
-            return;
-          }
-          if (
-            slashQuery &&
-            shouldPickSlashSkillOnSubmit(slashQuery.query, slashFiltered)
-          ) {
-            const pick =
-              slashFiltered.at(slashActiveIndex) ?? slashFiltered.at(0);
-            if (pick) {
-              selectSlashSkill(pick);
+      <div className="flex flex-col gap-1">
+        {isPersonaBuilder ? (
+          <PersonaInterviewActions
+            className="px-1 sm:hidden"
+            isDraftingPersona={isDraftingPersona}
+            onCancelInterview={onCancelInterview}
+            onSavePersona={onSavePersona}
+          />
+        ) : null}
+        <PromptInput
+          className="rounded-3xl border border-border bg-background p-3 shadow-xs transition-all duration-200 focus-within:border-border hover:border-muted-foreground/50"
+          onSubmit={(event) => {
+            event.preventDefault();
+            // Stop is a separate control while submitted/streaming; ignore Enter/submit then.
+            if (status === "streaming" || status === "submitted") {
               return;
             }
-          }
-          submitForm();
-        }}
-      >
-        <div className="flex flex-row items-start gap-1 sm:gap-2">
-          <PromptInputTextarea
-            {...(mounted && { autoFocus: true })}
-            className="grow resize-none border-0! border-none! bg-transparent p-2 text-sm outline-none ring-0 [-ms-overflow-style:none] [scrollbar-width:none] placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 [&::-webkit-scrollbar]:hidden"
-            data-testid="multimodal-input"
-            disableAutoResize={true}
-            disabled={disabled}
-            maxHeight={200}
-            minHeight={44}
-            onChange={handleInput}
-            onKeyDown={(event) => {
-              if (!slashQuery || slashFiltered.length === 0) {
+            if (
+              slashQuery &&
+              shouldPickSlashSkillOnSubmit(slashQuery.query, slashFiltered)
+            ) {
+              const pick =
+                slashFiltered.at(slashActiveIndex) ?? slashFiltered.at(0);
+              if (pick) {
+                selectSlashSkill(pick);
                 return;
               }
-              if (event.key === "ArrowDown") {
-                event.preventDefault();
-                setSlashActiveIndex(
-                  (index) => (index + 1) % slashFiltered.length,
-                );
-              } else if (event.key === "ArrowUp") {
-                event.preventDefault();
-                setSlashActiveIndex(
-                  (index) =>
-                    (index - 1 + slashFiltered.length) % slashFiltered.length,
-                );
-              } else if (event.key === "Escape") {
-                event.preventDefault();
-                if (slashQuery.start >= 0) {
-                  setInput(
-                    input.slice(0, slashQuery.start).replace(/\s+$/, ""),
-                  );
-                }
-              }
-            }}
-            placeholder={
-              disabled && !personaName
-                ? "Choose a persona to continue…"
-                : personaName
-                  ? `Ask ${personaName} anything…`
-                  : "Ask Ava anything…"
             }
-            ref={(node) => {
-              (
-                textareaRef as React.MutableRefObject<HTMLTextAreaElement | null>
-              ).current = node;
-            }}
-            rows={1}
-            value={input}
-          />{" "}
-          <Context {...contextProps} />
-        </div>{" "}
-        <PromptInputToolbar className="border-top-0! border-t-0! p-0 shadow-none dark:border-0 dark:border-transparent!">
-          <PromptInputTools className="gap-0 sm:gap-0.5">
-            {isPersonaBuilder ? (
-              <>
-                <Button
-                  className="h-8 px-2 text-xs"
-                  onClick={onSavePersona}
-                  type="button"
-                  variant="default"
-                >
-                  Save persona
-                </Button>
-                <Button
-                  className="h-8 px-2 text-xs"
-                  onClick={onCancelInterview}
-                  type="button"
-                  variant="ghost"
-                >
-                  Cancel interview
-                </Button>
-              </>
-            ) : null}
-            <ComposerModelMenu
-              aiProviderId={aiProviderId}
-              chatId={chatId}
-              followSettingsDefault={followSettingsDefault}
-              onAiProviderChange={onAiProviderChange}
-              onModelChange={onModelChange}
-              selectedModelId={selectedModelId}
-            />
-            <NetSuiteAccountSwitcher />
-            <TooltipProvider delayDuration={300}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    aria-label="Skills"
-                    className="size-8 px-2"
-                    onClick={() => openPortal("skills")}
-                    type="button"
-                    variant="ghost"
-                  >
-                    <Sparkles className="size-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Skills</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    aria-label="Prompt Library"
-                    className="size-8 px-2"
-                    onClick={openPromptLibrary}
-                    type="button"
-                    variant="ghost"
-                  >
-                    <BookOpen className="size-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Prompt Library</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </PromptInputTools>
+            submitForm();
+          }}
+        >
+          <div className="flex flex-row items-start gap-1 sm:gap-2">
+            <PromptInputTextarea
+              {...(mounted && { autoFocus: true })}
+              className="grow resize-none border-0! border-none! bg-transparent p-2 text-sm outline-none ring-0 [-ms-overflow-style:none] [scrollbar-width:none] placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 [&::-webkit-scrollbar]:hidden"
+              data-testid="multimodal-input"
+              disableAutoResize={true}
+              disabled={disabled}
+              maxHeight={200}
+              minHeight={44}
+              onChange={handleInput}
+              onKeyDown={(event) => {
+                if (!slashQuery || slashFiltered.length === 0) {
+                  return;
+                }
+                if (event.key === "ArrowDown") {
+                  event.preventDefault();
+                  setSlashActiveIndex(
+                    (index) => (index + 1) % slashFiltered.length,
+                  );
+                } else if (event.key === "ArrowUp") {
+                  event.preventDefault();
+                  setSlashActiveIndex(
+                    (index) =>
+                      (index - 1 + slashFiltered.length) % slashFiltered.length,
+                  );
+                } else if (event.key === "Escape") {
+                  event.preventDefault();
+                  if (slashQuery.start >= 0) {
+                    setInput(
+                      input.slice(0, slashQuery.start).replace(/\s+$/, ""),
+                    );
+                  }
+                }
+              }}
+              placeholder={
+                disabled && !personaName
+                  ? "Choose a persona to continue…"
+                  : personaName
+                    ? `Ask ${personaName} anything…`
+                    : "Ask Ava anything…"
+              }
+              ref={(node) => {
+                (
+                  textareaRef as React.MutableRefObject<HTMLTextAreaElement | null>
+                ).current = node;
+              }}
+              rows={1}
+              value={input}
+            />{" "}
+            <Context {...contextProps} />
+          </div>{" "}
+          <PromptInputToolbar className="border-top-0! border-t-0! p-0 shadow-none dark:border-0 dark:border-transparent!">
+            <PromptInputTools className="min-w-0 gap-0 sm:gap-0.5">
+              {isPersonaBuilder ? (
+                <PersonaInterviewActions
+                  className="hidden sm:flex"
+                  isDraftingPersona={isDraftingPersona}
+                  onCancelInterview={onCancelInterview}
+                  onSavePersona={onSavePersona}
+                />
+              ) : null}
+              <ComposerModelMenu
+                aiProviderId={aiProviderId}
+                chatId={chatId}
+                followSettingsDefault={followSettingsDefault}
+                onAiProviderChange={onAiProviderChange}
+                onModelChange={onModelChange}
+                selectedModelId={selectedModelId}
+              />
+              <ComposerSideTools
+                className="hidden sm:flex"
+                onOpenPromptLibrary={openPromptLibrary}
+              />
+            </PromptInputTools>
 
-          <div className="flex items-center gap-2">
-            {(status === "submitted" || status === "streaming") && (
-              <Spinner className="text-muted-foreground" />
-            )}
-            {status === "submitted" || status === "streaming" ? (
-              <StopButton setMessages={setMessages} stop={stop} />
-            ) : (
-              <PromptInputSubmit
-                className="size-8 rounded-full bg-primary text-primary-foreground transition-colors duration-200 hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground"
-                data-testid="send-button"
-                disabled={disabled || !input.trim()}
-                status={status}
-              >
-                <ArrowUpIcon size={14} />
-              </PromptInputSubmit>
-            )}
-          </div>
-        </PromptInputToolbar>
-      </PromptInput>
+            <div className="flex items-center justify-end gap-2">
+              {(status === "submitted" || status === "streaming") && (
+                <Spinner className="text-muted-foreground" />
+              )}
+              {status === "submitted" || status === "streaming" ? (
+                <StopButton setMessages={setMessages} stop={stop} />
+              ) : (
+                <PromptInputSubmit
+                  className="size-8 rounded-full bg-primary text-primary-foreground transition-colors duration-200 hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground"
+                  data-testid="send-button"
+                  disabled={disabled || !input.trim()}
+                  status={status}
+                >
+                  <ArrowUpIcon size={14} />
+                </PromptInputSubmit>
+              )}
+            </div>
+          </PromptInputToolbar>
+        </PromptInput>
+        <ComposerSideTools
+          className="px-1 sm:hidden"
+          onOpenPromptLibrary={openPromptLibrary}
+        />
+      </div>
     </div>
   );
 }
@@ -545,6 +603,9 @@ export const MultimodalInput = memo(
       return false;
     }
     if (prevProps.isPersonaBuilder !== nextProps.isPersonaBuilder) {
+      return false;
+    }
+    if (prevProps.isDraftingPersona !== nextProps.isDraftingPersona) {
       return false;
     }
 

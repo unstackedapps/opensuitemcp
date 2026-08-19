@@ -12,7 +12,6 @@ import type { Vote } from "@/lib/db/schema";
 import type { ChatMessage } from "@/lib/types";
 import { cn, sanitizeText } from "@/lib/utils";
 import { McpAppHost, type McpAppLaunch } from "./mcp-app-host";
-import { UserMessageTextWithSkillBadges } from "./user-message-text-with-skill-badges";
 import { MessageActions } from "./message-actions";
 import { MessageEditor } from "./message-editor";
 import { MessageContent } from "./message-elements/message";
@@ -25,6 +24,7 @@ import { ReadWebpageToolOutput } from "./tool-outputs/read-webpage-tool-output";
 import { WebSearchToolOutput } from "./tool-outputs/web-search-tool-output";
 import { Button } from "./ui/button";
 import { Card, CardContent } from "./ui/card";
+import { UserMessageTextWithSkillBadges } from "./user-message-text-with-skill-badges";
 
 type SetMessagesFn = (
   messages: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[]),

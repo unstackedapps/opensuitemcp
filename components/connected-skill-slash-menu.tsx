@@ -1,11 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import {
-  findSlashSkillTokens,
-  stripResolvedSkillTokens,
-  type SlashTokenMatch,
-} from "@/lib/ai/skills/slash-tokens";
+import { findSlashSkillTokens } from "@/lib/ai/skills/slash-tokens";
 import { cn } from "@/lib/utils";
 
 export type SlashConnectedSkill = {
@@ -78,9 +74,6 @@ export function insertSlashSkillToken(
     ? `${head}/${skill.slug} ${after}`
     : `${head}/${skill.slug} `;
 }
-
-export type { SlashTokenMatch };
-export { findSlashSkillTokens, stripResolvedSkillTokens };
 
 export type ResolveSlashSkillsResult =
   | {

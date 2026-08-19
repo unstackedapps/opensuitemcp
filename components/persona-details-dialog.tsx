@@ -10,6 +10,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  dialogChromeButtonClassName,
 } from "@/components/ui/dialog";
 
 export type PersonaDetailsTarget = {
@@ -85,6 +86,30 @@ export function PersonaDetailsDialog({
     };
   }, [content, open, persona.id]);
 
+  const copyPersonaDetails = () => {
+    if (!content) {
+      return;
+    }
+    void navigator.clipboard.writeText(content).then(
+      () => {
+        setCopied(true);
+        toast({
+          type: "success",
+          description: "Copied to clipboard!",
+        });
+        window.setTimeout(() => {
+          setCopied(false);
+        }, 1500);
+      },
+      () => {
+        toast({
+          type: "error",
+          description: "Copy to clipboard is not supported",
+        });
+      },
+    );
+  };
+
   return (
     <Dialog
       onOpenChange={(nextOpen) => {
@@ -98,56 +123,37 @@ export function PersonaDetailsDialog({
       <DialogContent
         className="flex max-h-[min(85vh,40rem)] w-[calc(100vw-1.5rem)] max-w-2xl flex-col gap-3 overflow-hidden sm:max-w-2xl"
         data-testid="persona-details-dialog"
+        headerActions={
+          <button
+            aria-label={
+              copied ? "Copied persona details" : "Copy persona details"
+            }
+            className={dialogChromeButtonClassName}
+            disabled={!content}
+            onClick={copyPersonaDetails}
+            type="button"
+          >
+            {copied ? (
+              <Check className="size-4" />
+            ) : (
+              <Copy className="size-4" />
+            )}
+          </button>
+        }
       >
-        <DialogHeader className="shrink-0 pr-8">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0 space-y-1.5">
-              <DialogTitle>{persona.name}</DialogTitle>
-              <DialogDescription>
-                {persona.shortName}
-                {persona.primaryRole ? ` · ${persona.primaryRole}` : ""}
-              </DialogDescription>
-            </div>
-            <Button
-              aria-label="Copy persona details"
-              className="size-8 shrink-0"
-              disabled={!content || isLoadingContent}
-              onClick={() => {
-                if (!content) {
-                  return;
-                }
-                void navigator.clipboard.writeText(content).then(
-                  () => {
-                    setCopied(true);
-                    toast({
-                      type: "success",
-                      description: "Copied to clipboard!",
-                    });
-                    window.setTimeout(() => {
-                      setCopied(false);
-                    }, 1500);
-                  },
-                  () => {
-                    toast({
-                      type: "error",
-                      description: "Copy to clipboard is not supported",
-                    });
-                  },
-                );
-              }}
-              size="icon"
-              type="button"
-              variant="ghost"
-            >
-              {copied ? (
-                <Check className="size-4" />
-              ) : (
-                <Copy className="size-4" />
-              )}
-            </Button>
-          </div>
+        <DialogHeader className="shrink-0">
+          <DialogTitle>{persona.name}</DialogTitle>
+          <DialogDescription>
+            {persona.shortName}
+            {persona.primaryRole ? ` · ${persona.primaryRole}` : ""}
+          </DialogDescription>
         </DialogHeader>
         <div className="min-h-0 flex-1 overflow-y-auto rounded-md border bg-muted/20">
+          {content !== null && !isLoadingContent ? (
+            <pre className="whitespace-pre-wrap wrap-break-word p-3 font-mono text-[11px] text-muted-foreground leading-relaxed">
+              {content}
+            </pre>
+          ) : null}
           {isLoadingContent ? (
             <div className="flex items-center gap-2 px-3 py-4 text-muted-foreground text-xs">
               <Loader2 className="size-3.5 animate-spin" />
@@ -156,11 +162,6 @@ export function PersonaDetailsDialog({
           ) : null}
           {contentError ? (
             <p className="px-3 py-4 text-destructive text-xs">{contentError}</p>
-          ) : null}
-          {content !== null && !isLoadingContent ? (
-            <pre className="whitespace-pre-wrap wrap-break-word px-3 py-3 font-mono text-[11px] text-muted-foreground leading-relaxed">
-              {content}
-            </pre>
           ) : null}
         </div>
       </DialogContent>

@@ -108,7 +108,7 @@ export function AppPortal({ user }: { user: User | undefined }) {
         open={open}
       >
         <DialogContent
-          className="flex h-[min(85vh,42rem)] w-[calc(100vw-1.5rem)] max-w-4xl flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl"
+          className="flex h-[min(82vh,42rem)] w-[min(56rem,calc(100vw-1.5rem))] max-w-4xl flex-col gap-0 overflow-hidden p-0"
           data-testid="app-portal"
           onInteractOutside={(event) => {
             event.preventDefault();
@@ -161,8 +161,8 @@ export function AppPortal({ user }: { user: User | undefined }) {
               })}
             </nav>
 
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-              <div className="flex gap-1.5 overflow-x-auto border-border/60 border-b px-4 py-3 sm:hidden">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col max-sm:[&_.text-sm]:text-xs! max-sm:[&_.text-xs]:text-[11px]!">
+              <div className="flex gap-1.5 overflow-x-auto border-border/60 border-b px-3 py-2 sm:hidden">
                 {visibleNav.map((item) => (
                   <button
                     className={cn(

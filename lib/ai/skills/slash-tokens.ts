@@ -46,8 +46,8 @@ export function stripResolvedSkillTokens(
 }
 
 export type SlashTokenTextSegment =
-  | { kind: "text"; value: string }
-  | { kind: "skill"; slug: string };
+  | { kind: "text"; value: string; start: number }
+  | { kind: "skill"; slug: string; start: number };
 
 /** Split message text into plain text and slash skill tokens for inline badge rendering. */
 export function splitTextOnSlashSkillTokens(
@@ -56,7 +56,7 @@ export function splitTextOnSlashSkillTokens(
 ): SlashTokenTextSegment[] {
   const tokens = findSlashSkillTokens(text);
   if (tokens.length === 0) {
-    return [{ kind: "text", value: text }];
+    return [{ kind: "text", value: text, start: 0 }];
   }
 
   const segments: SlashTokenTextSegment[] = [];
@@ -68,20 +68,30 @@ export function splitTextOnSlashSkillTokens(
       !badgeSlugs || badgeSlugs.size === 0 || badgeSlugs.has(slugKey);
 
     if (token.start > cursor) {
-      segments.push({ kind: "text", value: text.slice(cursor, token.start) });
+      segments.push({
+        kind: "text",
+        value: text.slice(cursor, token.start),
+        start: cursor,
+      });
     }
 
     if (shouldBadge) {
-      segments.push({ kind: "skill", slug: token.slug });
+      segments.push({ kind: "skill", slug: token.slug, start: token.start });
     } else {
-      segments.push({ kind: "text", value: text.slice(token.start, token.end) });
+      segments.push({
+        kind: "text",
+        value: text.slice(token.start, token.end),
+        start: token.start,
+      });
     }
     cursor = token.end;
   }
 
   if (cursor < text.length) {
-    segments.push({ kind: "text", value: text.slice(cursor) });
+    segments.push({ kind: "text", value: text.slice(cursor), start: cursor });
   }
 
-  return segments.length > 0 ? segments : [{ kind: "text", value: text }];
+  return segments.length > 0
+    ? segments
+    : [{ kind: "text", value: text, start: 0 }];
 }

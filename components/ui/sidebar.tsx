@@ -37,8 +37,8 @@ import { cn } from "@/lib/utils";
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state";
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
-// Desktop expanded width: short icon+label rail (chats live in a modal now).
-const SIDEBAR_WIDTH = "12rem";
+// Desktop expanded width: room for chat titles + persona labels.
+const SIDEBAR_WIDTH = "16rem";
 // Mobile sheet still needs room for the inline chat history list.
 const SIDEBAR_WIDTH_MOBILE = "16rem";
 const SIDEBAR_WIDTH_ICON = "3rem";
@@ -216,7 +216,7 @@ const Sidebar = forwardRef<
       return (
         <Sheet onOpenChange={setOpenMobile} open={openMobile} {...props}>
           <SheetContent
-            className="w-(--sidebar-width) bg-sidebar p-0 text-sidebar-foreground [&::-webkit-scrollbar]:hidden [&>button]:hidden"
+            className="w-(--sidebar-width) bg-sidebar p-0 text-sidebar-foreground [&::-webkit-scrollbar]:hidden [&>button]:hidden [&_.text-sm]:text-xs! [&_.text-xs]:text-[11px]! [&_[data-sidebar=menu-button]]:text-xs"
             data-mobile="true"
             data-sidebar="sidebar"
             side={side}

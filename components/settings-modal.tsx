@@ -68,7 +68,7 @@ function PortalPanelHeader({
   docsLinks,
 }: PortalPanelHeaderProps) {
   return (
-    <div className="flex shrink-0 items-start justify-between gap-3 border-border/60 border-b py-3 pl-4 pr-8 sm:pl-5 sm:pr-9">
+    <div className="flex shrink-0 items-start justify-between gap-3 border-border/60 border-b px-4 py-2.5 sm:px-5 sm:py-3">
       <div className="min-w-0 space-y-1">
         <p className="flex items-center gap-1.5 font-medium text-sm">
           <Icon className="size-3.5 text-muted-foreground" />
@@ -1248,7 +1248,7 @@ export function SettingsPanel({ active, section }: SettingsPanelProps) {
         ) : null}
       </div>
 
-      <DialogFooter className="shrink-0 gap-2 border-t border-border/60 py-3 pl-4 pr-8 sm:justify-end sm:pl-5 sm:pr-9">
+      <DialogFooter className="shrink-0 gap-2 border-t border-border/60 px-4 py-3 sm:justify-end sm:px-5">
         {section === "netsuite" ? (
           <Button onClick={() => closePortal()} type="button">
             Close

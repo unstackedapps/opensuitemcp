@@ -42,7 +42,7 @@ function PureChatHeader({
     mounted && windowWidth !== undefined ? windowWidth < 768 : false;
 
   const personaBadgeClassName = cn(
-    "order-3 truncate rounded-md border px-2 py-1 text-muted-foreground text-xs md:order-3",
+    "order-3 truncate rounded-md border px-2 py-1 text-muted-foreground text-xs",
     onPersonaClick
       ? "inline-flex cursor-pointer transition-colors hover:border-primary hover:bg-primary/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       : "hidden md:inline-flex",
@@ -60,7 +60,7 @@ function PureChatHeader({
         />
       )}
 
-      <div className="pointer-events-none order-2 flex h-8 select-none flex-row items-center justify-center gap-0 rounded-md text-xl md:order-3">
+      <div className="pointer-events-none order-2 hidden h-8 select-none flex-row items-center justify-center gap-0 rounded-md text-xl md:flex">
         <span
           className="font-light"
           style={{ fontFamily: "var(--font-raleway)" }}
@@ -99,8 +99,9 @@ function PureChatHeader({
         {/* Desktop New Chat lives in the sidebar rail; header + only when the
             mobile sheet is closed and that control isn't visible. */}
         {isMobile ? (
-          <Button asChild className="h-8 px-2" variant="outline">
+          <Button asChild className="size-8 px-0" variant="outline">
             <Link
+              aria-label="New Chat"
               href="/"
               onClick={(event) => {
                 if (
@@ -116,7 +117,7 @@ function PureChatHeader({
               }}
             >
               <PlusIcon />
-              <span className="md:sr-only">New Chat</span>
+              <span className="sr-only">New Chat</span>
             </Link>
           </Button>
         ) : null}

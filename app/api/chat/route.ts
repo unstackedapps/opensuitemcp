@@ -449,11 +449,13 @@ export async function POST(request: Request) {
                 const invokedConnectedSkills = listConnectedCatalogSkills(
                   session.user.id,
                   skillSettings.connectedSkillSources,
-                ).filter((skill) => invokedConnectedSkillIds.includes(skill.id));
+                ).filter((skill) =>
+                  invokedConnectedSkillIds.includes(skill.id),
+                );
                 invokedConnectedSkillSlugs = new Set(
-                  invokedConnectedSkills.map((skill) =>
-                    skill.slug?.toLowerCase() ?? "",
-                  ).filter(Boolean),
+                  invokedConnectedSkills
+                    .map((skill) => skill.slug?.toLowerCase() ?? "")
+                    .filter(Boolean),
                 );
                 if (invokedConnectedSkills.length > 0) {
                   const fallbackNames = invokedConnectedSkills
