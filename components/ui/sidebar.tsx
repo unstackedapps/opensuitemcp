@@ -216,7 +216,7 @@ const Sidebar = forwardRef<
       return (
         <Sheet onOpenChange={setOpenMobile} open={openMobile} {...props}>
           <SheetContent
-            className="w-(--sidebar-width) bg-sidebar p-0 text-sidebar-foreground [&::-webkit-scrollbar]:hidden [&>button]:hidden [&_.text-sm]:text-xs! [&_.text-xs]:text-[11px]! [&_[data-sidebar=menu-button]]:text-xs"
+            className="w-(--sidebar-width) bg-sidebar p-0 text-sidebar-foreground [&::-webkit-scrollbar]:hidden [&>button]:hidden [&_.text-sm]:text-xs! [&_.text-xs]:text-[11px]! **:data-[sidebar=menu-button]:text-xs"
             data-mobile="true"
             data-sidebar="sidebar"
             side={side}
