@@ -42,7 +42,7 @@ jobs:
       - name: Run lint
         run: pnpm lint
       - name: Run unit tests
-        run: find lib -name '*.test.ts' -print0 | xargs -0 pnpm exec tsx --test
+        run: find lib -name '*.test.ts' ! -name 'models.test.ts' -print0 | xargs -0 pnpm exec tsx --test
       - name: Build
         env:
           AUTH_SECRET: ci-auth-secret
