@@ -106,12 +106,66 @@ Resolve conflicts on `develop`, not on public `main`.
 
 ## Promoting to public
 
-When `develop` is tested and ready:
+**Do not merge all of `develop` into public `main`.** `develop` contains WIP-only files that must stay private.
 
-1. Confirm CI is green on `develop`
-2. Confirm smoke checks passed on target environments (local, bare metal, AWS, GCP as applicable)
-3. Open a PR: **`opensuitemcp-wip` `develop` → `opensuitemcp` `main`**
-4. Include CHANGELOG / version updates if releasing
+### WIP-only files (never promote)
+
+These exist on `develop` only and should **not** appear in the public repo:
+
+- `docs/getting-started.md` (this file)
+- `.github/workflows/ci.yml`
+- `.github/workflows/e2e.yml`
+- WIP-specific changes in `.github/workflows/lint.yml` (if public differs)
+- `scripts/smoke-dev.sh`
+
+Product code, public README, CHANGELOG, and shared workflows **do** get promoted.
+
+### How to promote (recommended)
+
+Promote **product commits only**, not the whole `develop` branch.
+
+```bash
+git fetch public
+git fetch origin
+
+# Branch from public main
+git checkout -b promote/v4.x.x public/main
+
+# Cherry-pick only the product commits from develop (not WIP setup commits)
+git cherry-pick <commit-sha-1> <commit-sha-2>
+
+git push -u origin promote/v4.x.x
+```
+
+Open a PR: **`promote/v4.x.x` → `opensuitemcp` `main`** (cross-repo or push branch to public fork).
+
+Before merging, confirm the PR **does not** include any WIP-only paths listed above.
+
+Alternative: open a PR from `develop`, then **remove WIP-only files in that PR** before merge. Cherry-picking is usually cleaner.
+
+### After public merge — sync wip
+
+Keep wip `main` mirroring public, and keep WIP-only files on `develop`:
+
+```bash
+git checkout main
+git merge public/main
+git push origin main
+
+git checkout develop
+git merge public/main
+git push origin develop
+```
+
+`develop` keeps this doc and WIP CI; public (and wip `main`) stay clean.
+
+### Release checklist
+
+1. CI green on `develop`
+2. Smoke checks passed (local, bare metal, AWS, GCP as applicable)
+3. Promotion PR contains **product changes only**
+4. CHANGELOG / version updated in the promotion PR
+5. After merge: sync wip `main` and `develop` from public (see above)
 
 That promotion PR is the only step that changes the public repo.
 
