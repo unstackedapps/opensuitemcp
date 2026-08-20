@@ -71,7 +71,7 @@ Open a pull request in the **wip repo**:
 
 **`feature/short-description` → `develop`**
 
-After merge, GitHub Actions runs lint, unit tests, build, and e2e on `develop`.
+After merge, GitHub Actions runs lint, unit tests, and build on `develop`. (E2E is disabled in CI until Postgres/Redis services are wired up — run `pnpm test` locally when needed.)
 
 ## Before opening a PR
 
@@ -114,7 +114,7 @@ These exist on `develop` only and should **not** appear in the public repo:
 
 - `docs/getting-started.md` (this file)
 - `.github/workflows/ci.yml`
-- `.github/workflows/e2e.yml`
+- `.github/workflows/e2e.yml.disabled`
 - WIP-specific changes in `.github/workflows/lint.yml` (if public differs)
 - `scripts/smoke-dev.sh`
 

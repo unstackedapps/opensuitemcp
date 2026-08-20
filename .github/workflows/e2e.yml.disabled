@@ -1,3 +1,5 @@
+# Disabled: needs CI Postgres/Redis (or repo secrets pointing at hosted services).
+# Rename to e2e.yml to re-enable. Run locally with `pnpm test` after `pnpm setup:backend`.
 name: E2E
 
 on:
