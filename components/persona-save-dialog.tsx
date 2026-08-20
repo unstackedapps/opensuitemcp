@@ -330,7 +330,7 @@ export function draftFromAssistantMessages(
     parts?: Array<{
       type: string;
       text?: string;
-      input?: Record<string, unknown>;
+      input?: unknown;
       output?: unknown;
     }>;
   }>,

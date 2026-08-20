@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [4.1.0] - 2026-08-19
+
+### ✨ Added
+
+- **Personas** — Six built-in NetSuite specialists (`.personas/`), persona picker, header badge, Personas panel, and interview builder for custom personas
+- **Community skills** — Shared pack from [opensuitemcp-community-skills](https://github.com/unstackedapps/opensuitemcp-community-skills); synced via `pnpm skills:sync` into `COMMUNITY_SKILLS_DIR`
+- **Connected skills** — Paste a public GitHub repo/folder URL; invoke with `/skill-name` in the composer; per-user cache under `.data/connected-skills/<userId>/…`
+- **Slash skill badges** — `/skill` tokens stay visible in the user bubble; stripped only when sending to the model
+- **MCP tools cache** — Durable per-account tool catalog on disk with background refresh
+
+### 🐛 Fixed
+
+- **Persona draft types** — production TypeScript build for persona interview save flow
+- **Skills pack sync gate** — `DISABLE_SKILLS_PACK_SYNC` and `lib/product-features.ts` hide Oracle/Community Refresh when pack sync is operator-managed (hosted overlay sets this off)
+
+### 📦 Database
+
+- Migrations `0011_personas`, `0012_persona_interview`, `0013_connected_skill_sources`
+
+---
+
 ## [4.0.2] - 2026-08-15
 
 ### 🐛 Fixed

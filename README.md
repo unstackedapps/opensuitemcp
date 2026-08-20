@@ -10,20 +10,27 @@ Bring your own LLM keys (**Google Gemini**, **Anthropic Claude**, or **OpenAI GP
 
 **Star this repo** if it helps your NetSuite team — it makes the project discoverable.
 
-**Current release:** [v4.0.2](https://github.com/unstackedapps/opensuitemcp/releases/tag/v4.0.2) · [Changelog](CHANGELOG.md)
+**Current release:** [v4.1.0](https://github.com/unstackedapps/opensuitemcp/releases/tag/v4.1.0) · [Changelog](CHANGELOG.md)
 
 <img src="./docs/screenshot-chat.png" alt="OpenSuiteMCP chat UI" width="100%" />
 
 _Main chat UI._
 
-## What’s in 4.0
+## What’s in 4.1
 
-- **App Portal** — Chats, Skills, Prompts, AI Provider, NetSuite, Web Search, Timezone, and Account in one panel
+- **Personas** — Six built-in NetSuite specialists (admin, SuiteQL analyst, controller, SuiteScript dev, auditor, inventory analyst) plus custom personas via the interview builder
+- **SuiteCloud Agent Skills** — Oracle + Community packs, custom `SKILL.md`, and Connected GitHub packs (slash-invoked with inline badges)
+- **App Portal** — Chats, Personas, Skills, Prompts, AI Provider, NetSuite, Web Search, Timezone, and Account in one panel
 - **Multiple AI providers** — named Google / Anthropic / OpenAI (or a custom OpenAI-compatible endpoint) keys; Speed / Reasoning per chat
-- **SuiteCloud Agent Skills** — Oracle + Community packs, custom `SKILL.md`, and Connected GitHub packs (slash-invoked)
 - **Companion Prompt Library** — Browse, fill placeholders, send into chat
 - **NetSuite MCP** — Multiple connected accounts, per-account tools, encrypted OAuth tokens
 - **BYOLLM** — Your API keys; no shared multi-tenant model account in this app
+
+## Personas
+
+Open **Personas** from the App Portal or the header badge on a new chat. Pick a built-in specialist or **Create my own…** to run the interview builder (guided chat that drafts a custom persona playbook).
+
+Built-in personas ship in `.personas/*.md` in this repo. Custom personas are stored per user in Postgres.
 
 ## Skills
 
@@ -138,7 +145,8 @@ _NetSuite MCP tools in a conversation._
 
    - **AI Provider** — Choose Google / Anthropic / OpenAI and enter your API key (stored encrypted)
    - **NetSuite** — Add an account ID, complete Integration / DCR setup, connect
-   - **Skills** — Enable Oracle and/or custom skills for new messages
+   - **Personas** — Pick a built-in specialist or create a custom persona
+   - **Skills** — Enable Oracle, Community, and/or custom skills; connect GitHub packs for `/` slash skills
    - **Prompts** — Browse Companion templates when NetSuite + Companion are available
 
 ## NetSuite setup (short)

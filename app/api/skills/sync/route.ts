@@ -7,6 +7,7 @@ import {
 } from "@/lib/ai/skills/catalog";
 import { syncCommunitySkills } from "@/lib/ai/skills/sync-community";
 import { syncOracleSkills } from "@/lib/ai/skills/sync-oracle";
+import { skillsPackSyncEnabled } from "@/lib/product-features";
 
 const bodySchema = z.object({
   pack: z.enum(["oracle", "community"]),
@@ -21,6 +22,16 @@ export async function POST(request: Request) {
   if (session.user.type !== "regular") {
     return NextResponse.json(
       { error: "Sign in to refresh skill packs." },
+      { status: 403 },
+    );
+  }
+
+  if (!skillsPackSyncEnabled) {
+    return NextResponse.json(
+      {
+        error:
+          "Skill pack refresh is disabled on this instance. Packs are synced by the operator.",
+      },
       { status: 403 },
     );
   }

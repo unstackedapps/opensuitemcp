@@ -23,6 +23,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { PUBLIC_DOCS_ORIGIN } from "@/lib/constants";
+import { skillsPackSyncEnabled } from "@/lib/product-features";
 import { cn } from "@/lib/utils";
 import { toast } from "./toast";
 
@@ -913,7 +914,10 @@ export function SkillsPanel({ active }: SkillsPanelProps) {
             ))}
             {oracleCatalog.length === 0 ? (
               <div className="py-8 text-center text-muted-foreground text-sm">
-                No Oracle skills yet. Use Refresh to pull the pack.
+                No Oracle skills yet.
+                {skillsPackSyncEnabled
+                  ? " Use Refresh to pull the pack."
+                  : " Contact the operator if the pack is missing."}
               </div>
             ) : null}
           </>
@@ -936,7 +940,10 @@ export function SkillsPanel({ active }: SkillsPanelProps) {
             ))}
             {communityCatalog.length === 0 ? (
               <div className="py-8 text-center text-muted-foreground text-sm">
-                No Community skills yet. Use Refresh to pull the pack.
+                No Community skills yet.
+                {skillsPackSyncEnabled
+                  ? " Use Refresh to pull the pack."
+                  : " Contact the operator if the pack is missing."}
               </div>
             ) : null}
           </>
@@ -1168,19 +1175,23 @@ export function SkillsPanel({ active }: SkillsPanelProps) {
             Add a custom skill
           </Button>
         ) : activeSection === "oracle" || activeSection === "community" ? (
-          <Button
-            disabled={refreshingPack !== null}
-            onClick={() => void handleRefreshPack(activeSection)}
-            type="button"
-            variant="outline"
-          >
-            {refreshingPack === activeSection ? (
-              <Loader2 className="mr-1.5 size-4 animate-spin" />
-            ) : (
-              <RefreshCw className="mr-1.5 size-4" />
-            )}
-            Refresh
-          </Button>
+          skillsPackSyncEnabled ? (
+            <Button
+              disabled={refreshingPack !== null}
+              onClick={() => void handleRefreshPack(activeSection)}
+              type="button"
+              variant="outline"
+            >
+              {refreshingPack === activeSection ? (
+                <Loader2 className="mr-1.5 size-4 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-1.5 size-4" />
+              )}
+              Refresh
+            </Button>
+          ) : (
+            <span />
+          )
         ) : (
           <span />
         )}

@@ -8,7 +8,7 @@ export type PersonaPlaybookDraft = {
 type MessagePartLike = {
   type: string;
   text?: string;
-  input?: Record<string, unknown>;
+  input?: unknown;
   output?: unknown;
 };
 
@@ -75,8 +75,8 @@ function draftFromProposePart(
       }
     }
   }
-  if (part.input) {
-    return draftFromRecord(part.input);
+  if (part.input && typeof part.input === "object") {
+    return draftFromRecord(part.input as Record<string, unknown>);
   }
   return null;
 }
