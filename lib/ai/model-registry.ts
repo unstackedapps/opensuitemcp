@@ -27,11 +27,10 @@ export type ProviderMeta = {
 
 export const PROVIDER_META: ProviderMeta[] = [
   {
-    id: "openai",
-    name: "OpenAI",
-    tagline:
-      "Your OpenAI key. Speed and Reasoning modes map to current GPT models.",
-    docsUrl: "https://platform.openai.com/docs/models",
+    id: "google",
+    name: "Google",
+    tagline: "Your Gemini API key. Flash for speed, Pro for harder sessions.",
+    docsUrl: "https://ai.google.dev/gemini-api/docs/models",
   },
   {
     id: "anthropic",
@@ -41,31 +40,32 @@ export const PROVIDER_META: ProviderMeta[] = [
     docsUrl: "https://docs.anthropic.com/en/docs/about-claude/models",
   },
   {
-    id: "google",
-    name: "Google",
-    tagline: "Your Gemini API key. Flash for speed, Pro for harder sessions.",
-    docsUrl: "https://ai.google.dev/gemini-api/docs/models",
+    id: "openai",
+    name: "OpenAI",
+    tagline:
+      "Your OpenAI key. Speed and Reasoning modes map to current GPT models.",
+    docsUrl: "https://platform.openai.com/docs/models",
   },
 ];
 
 export const REGISTERED_MODELS: RegisteredModel[] = [
   {
-    provider: "openai",
+    provider: "google",
     slot: "speed",
-    apiModelId: "gpt-5.4-mini",
-    openRouterId: "openai/gpt-5.4-mini",
-    name: "GPT-5.4 Mini",
-    blurb: "Speed mode — fast, lower-cost tool calls and everyday SuiteQL.",
-    docsUrl: "https://developers.openai.com/api/docs/models/gpt-5.4-mini",
+    apiModelId: "gemini-3.5-flash",
+    openRouterId: "google/gemini-3.5-flash",
+    name: "Gemini 3.5 Flash",
+    blurb: "Speed mode — low-latency MCP calls and short answers.",
+    docsUrl: "https://ai.google.dev/gemini-api/docs/models",
   },
   {
-    provider: "openai",
+    provider: "google",
     slot: "reasoning",
-    apiModelId: "gpt-5.4",
-    openRouterId: "openai/gpt-5.4",
-    name: "GPT-5.4",
-    blurb: "Reasoning mode — multi-step agent work and harder analysis.",
-    docsUrl: "https://developers.openai.com/api/docs/models/gpt-5.4",
+    apiModelId: "gemini-3.1-pro-preview",
+    openRouterId: "google/gemini-3.1-pro-preview",
+    name: "Gemini 3.1 Pro",
+    blurb: "Reasoning mode — deeper SuiteQL / multi-tool sessions.",
+    docsUrl: "https://ai.google.dev/gemini-api/docs/models",
   },
   {
     provider: "anthropic",
@@ -86,22 +86,22 @@ export const REGISTERED_MODELS: RegisteredModel[] = [
     docsUrl: "https://docs.anthropic.com/en/docs/about-claude/models",
   },
   {
-    provider: "google",
+    provider: "openai",
     slot: "speed",
-    apiModelId: "gemini-3.5-flash",
-    openRouterId: "google/gemini-3.5-flash",
-    name: "Gemini 3.5 Flash",
-    blurb: "Speed mode — low-latency MCP calls and short answers.",
-    docsUrl: "https://ai.google.dev/gemini-api/docs/models",
+    apiModelId: "gpt-5.4-mini",
+    openRouterId: "openai/gpt-5.4-mini",
+    name: "GPT-5.4 Mini",
+    blurb: "Speed mode — fast, lower-cost tool calls and everyday SuiteQL.",
+    docsUrl: "https://developers.openai.com/api/docs/models/gpt-5.4-mini",
   },
   {
-    provider: "google",
+    provider: "openai",
     slot: "reasoning",
-    apiModelId: "gemini-3.1-pro-preview",
-    openRouterId: "google/gemini-3.1-pro-preview",
-    name: "Gemini 3.1 Pro",
-    blurb: "Reasoning mode — deeper SuiteQL / multi-tool sessions.",
-    docsUrl: "https://ai.google.dev/gemini-api/docs/models",
+    apiModelId: "gpt-5.4",
+    openRouterId: "openai/gpt-5.4",
+    name: "GPT-5.4",
+    blurb: "Reasoning mode — multi-step agent work and harder analysis.",
+    docsUrl: "https://developers.openai.com/api/docs/models/gpt-5.4",
   },
 ];
 

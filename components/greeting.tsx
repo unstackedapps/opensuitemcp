@@ -16,7 +16,7 @@ export const Greeting = ({ children }: { children?: ReactNode }) => {
 
   return (
     <div
-      className="mx-auto flex w-full max-w-3xl flex-col items-center px-0 md:px-4"
+      className="mx-auto flex w-full max-w-chat flex-col items-center px-0 md:px-4"
       key="overview"
     >
       <motion.div

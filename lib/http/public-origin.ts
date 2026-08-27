@@ -33,7 +33,27 @@ export function getPublicAppOrigin(request?: Request): string {
   return "http://localhost:3000";
 }
 
+/** Same-origin relative path only. Rejects protocol-relative values like `//evil.com`. */
+export function isSafeAppPath(
+  value: string | null | undefined,
+): value is string {
+  return Boolean(value?.startsWith("/") && !value.startsWith("//"));
+}
+
+export function sanitizeReturnTo(
+  value: string | null | undefined,
+  fallback = "/",
+): string {
+  return isSafeAppPath(value) ? value : fallback;
+}
+
 export function publicAppUrl(path: string, request?: Request): URL {
-  const normalized = path.startsWith("/") ? path : `/${path}`;
-  return new URL(normalized, `${getPublicAppOrigin(request)}/`);
+  const origin = `${getPublicAppOrigin(request)}/`;
+  if (isSafeAppPath(path)) {
+    return new URL(path, origin);
+  }
+  if (path.startsWith("/")) {
+    return new URL("/", origin);
+  }
+  return new URL(`/${path}`, origin);
 }

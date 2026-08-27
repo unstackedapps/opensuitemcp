@@ -128,7 +128,7 @@ export function PersonaPickerDialog({
       }}
     >
       <DialogContent
-        className="flex h-[min(85vh,36rem)] w-[calc(100vw-1.5rem)] max-w-2xl flex-col gap-4 overflow-hidden sm:max-w-2xl"
+        className="flex h-[min(85vh,36rem)] w-[calc(100vw-1.5rem)] max-w-2xl flex-col gap-4 overflow-hidden lg:max-w-4xl"
         data-testid="persona-picker"
         showCloseButton={dismissible && !startingInterview}
         aria-busy={startingInterview}
@@ -152,6 +152,30 @@ export function PersonaPickerDialog({
               ? "Pick a different specialist for this chat. You can change your default later in Settings."
               : "This chat will use the specialist you pick. You can change your default later in Settings."}
           </DialogDescription>
+          <div className="space-y-1.5 pt-3 text-left">
+            <div className="flex items-center gap-2">
+              <input
+                checked={doNotShowAgain}
+                className="size-4 shrink-0 rounded border"
+                data-testid="persona-do-not-show-again"
+                disabled={startingInterview}
+                id={checkboxId}
+                onChange={(event) => {
+                  setDoNotShowAgain(event.target.checked);
+                }}
+                type="checkbox"
+              />
+              <Label
+                className="cursor-pointer font-normal text-xs sm:text-sm"
+                htmlFor={checkboxId}
+              >
+                Do not show again
+              </Label>
+            </div>
+            <p className="text-[11px] text-muted-foreground sm:text-xs">
+              Personas can be changed at anytime in Settings → Personas.
+            </p>
+          </div>
         </DialogHeader>
 
         <Tabs className="flex min-h-0 flex-1 flex-col" defaultValue="builtin">
@@ -166,7 +190,7 @@ export function PersonaPickerDialog({
           >
             <div
               aria-label="Built-in personas"
-              className="grid gap-2 sm:grid-cols-2"
+              className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3"
               role="listbox"
             >
               {builtinPersonas.map((persona) => (
@@ -190,7 +214,7 @@ export function PersonaPickerDialog({
             {customPersonas.length > 0 ? (
               <div
                 aria-label="Custom personas"
-                className="grid gap-2 sm:grid-cols-2"
+                className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3"
                 role="listbox"
               >
                 {customPersonas.map((persona) => (
@@ -252,32 +276,6 @@ export function PersonaPickerDialog({
             ) : null}
           </TabsContent>
         </Tabs>
-
-        <div className="shrink-0 space-y-2 border-t pt-3">
-          <div className="flex items-center gap-2">
-            <input
-              checked={doNotShowAgain}
-              className="size-4 rounded border"
-              data-testid="persona-do-not-show-again"
-              id={checkboxId}
-              onChange={(event) => {
-                setDoNotShowAgain(event.target.checked);
-              }}
-              type="checkbox"
-            />
-            <Label
-              className="cursor-pointer font-normal text-sm"
-              htmlFor={checkboxId}
-            >
-              Do not show again
-            </Label>
-          </div>
-          <p className="text-muted-foreground text-xs">
-            {dismissible
-              ? "Personas can be changed at anytime in Settings > Personas."
-              : "Select a persona to continue. Sending is disabled until you choose. Personas can be changed at anytime in Settings > Personas."}
-          </p>
-        </div>
       </DialogContent>
     </Dialog>
   );

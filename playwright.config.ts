@@ -8,6 +8,7 @@ import { config } from "dotenv";
 
 config({
   path: ".env.local",
+  override: true,
 });
 
 /* Use process.env.PORT by default and fallback to port 3000 */

@@ -13,6 +13,9 @@ export const metadata: Metadata = {
   title: "OpenSuiteMCP",
   description:
     "OpenSuiteMCP NetSuite AI Assistant, powered by Gemini, Claude, and GPT",
+  icons: {
+    icon: "/icon.svg",
+  },
 };
 
 export const viewport = {

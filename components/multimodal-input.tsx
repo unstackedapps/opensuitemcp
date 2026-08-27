@@ -1,7 +1,7 @@
 "use client";
 
 import type { UseChatHelpers } from "@ai-sdk/react";
-import { BookOpen, Sparkles } from "lucide-react";
+import { Blocks, BookOpen } from "lucide-react";
 import {
   type Dispatch,
   memo,
@@ -15,6 +15,7 @@ import {
 import useSWR from "swr";
 import { useWindowSize } from "usehooks-ts";
 import { ComposerModelMenu } from "@/components/composer-model-menu";
+import { ComposerWebSearchMenu } from "@/components/composer-web-search-menu";
 import {
   ConnectedSkillSlashMenu,
   filterSlashSkills,
@@ -61,11 +62,21 @@ async function fetchConnectedSlashSkills(): Promise<SlashConnectedSkill[]> {
       name: string;
       description: string;
       slug?: string;
+      sourceId?: string;
       connectionLabel?: string;
     }>;
+    disabledOrgConnectedSkillSourceIds?: string[];
   };
+  const disabledSourceIds = new Set(
+    payload.disabledOrgConnectedSkillSourceIds ?? [],
+  );
   return (payload.connectedSkills ?? [])
-    .filter((skill) => typeof skill.slug === "string" && skill.slug.length > 0)
+    .filter(
+      (skill) =>
+        typeof skill.slug === "string" &&
+        skill.slug.length > 0 &&
+        (!skill.sourceId || !disabledSourceIds.has(skill.sourceId)),
+    )
     .map((skill) => ({
       id: skill.id,
       name: skill.name,
@@ -122,6 +133,7 @@ function ComposerSideTools({
     <div className={cn("flex items-center gap-0.5", className)}>
       <NetSuiteAccountSwitcher />
       <TooltipProvider delayDuration={300}>
+        <ComposerWebSearchMenu />
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -131,7 +143,7 @@ function ComposerSideTools({
               type="button"
               variant="ghost"
             >
-              <Sparkles className="size-4" />
+              <Blocks className="size-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Skills</TooltipContent>

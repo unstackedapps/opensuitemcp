@@ -9,6 +9,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.0.0] - 2026-08-27
+
+### ✨ Added
+
+- **Organization admin** — `OSMCP_INSTALL_MODE=org|solo`, `/setup` org bootstrap, Admin area for owners/admins (users, LLM providers, NetSuite MCP/OIDC, skills, search, personas)
+- **Post-install onboarding** — Solo and org setup wizards with required MCP + LLM steps and optional OIDC, search, and custom skills
+- **NetSuite OIDC app login** — Separate OAuth integration and callback from MCP; multi-account OIDC picker, per-account **Test connection**, and redirect URI copy fields
+- **Per-account MCP connect** — DCR probe, integration setup card, and OAuth connect per NetSuite connection in settings, onboarding, and admin
+- **Node bootstrap orchestrator** — `pnpm bootstrap:local` and `pnpm reset:backend` via `docker/scripts/local-orchestrator.ts` for cross-platform dev setup
+- **Org policy overlays** — Central org defaults for LLM, MCP accounts, skills, and search with per-user overrides where allowed
+- **User tags** — Org admin can tag users for filtering and assignment
+- **Docs** — [NetSuite OIDC login](docs/netsuite-oidc-login.md) and [org admin upgrade](docs/org-admin-upgrade.md) for existing installs
+
+### Changed
+
+- **Setup backend TUI** — Organization vs solo prompt; NetSuite OIDC client ID masked as password input
+- **Login and setup branding** — Larger OpenSuiteMCP logo on auth pages
+- **LLM provider settings** — Stop auto-listing unconfigured provider seed rows in settings
+- **Onboarding step nav** — Display-only progress rail; optional steps use **Skip for now**
+
+### 🐛 Fixed
+
+- **OAuth returnTo** — Block protocol-relative open redirects (`//evil.com`)
+- **Org skills and search** — Respect org-disabled resources; sync org policies when a user has no saved settings yet
+- **NetSuite callbacks** — JWT org lookup, skills scope, and callback URL handling for org installs
+- **Skills sync and solo auth** — Harden community/oracle sync and local bootstrap reliability
+- **SearXNG** — Disable wikidata engine that caused search failures in local Docker
+
+### 💥 Breaking
+
+- **Database** — run `pnpm db:migrate` (`0014`–`0023`: org admin tables, onboarding state, user OIDC links, org OIDC verification, user tags, connected-skill prefs)
+- **Fresh installs** — `pnpm setup:backend` requires choosing **organization** or **solo** install mode (`OSMCP_INSTALL_MODE`, `OSMCP_ROOT_EMAIL` for org)
+- **Existing installs** — designate an org owner after migrate; see [docs/org-admin-upgrade.md](docs/org-admin-upgrade.md)
+
+### 🧰 Technical
+
+- **`package.json` version** aligned to `5.0.0` (tags remain source of truth for releases)
+
+---
+
 ## [4.1.0] - 2026-08-19
 
 ### ✨ Added
@@ -573,6 +613,8 @@ First stable release of OpenSuiteMCP - an open source, production-ready NetSuite
 
 ---
 
+[5.0.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.0.0
+[4.1.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v4.1.0
 [3.0.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v3.0.0
 [2.6.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v2.6.0
 [2.5.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v2.5.0

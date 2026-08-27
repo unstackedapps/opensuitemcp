@@ -7,6 +7,10 @@ import {
 } from "@/lib/ai/skills/catalog";
 import { syncCommunitySkills } from "@/lib/ai/skills/sync-community";
 import { syncOracleSkills } from "@/lib/ai/skills/sync-oracle";
+import {
+  formatSkillSyncError,
+  withSkillSyncRetry,
+} from "@/lib/ai/skills/sync-with-retry";
 import { skillsPackSyncEnabled } from "@/lib/product-features";
 
 const bodySchema = z.object({
@@ -48,9 +52,9 @@ export async function POST(request: Request) {
 
   try {
     if (body.pack === "oracle") {
-      await syncOracleSkills();
+      await withSkillSyncRetry("Oracle sync", syncOracleSkills);
     } else {
-      await syncCommunitySkills();
+      await withSkillSyncRetry("Community sync", syncCommunitySkills);
     }
 
     return NextResponse.json({
@@ -61,8 +65,9 @@ export async function POST(request: Request) {
           : listCommunityCatalogSkills(),
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Failed to refresh skills";
-    return NextResponse.json({ error: message }, { status: 400 });
+    return NextResponse.json(
+      { error: formatSkillSyncError(error) },
+      { status: 400 },
+    );
   }
 }

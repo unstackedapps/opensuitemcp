@@ -1,8 +1,10 @@
 import path from "node:path";
-import { listSkillMdFiles, writeSkillPack } from "./github-sync";
+import { listPublicSkillMdFiles } from "./github-public-sync";
+import { writeSkillPack } from "./github-sync";
 
 const COMMUNITY_REPO_OWNER = "unstackedapps";
 const COMMUNITY_REPO_NAME = "opensuitemcp-community-skills";
+const COMMUNITY_REPO_REF = "main";
 const COMMUNITY_SKILLS_PATH = "skills";
 
 /**
@@ -23,11 +25,13 @@ export function getCommunitySkillsDir(): string {
  */
 export async function syncCommunitySkills(): Promise<boolean> {
   const skillsDir = getCommunitySkillsDir();
-  const { skills } = await listSkillMdFiles({
+  const { skills } = await listPublicSkillMdFiles({
     owner: COMMUNITY_REPO_OWNER,
     repo: COMMUNITY_REPO_NAME,
+    ref: COMMUNITY_REPO_REF,
     path: COMMUNITY_SKILLS_PATH,
     maxSkills: 200,
+    skipDirNames: ["in-progress"],
   });
 
   // Deduplicate by leaf slug (last wins if collision across buckets)

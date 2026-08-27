@@ -33,6 +33,7 @@ import {
   providerSelectorSubtitle,
   providerTypeLabel,
   resolveDefaultProviderId,
+  sortProviderEntries,
 } from "@/lib/ai/provider-entries";
 import {
   BrainIcon,
@@ -148,9 +149,11 @@ export function ComposerModelMenu({
   const currentOption =
     options.find((option) => option.id === optimisticModelId) ?? options[0];
   const providerLabel = selectedEntry?.label ?? providerTypeLabel(hostedType);
-  const otherProviders = config.providers.filter(
-    (entry) =>
-      isProviderEntryConfigured(entry) && entry.id !== selectedEntry?.id,
+  const otherProviders = sortProviderEntries(
+    config.providers.filter(
+      (entry) =>
+        isProviderEntryConfigured(entry) && entry.id !== selectedEntry?.id,
+    ),
   );
 
   useEffect(() => {

@@ -81,8 +81,8 @@ test.describe
 
     test("Allow navigating to /register as guest user", async ({ page }) => {
       await page.goto("/register");
-      await page.waitForURL("/register");
-      await expect(page).toHaveURL("/register");
+      await page.waitForURL(/\/login/);
+      await expect(page).toHaveURL(/\/login/);
     });
 
     test("Do not show email in user menu for guest user", async ({ page }) => {

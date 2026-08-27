@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { memo, useEffect, useState } from "react";
 import { useWindowSize } from "usehooks-ts";
+import { AppReleaseChip } from "@/components/app-release-chip";
+import { useAppRelease } from "@/components/app-release-provider";
 import { NetSuiteStatusChip } from "@/components/netsuite-status-chip";
 import { SidebarToggle } from "@/components/sidebar-toggle";
 import { Button } from "@/components/ui/button";
@@ -29,6 +31,7 @@ function PureChatHeader({
   onPersonaClick?: () => void;
 }) {
   const router = useRouter();
+  const appRelease = useAppRelease();
 
   const { width: windowWidth } = useWindowSize();
   const [mounted, setMounted] = useState(false);
@@ -95,6 +98,12 @@ function PureChatHeader({
           "order-4 md:order-4",
         )}
       >
+        <AppReleaseChip
+          installMode={appRelease.installMode}
+          latestVersion={appRelease.latestVersion}
+          updateAvailable={appRelease.updateAvailable}
+          version={appRelease.version}
+        />
         {!isReadonly ? <NetSuiteStatusChip /> : null}
         {/* Desktop New Chat lives in the sidebar rail; header + only when the
             mobile sheet is closed and that control isn't visible. */}

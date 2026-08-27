@@ -16,10 +16,22 @@ chown -R searxng:searxng /etc/searxng 2>/dev/null || true
 
 # Step 3: Apply configuration modifications
 if [ -f "$SETTINGS_FILE" ]; then
-  # Enable JSON format
-  sed -i 's/- html/- html\n    - json/' "$SETTINGS_FILE"
+  # Enable JSON format (idempotent — template ships html-only)
+  if ! grep -q '^    - json$' "$SETTINGS_FILE"; then
+    sed -i 's/- html/- html\n    - json/' "$SETTINGS_FILE"
+  fi
   # Enable Bing engine
   sed -i '/- name: bing/,/- name:/ s/disabled: true/disabled: false/' "$SETTINGS_FILE"
+  # Wikidata processor is not registered in this image; enabled template breaks all searches
+  if grep -q '^  - name: wikidata$' "$SETTINGS_FILE"; then
+    if sed -n '/^  - name: wikidata$/,/^  - name: /p' "$SETTINGS_FILE" | grep -q 'disabled: true'; then
+      : # already disabled
+    elif sed -n '/^  - name: wikidata$/,/^  - name: /p' "$SETTINGS_FILE" | grep -q 'disabled: false'; then
+      sed -i '/^  - name: wikidata$/,/^  - name: / s/disabled: false/disabled: true/' "$SETTINGS_FILE"
+    else
+      sed -i '/^  - name: wikidata$/a\    disabled: true' "$SETTINGS_FILE"
+    fi
+  fi
   echo "Configuration modifications applied."
 fi
 

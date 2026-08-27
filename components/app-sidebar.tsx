@@ -1,18 +1,23 @@
 "use client";
 
 import {
+  Blocks,
+  BookOpen,
+  Cloud,
+  Globe,
   MessagesSquare,
   PanelLeft,
   Plus,
-  Settings,
   Sparkles,
-  SunMoon,
+  UserRound,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { User } from "next-auth";
-import { useTheme } from "next-themes";
-import { useAppPortal } from "@/components/portal/context";
+import {
+  type PortalSectionId,
+  useAppPortal,
+} from "@/components/portal/context";
 import { SidebarHistory } from "@/components/sidebar-history";
 import { SidebarUserNav } from "@/components/sidebar-user-nav";
 import {
@@ -25,13 +30,33 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { isOrgAdminRole } from "@/lib/org/types";
+
+const QUICK_ACTIONS: Array<{
+  id: PortalSectionId;
+  label: string;
+  icon: typeof Sparkles;
+  testId?: string;
+}> = [
+  { id: "personas", label: "Personas", icon: UserRound },
+  {
+    id: "skills",
+    label: "Skills",
+    icon: Blocks,
+    testId: "sidebar-skills-button",
+  },
+  { id: "prompts", label: "Prompts", icon: BookOpen },
+  { id: "provider", label: "AI Provider", icon: Sparkles },
+  { id: "netsuite", label: "NetSuite", icon: Cloud },
+  { id: "search", label: "Web Search", icon: Globe },
+];
 
 export function AppSidebar({ user }: { user: User | undefined }) {
   const router = useRouter();
   const { setOpenMobile, isMobile, toggleSidebar, state } = useSidebar();
-  const { setTheme, resolvedTheme } = useTheme();
   const { openPortal } = useAppPortal();
   const sidebarCollapsed = state === "collapsed";
+  const showAdminLink = isOrgAdminRole(user?.role);
 
   return (
     <Sidebar className="group-data-[side=left]:border-r-0" collapsible="icon">
@@ -72,36 +97,21 @@ export function AppSidebar({ user }: { user: User | undefined }) {
               </SidebarMenuButton>
             </SidebarMenuItem>
           ) : null}
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              data-testid="sidebar-skills-button"
-              onClick={() => openPortal("skills")}
-              tooltip="Skills"
-            >
-              <Sparkles />
-              <span>Skills</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              onClick={() =>
-                setTheme(resolvedTheme === "dark" ? "light" : "dark")
-              }
-              tooltip={resolvedTheme === "light" ? "Dark mode" : "Light mode"}
-            >
-              <SunMoon />
-              <span>Theme</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              onClick={() => openPortal("provider")}
-              tooltip="Settings"
-            >
-              <Settings />
-              <span>Settings</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
+          {QUICK_ACTIONS.map((action) => {
+            const Icon = action.icon;
+            return (
+              <SidebarMenuItem key={action.id}>
+                <SidebarMenuButton
+                  data-testid={action.testId}
+                  onClick={() => openPortal(action.id)}
+                  tooltip={action.label}
+                >
+                  <Icon />
+                  <span>{action.label}</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            );
+          })}
         </SidebarMenu>
       </SidebarHeader>
 
@@ -126,7 +136,9 @@ export function AppSidebar({ user }: { user: User | undefined }) {
             </SidebarMenuItem>
           </SidebarMenu>
         ) : null}
-        {user && <SidebarUserNav user={user} />}
+        {user ? (
+          <SidebarUserNav showAdminLink={showAdminLink} user={user} />
+        ) : null}
       </SidebarFooter>
     </Sidebar>
   );

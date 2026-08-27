@@ -79,6 +79,16 @@ export function isMcpToolAllowed(
   return !isMcpToolDisabled(settings, accountId, toolName);
 }
 
+export function isMcpToolInDisabledList(
+  disabledNames: string[],
+  toolName: string,
+): boolean {
+  if (!toolName.trim()) {
+    return false;
+  }
+  return disabledNames.includes(toolName);
+}
+
 export const MCP_TOOL_DISABLED_MESSAGE =
   "This NetSuite MCP tool is disabled in Settings.";
 
