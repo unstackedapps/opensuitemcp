@@ -352,19 +352,18 @@ export function AiProviderSettings({
 
   const visibleProviders = listVisibleProviderEntries(aiProviders);
 
-  const addButton =
-    orgManaged ? null : (
-      <Button
-        className="w-full shrink-0 sm:w-auto"
-        onClick={openAddModal}
-        size="sm"
-        type="button"
-        variant="outline"
-      >
-        <Plus className="size-4" />
-        Add Provider
-      </Button>
-    );
+  const addButton = orgManaged ? null : (
+    <Button
+      className="w-full shrink-0 sm:w-auto"
+      onClick={openAddModal}
+      size="sm"
+      type="button"
+      variant="outline"
+    >
+      <Plus className="size-4" />
+      Add Provider
+    </Button>
+  );
 
   if (showSkeletons) {
     return (

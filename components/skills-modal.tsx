@@ -12,8 +12,8 @@ import {
   Unplug,
   Upload,
 } from "lucide-react";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import { ConfirmDestructiveDialog } from "@/components/confirm-destructive-dialog";
 import { OnboardingPanelSkeleton } from "@/components/onboarding/onboarding-panel-skeleton";
@@ -1148,54 +1148,55 @@ export function SkillsPanel({
               {customSkills.map((skill) => (
                 <SkillRow
                   actions={
-                  skill.managedByOrg ? undefined : (
-                    <>
-                      <Button
-                        aria-label={`Edit ${skill.name}`}
-                        className="size-7"
-                        onClick={() => {
-                          setEditingSkill(skill);
-                          setEditorOpen(true);
-                        }}
-                        size="icon"
-                        type="button"
-                        variant="ghost"
-                      >
-                        <Pencil className="size-3.5" />
-                      </Button>
-                      <Button
-                        aria-label={`Delete ${skill.name}`}
-                        className="size-7 text-muted-foreground hover:text-red-500 dark:hover:text-red-400"
-                        onClick={() => {
-                          setPendingDestructive({
-                            confirmLabel: "Delete",
-                            description:
-                              "This permanently deletes the custom skill.",
-                            onConfirm: () => handleDeleteCustomSkill(skill.id),
-                            title: `Delete ${skill.name}?`,
-                          });
-                        }}
-                        size="icon"
-                        type="button"
-                        variant="ghost"
-                      >
-                        <Trash2 className="size-3.5" />
-                      </Button>
-                    </>
-                  )
-                }
-                author={skill.managedByOrg ? "Organization" : "You"}
-                checked={skill.enabled !== false}
-                key={skill.id}
-                name={skill.name}
-                onCheckedChange={(checked) =>
-                  void handleCustomToggle(skill.id, checked)
-                }
-                pending={pendingToggles.has(skill.id)}
-                preview={{ kind: "inline", content: skill.content }}
-                updatedAt={skill.updatedAt}
-                variant="card"
-              />
+                    skill.managedByOrg ? undefined : (
+                      <>
+                        <Button
+                          aria-label={`Edit ${skill.name}`}
+                          className="size-7"
+                          onClick={() => {
+                            setEditingSkill(skill);
+                            setEditorOpen(true);
+                          }}
+                          size="icon"
+                          type="button"
+                          variant="ghost"
+                        >
+                          <Pencil className="size-3.5" />
+                        </Button>
+                        <Button
+                          aria-label={`Delete ${skill.name}`}
+                          className="size-7 text-muted-foreground hover:text-red-500 dark:hover:text-red-400"
+                          onClick={() => {
+                            setPendingDestructive({
+                              confirmLabel: "Delete",
+                              description:
+                                "This permanently deletes the custom skill.",
+                              onConfirm: () =>
+                                handleDeleteCustomSkill(skill.id),
+                              title: `Delete ${skill.name}?`,
+                            });
+                          }}
+                          size="icon"
+                          type="button"
+                          variant="ghost"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      </>
+                    )
+                  }
+                  author={skill.managedByOrg ? "Organization" : "You"}
+                  checked={skill.enabled !== false}
+                  key={skill.id}
+                  name={skill.name}
+                  onCheckedChange={(checked) =>
+                    void handleCustomToggle(skill.id, checked)
+                  }
+                  pending={pendingToggles.has(skill.id)}
+                  preview={{ kind: "inline", content: skill.content }}
+                  updatedAt={skill.updatedAt}
+                  variant="card"
+                />
               ))}
             </div>
             {customSkills.length === 0 ? (

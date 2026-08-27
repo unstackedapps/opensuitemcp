@@ -8,6 +8,7 @@ import {
   type NetSuiteDcrProbeState,
   NetSuiteIntegrationSetupCard,
 } from "@/components/netsuite-integration-setup-card";
+import { NetSuiteMcpRedirectUriField } from "@/components/netsuite-mcp-redirect-uri-field";
 import {
   formatMcpToolsAvailableLabel,
   NetSuiteMcpToolsSection,
@@ -15,7 +16,6 @@ import {
 } from "@/components/netsuite-mcp-tools-panel";
 import { OnboardingPanelSkeleton } from "@/components/onboarding/onboarding-panel-skeleton";
 import { OnboardingStepProse } from "@/components/onboarding/onboarding-step-prose";
-import { NetSuiteMcpRedirectUriField } from "@/components/netsuite-mcp-redirect-uri-field";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -27,11 +27,11 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { getDcrProbeForAccount } from "@/hooks/use-netsuite-dcr-probes";
 import {
   formatNetSuiteAccountDisplay,
   type NetSuiteAccountEntry,
 } from "@/lib/netsuite/accounts";
-import { getDcrProbeForAccount } from "@/hooks/use-netsuite-dcr-probes";
 import { cn } from "@/lib/utils";
 
 export type { NetSuiteDcrProbeState } from "@/components/netsuite-integration-setup-card";
@@ -73,9 +73,7 @@ type NetSuiteConnectPanelProps = {
 
 const compactInputClass = "h-8 px-2.5 text-sm";
 
-function shouldShowIntegrationSetup(
-  dcrProbe: NetSuiteDcrProbeState,
-): boolean {
+function shouldShowIntegrationSetup(dcrProbe: NetSuiteDcrProbeState): boolean {
   return (
     dcrProbe.status === "probing" ||
     dcrProbe.status === "needs_integration" ||
@@ -539,7 +537,9 @@ export function NetSuiteConnectPanel({
                       type="button"
                       variant="outline"
                     >
-                      <span className="font-medium text-sm">{account.label}</span>
+                      <span className="font-medium text-sm">
+                        {account.label}
+                      </span>
                       <span className="text-muted-foreground text-xs">
                         {account.accountId}
                       </span>

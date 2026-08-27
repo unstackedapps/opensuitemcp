@@ -7,10 +7,7 @@ import { normalizeNetSuiteAccountId } from "@/lib/netsuite/accounts";
 type UseNetSuiteDcrProbesOptions = {
   enabled?: boolean;
   getAccountLabel?: (accountId: string) => string | undefined;
-  onProbeReady?: (
-    accountId: string,
-    clientId: string,
-  ) => void | Promise<void>;
+  onProbeReady?: (accountId: string, clientId: string) => void | Promise<void>;
 };
 
 export function getDcrProbeForAccount(

@@ -34,6 +34,10 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WebSearchSettings } from "@/components/web-search-settings";
 import {
+  getDcrProbeForAccount,
+  useNetSuiteDcrProbes,
+} from "@/hooks/use-netsuite-dcr-probes";
+import {
   type AiProviderConfig,
   EMPTY_AI_PROVIDER_CONFIG,
   ensureSeededProviderConfig,
@@ -53,10 +57,6 @@ import {
   normalizeNetSuiteAccountId,
 } from "@/lib/netsuite/accounts";
 import { ORACLE_DOC_LINKS } from "@/lib/netsuite/integration-checklist";
-import {
-  getDcrProbeForAccount,
-  useNetSuiteDcrProbes,
-} from "@/hooks/use-netsuite-dcr-probes";
 import { toast } from "./toast";
 
 export type SettingsPanelSection =
@@ -559,7 +559,9 @@ export function SettingsPanel({ active, section }: SettingsPanelProps) {
                     clientId: null,
                   },
                 ]);
-          const exists = base.some((account) => account.accountId === accountId);
+          const exists = base.some(
+            (account) => account.accountId === accountId,
+          );
           const next = exists
             ? base.map((account) =>
                 account.accountId === accountId

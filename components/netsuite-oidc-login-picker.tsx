@@ -61,10 +61,7 @@ export function NetSuiteOidcTestConnectionButton({
   return (
     <Button
       asChild
-      className={cn(
-        className,
-        disabled && "pointer-events-none opacity-50",
-      )}
+      className={cn(className, disabled && "pointer-events-none opacity-50")}
     >
       <a href={href}>{label}</a>
     </Button>

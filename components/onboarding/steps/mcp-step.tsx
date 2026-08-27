@@ -360,7 +360,5 @@ export function OnboardingMcpStep({
     );
   }
 
-  return (
-    <SoloOnboardingMcpPanel onRefresh={onRefresh} />
-  );
+  return <SoloOnboardingMcpPanel onRefresh={onRefresh} />;
 }
