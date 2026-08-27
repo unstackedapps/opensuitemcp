@@ -36,7 +36,7 @@ export function getPublicAppOrigin(request?: Request): string {
 /** Same-origin relative path only. Rejects protocol-relative values like `//evil.com`. */
 export function isSafeAppPath(
   value: string | null | undefined,
-): value is string {
+): value is `/${string}` {
   return Boolean(value?.startsWith("/") && !value.startsWith("//"));
 }
 
