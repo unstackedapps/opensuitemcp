@@ -11,8 +11,10 @@ import {
   useState,
 } from "react";
 import useSWR from "swr";
+import { ConfirmDestructiveDialog } from "@/components/confirm-destructive-dialog";
+import { OnboardingPanelSkeleton } from "@/components/onboarding/onboarding-panel-skeleton";
 import { PersonaDetailsLink } from "@/components/persona-details-dialog";
-import { useAppPortal } from "@/components/portal/context";
+import { useOptionalAppPortal } from "@/components/portal/context";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -24,7 +26,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -59,6 +60,8 @@ type SettingsPersonasPayload = {
 
 type PersonasPanelProps = {
   active: boolean;
+  embedded?: boolean;
+  onSettingsChange?: () => void | Promise<void>;
 };
 
 async function fetchSettingsPersonas(): Promise<SettingsPersonasPayload> {
@@ -156,8 +159,12 @@ function PersonaCard({
   );
 }
 
-export function PersonasPanel({ active }: PersonasPanelProps) {
-  const { closePortal } = useAppPortal();
+export function PersonasPanel({
+  active,
+  embedded = false,
+  onSettingsChange,
+}: PersonasPanelProps) {
+  const portal = useOptionalAppPortal();
   const { data: session } = useSession();
   const isGuest = guestRegex.test(session?.user?.email ?? "");
   const { data, error, isLoading, mutate } = useSWR(
@@ -176,6 +183,8 @@ export function PersonasPanel({ active }: PersonasPanelProps) {
   const [editContent, setEditContent] = useState("");
   const [saving, setSaving] = useState(false);
   const [startingInterview, setStartingInterview] = useState(false);
+  const [pendingDeletePersona, setPendingDeletePersona] =
+    useState<CustomPersona | null>(null);
 
   useEffect(() => {
     if (!data) {
@@ -199,6 +208,7 @@ export function PersonasPanel({ active }: PersonasPanelProps) {
       try {
         await persistPersonaSettings(payload);
         await mutate();
+        await onSettingsChange?.();
         toast({ type: "success", description: "Persona settings saved" });
       } catch (err) {
         rollback();
@@ -211,7 +221,7 @@ export function PersonasPanel({ active }: PersonasPanelProps) {
         setSaving(false);
       }
     },
-    [mutate],
+    [mutate, onSettingsChange],
   );
 
   const setDefaultPersona = useCallback(
@@ -275,17 +285,23 @@ export function PersonasPanel({ active }: PersonasPanelProps) {
     return { builtinPersonas: builtin, customListPersonas: custom };
   }, [data?.personas, isGuest]);
 
+  const personaGridClass = cn(
+    "grid gap-2 sm:grid-cols-2",
+    embedded && "lg:grid-cols-3",
+  );
+
   if (!active) {
     return null;
   }
 
-  if (isLoading) {
+  if (isLoading && !data) {
     return (
-      <div className="space-y-3 p-4">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-20 w-full" />
-        <Skeleton className="h-20 w-full" />
-      </div>
+      <OnboardingPanelSkeleton
+        className={embedded ? undefined : "p-4"}
+        headerClassName="h-8 w-48"
+        rowClassName="h-20 w-full"
+        rows={2}
+      />
     );
   }
 
@@ -303,22 +319,24 @@ export function PersonasPanel({ active }: PersonasPanelProps) {
       data-testid="personas-panel"
     >
       <div className="flex shrink-0 flex-col gap-3 border-border/60 border-b px-4 py-3 sm:px-5">
-        <div className="min-w-0 space-y-1">
-          <p className="flex items-center gap-1.5 font-medium text-sm">
-            <UserRound className="size-3.5 text-muted-foreground" />
-            Personas
-          </p>
-          <p className="text-muted-foreground text-xs leading-relaxed">
-            Specialists shape how the assistant approaches NetSuite work. Each
-            chat uses one persona. Click a card to set your default.
-          </p>
-          {isGuest ? (
-            <p className="text-muted-foreground text-xs">
-              As a guest, defaults are limited to built-in personas and stored
-              in this browser.
+        {!embedded ? (
+          <div className="min-w-0 space-y-1">
+            <p className="flex items-center gap-1.5 font-medium text-sm">
+              <UserRound className="size-3.5 text-muted-foreground" />
+              Personas
             </p>
-          ) : null}
-        </div>
+            <p className="text-muted-foreground text-xs leading-relaxed">
+              Specialists shape how the assistant approaches NetSuite work. Each
+              chat uses one persona. Click a card to set your default.
+            </p>
+            {isGuest ? (
+              <p className="text-muted-foreground text-xs">
+                As a guest, defaults are limited to built-in personas and stored
+                in this browser.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
         <div className="flex items-center justify-between gap-3">
           <Label
             className="cursor-pointer font-normal text-sm"
@@ -350,138 +368,150 @@ export function PersonasPanel({ active }: PersonasPanelProps) {
         </div>
       </div>
 
-      <Tabs
-        className="flex min-h-0 flex-1 flex-col"
-        onValueChange={setTab}
-        value={tab}
-      >
-        <div className="shrink-0 border-border/60 border-b px-4 py-3 sm:px-5">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="builtin">Built-In</TabsTrigger>
-            <TabsTrigger value="custom">Custom</TabsTrigger>
-          </TabsList>
-        </div>
-
+      {embedded ? (
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 sm:px-5">
-          <TabsContent className="mt-0" value="builtin">
-            <div
-              aria-label="Built-in personas"
-              className="grid gap-2 sm:grid-cols-2"
-              role="listbox"
-            >
-              {builtinPersonas.map((persona) => (
-                <PersonaCard
-                  disabled={saving}
-                  key={persona.id}
-                  onSelect={() => {
-                    setDefaultPersona(persona.id);
-                  }}
-                  persona={persona}
-                  selected={defaultId === persona.id}
-                />
-              ))}
-            </div>
-          </TabsContent>
+          <div
+            aria-label="Built-in personas"
+            className={personaGridClass}
+            role="listbox"
+          >
+            {builtinPersonas.map((persona) => (
+              <PersonaCard
+                disabled={saving}
+                key={persona.id}
+                onSelect={() => {
+                  setDefaultPersona(persona.id);
+                }}
+                persona={persona}
+                selected={defaultId === persona.id}
+              />
+            ))}
+          </div>
+        </div>
+      ) : (
+        <Tabs
+          className="flex min-h-0 flex-1 flex-col"
+          onValueChange={setTab}
+          value={tab}
+        >
+          <div className="shrink-0 border-border/60 border-b px-4 py-3 sm:px-5">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="builtin">Built-In</TabsTrigger>
+              <TabsTrigger value="custom">Custom</TabsTrigger>
+            </TabsList>
+          </div>
 
-          <TabsContent className="mt-0 space-y-3" value="custom">
-            {!isGuest && customPersonas.length >= 32 ? (
-              <p className="text-muted-foreground text-xs">
-                Limit reached — delete or refine an existing persona.
-              </p>
-            ) : null}
-
-            {customListPersonas.length === 0 ? (
-              <p className="text-muted-foreground text-sm">
-                {isGuest
-                  ? "Sign in to create and use custom personas."
-                  : "No custom personas yet."}
-              </p>
-            ) : (
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 sm:px-5">
+            <TabsContent className="mt-0" value="builtin">
               <div
-                aria-label="Custom personas"
-                className="grid gap-2 sm:grid-cols-2"
+                aria-label="Built-in personas"
+                className={personaGridClass}
                 role="listbox"
               >
-                {customListPersonas.map((persona) => {
-                  const custom = customPersonas.find(
-                    (p) => p.id === persona.id,
-                  );
-                  return (
-                    <PersonaCard
-                      actions={
-                        custom ? (
-                          <>
-                            {!isGuest ? (
+                {builtinPersonas.map((persona) => (
+                  <PersonaCard
+                    disabled={saving}
+                    key={persona.id}
+                    onSelect={() => {
+                      setDefaultPersona(persona.id);
+                    }}
+                    persona={persona}
+                    selected={defaultId === persona.id}
+                  />
+                ))}
+              </div>
+            </TabsContent>
+
+            <TabsContent className="mt-0 space-y-3" value="custom">
+              {!isGuest && customPersonas.length >= 32 ? (
+                <p className="text-muted-foreground text-xs">
+                  Limit reached — delete or refine an existing persona.
+                </p>
+              ) : null}
+
+              {customListPersonas.length === 0 ? (
+                <p className="text-muted-foreground text-sm">
+                  {isGuest
+                    ? "Sign in to create and use custom personas."
+                    : "No custom personas yet."}
+                </p>
+              ) : (
+                <div
+                  aria-label="Custom personas"
+                  className={personaGridClass}
+                  role="listbox"
+                >
+                  {customListPersonas.map((persona) => {
+                    const custom = customPersonas.find(
+                      (p) => p.id === persona.id,
+                    );
+                    return (
+                      <PersonaCard
+                        actions={
+                          custom ? (
+                            <>
+                              {!isGuest ? (
+                                <Button
+                                  aria-label={`Refine ${persona.name} with interview`}
+                                  className="hover:bg-foreground/10 dark:hover:bg-foreground/15"
+                                  disabled={startingInterview}
+                                  onClick={() => {
+                                    void startInterview(persona.id);
+                                  }}
+                                  size="sm"
+                                  type="button"
+                                  variant="ghost"
+                                >
+                                  Refine
+                                </Button>
+                              ) : null}
                               <Button
-                                aria-label={`Refine ${persona.name} with interview`}
+                                aria-label={`Edit ${persona.name}`}
                                 className="hover:bg-foreground/10 dark:hover:bg-foreground/15"
-                                disabled={startingInterview}
                                 onClick={() => {
-                                  void startInterview(persona.id);
+                                  setEditing(custom);
+                                  setEditName(custom.name);
+                                  setEditShortName(custom.shortName ?? "");
+                                  setEditContent(custom.content);
                                 }}
-                                size="sm"
+                                size="icon"
                                 type="button"
                                 variant="ghost"
                               >
-                                Refine
+                                <Pencil className="size-4" />
                               </Button>
-                            ) : null}
-                            <Button
-                              aria-label={`Edit ${persona.name}`}
-                              className="hover:bg-foreground/10 dark:hover:bg-foreground/15"
-                              onClick={() => {
-                                setEditing(custom);
-                                setEditName(custom.name);
-                                setEditShortName(custom.shortName ?? "");
-                                setEditContent(custom.content);
-                              }}
-                              size="icon"
-                              type="button"
-                              variant="ghost"
-                            >
-                              <Pencil className="size-4" />
-                            </Button>
-                            <Button
-                              aria-label={`Delete ${persona.name}`}
-                              className="text-muted-foreground hover:bg-red-500/10 hover:text-red-500 dark:hover:bg-red-500/20 dark:hover:text-red-400"
-                              onClick={() => {
-                                const previous = customPersonas;
-                                const next = customPersonas.filter(
-                                  (p) => p.id !== persona.id,
-                                );
-                                setCustomPersonas(next);
-                                void runPersist(
-                                  { customPersonas: next },
-                                  () => {
-                                    setCustomPersonas(previous);
-                                  },
-                                );
-                              }}
-                              size="icon"
-                              type="button"
-                              variant="ghost"
-                            >
-                              <Trash2 className="size-4" />
-                            </Button>
-                          </>
-                        ) : null
-                      }
-                      disabled={saving}
-                      inlineContent={custom?.content ?? null}
-                      key={persona.id}
-                      onSelect={() => {
-                        setDefaultPersona(persona.id);
-                      }}
-                      persona={persona}
-                      selected={defaultId === persona.id}
-                    />
-                  );
-                })}
-              </div>
-            )}
-          </TabsContent>
-        </div>
-      </Tabs>
+                              <Button
+                                aria-label={`Delete ${persona.name}`}
+                                className="text-muted-foreground hover:bg-red-500/10 hover:text-red-500 dark:hover:bg-red-500/20 dark:hover:text-red-400"
+                                onClick={() => {
+                                  setPendingDeletePersona(custom);
+                                }}
+                                size="icon"
+                                type="button"
+                                variant="ghost"
+                              >
+                                <Trash2 className="size-4" />
+                              </Button>
+                            </>
+                          ) : null
+                        }
+                        disabled={saving}
+                        inlineContent={custom?.content ?? null}
+                        key={persona.id}
+                        onSelect={() => {
+                          setDefaultPersona(persona.id);
+                        }}
+                        persona={persona}
+                        selected={defaultId === persona.id}
+                      />
+                    );
+                  })}
+                </div>
+              )}
+            </TabsContent>
+          </div>
+        </Tabs>
+      )}
       <PersonaEditorDialog
         editing={editing}
         name={editName}
@@ -523,64 +553,93 @@ export function PersonasPanel({ active }: PersonasPanelProps) {
           editing ? !customPersonas.some((p) => p.id === editing.id) : true
         }
       />
-      <DialogFooter className="flex-col gap-2 border-t border-border/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-        {tab === "custom" && !isGuest ? (
-          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">
-            <Button
-              className="min-w-0"
-              disabled={
-                saving || startingInterview || customPersonas.length >= 32
-              }
-              onClick={() => {
-                void startInterview();
-              }}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              {startingInterview ? (
-                <>
-                  <Loader2 className="mr-1.5 size-4 animate-spin" />
-                  <span className="truncate">Starting interview…</span>
-                </>
-              ) : (
-                <span className="truncate">Create with interview</span>
-              )}
-            </Button>
-            <Button
-              className="min-w-0"
-              disabled={saving || customPersonas.length >= 32}
-              onClick={() => {
-                setEditing({
-                  id: generateUUID(),
-                  name: "",
-                  shortName: "",
-                  content: "",
-                  updatedAt: new Date().toISOString(),
-                });
-                setEditName("");
-                setEditShortName("");
-                setEditContent("");
-              }}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              <Plus className="mr-1.5 size-4" />
-              Add
-            </Button>
-          </div>
-        ) : (
-          <span className="hidden sm:block" />
-        )}
-        <Button
-          className="w-full sm:w-auto"
-          onClick={() => closePortal()}
-          type="button"
-        >
-          Done
-        </Button>
-      </DialogFooter>
+      <ConfirmDestructiveDialog
+        description="This permanently deletes the custom persona."
+        onConfirm={() => {
+          if (!pendingDeletePersona) {
+            return;
+          }
+          const previous = customPersonas;
+          const next = customPersonas.filter(
+            (persona) => persona.id !== pendingDeletePersona.id,
+          );
+          setCustomPersonas(next);
+          void runPersist({ customPersonas: next }, () => {
+            setCustomPersonas(previous);
+          });
+        }}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingDeletePersona(null);
+          }
+        }}
+        open={pendingDeletePersona !== null}
+        title={
+          pendingDeletePersona
+            ? `Delete ${pendingDeletePersona.name}?`
+            : "Delete persona?"
+        }
+      />
+      {!embedded && portal ? (
+        <DialogFooter className="flex-col gap-2 border-t border-border/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+          {tab === "custom" && !isGuest ? (
+            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">
+              <Button
+                className="min-w-0"
+                disabled={
+                  saving || startingInterview || customPersonas.length >= 32
+                }
+                onClick={() => {
+                  void startInterview();
+                }}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                {startingInterview ? (
+                  <>
+                    <Loader2 className="mr-1.5 size-4 animate-spin" />
+                    <span className="truncate">Starting interview…</span>
+                  </>
+                ) : (
+                  <span className="truncate">Create with interview</span>
+                )}
+              </Button>
+              <Button
+                className="min-w-0"
+                disabled={saving || customPersonas.length >= 32}
+                onClick={() => {
+                  setEditing({
+                    id: generateUUID(),
+                    name: "",
+                    shortName: "",
+                    content: "",
+                    updatedAt: new Date().toISOString(),
+                  });
+                  setEditName("");
+                  setEditShortName("");
+                  setEditContent("");
+                }}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                <Plus className="mr-1.5 size-4" />
+                Add
+              </Button>
+            </div>
+          ) : (
+            <span className="hidden sm:block" />
+          )}
+          <Button
+            className="w-full sm:w-auto"
+            onClick={() => portal.closePortal()}
+            type="button"
+          >
+            Done
+          </Button>
+        </DialogFooter>
+      ) : null}
     </div>
   );
 }
@@ -635,7 +694,7 @@ function PersonaEditorDialog({
             sidebar and chat badge.
           </DialogDescription>
         </DialogHeader>
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-5">
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-4 sm:px-5">
           <div className="space-y-1.5">
             <Label htmlFor={nameId}>Name</Label>
             <Input
@@ -659,15 +718,16 @@ function PersonaEditorDialog({
               value={shortName}
             />
           </div>
-          <div className="space-y-1.5">
+          <div className="flex min-h-0 flex-1 flex-col space-y-1.5">
             <Label htmlFor={contentId}>Instructions</Label>
             <Textarea
-              className="min-h-40 font-mono text-xs"
+              className="min-h-64 flex-1 resize-y font-mono text-xs md:min-h-80"
               id={contentId}
               maxLength={32_000}
               onChange={(event) => {
                 onContentChange(event.target.value);
               }}
+              rows={14}
               value={content}
             />
           </div>

@@ -36,7 +36,7 @@ export async function POST(request: Request) {
     const accountId = requestedAccountId || activeAccountId;
     if (!accountId) {
       return NextResponse.json(
-        { error: "No NetSuite account specified to disconnect" },
+        { error: "No NetSuite connection specified to disconnect" },
         { status: 400 },
       );
     }
@@ -53,7 +53,7 @@ export async function POST(request: Request) {
     }
     console.error("[NetSuite Disconnect] Error:", error);
     return NextResponse.json(
-      { error: "Failed to disconnect NetSuite account" },
+      { error: "Failed to disconnect NetSuite connection" },
       { status: 500 },
     );
   }

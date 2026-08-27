@@ -7,6 +7,7 @@ import {
 } from "@/lib/ai/skills/catalog";
 import { syncConnectedSkillSource } from "@/lib/ai/skills/sync-connected";
 import { getUserSettings, upsertUserSettings } from "@/lib/db/queries";
+import { assertOrgPersonalConnectedSkillsAllowed } from "@/lib/org/enforcement";
 
 const connectBodySchema = z.object({
   url: z.string().min(3).max(2048),
@@ -17,6 +18,20 @@ export async function POST(request: Request) {
 
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    assertOrgPersonalConnectedSkillsAllowed(session.user.orgId);
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Connected skill packs cannot be changed.",
+      },
+      { status: 403 },
+    );
   }
 
   let body: z.infer<typeof connectBodySchema>;

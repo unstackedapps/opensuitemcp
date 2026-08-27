@@ -6,15 +6,19 @@ import { fetchMCPTools } from "@/lib/netsuite/mcp";
 import {
   fallbackMcpToolLabel,
   isMcpToolAllowed,
+  isMcpToolInDisabledList,
 } from "@/lib/netsuite/mcp-tool-settings";
 import { getNetSuiteToken } from "@/lib/netsuite/tokens";
+import { isOrgInstallMode } from "@/lib/org/install-config";
+import {
+  getOrgMcpDisabledToolNames,
+  resolveEffectiveNetsuiteMcpToolSettings,
+} from "@/lib/org/mcp-tool-policy";
 
 /**
  * GET /api/netsuite/mcp-tools?accountId=
  * Lists MCP tools for a specific NetSuite account (defaults to active),
  * with that account's Allowed/Disabled state.
- * Labels come from NetSuite metadata / local fallback — no AI calls.
- * Pass refresh=1 to bypass the shared tools/list cache.
  */
 export async function GET(request: Request) {
   const session = await auth();
@@ -43,6 +47,20 @@ export async function GET(request: Request) {
     });
   }
 
+  const orgDisabled =
+    isOrgInstallMode() && session.user.orgId
+      ? await getOrgMcpDisabledToolNames({
+          orgId: session.user.orgId,
+          accountId,
+        })
+      : [];
+  const effectiveSettings = await resolveEffectiveNetsuiteMcpToolSettings({
+    orgId: session.user.orgId,
+    accountId,
+    userSettings: settings?.netsuiteMcpTools,
+  });
+  const orgMcpToolsManaged = isOrgInstallMode() && Boolean(session.user.orgId);
+
   try {
     const rawTools = await fetchMCPTools(
       session.user.id,
@@ -54,17 +72,18 @@ export async function GET(request: Request) {
     return NextResponse.json({
       connected: true,
       accountId,
+      orgMcpToolsManaged,
       tools: rawTools.map((tool) => {
         const label = fallbackMcpToolLabel(tool);
+        const orgDisabledTool = isMcpToolInDisabledList(orgDisabled, tool.name);
         return {
           originalName: tool.name,
           displayName: label.displayName,
           description: label.description,
-          allowed: isMcpToolAllowed(
-            settings?.netsuiteMcpTools,
-            accountId,
-            tool.name,
-          ),
+          orgDisabled: orgDisabledTool,
+          allowed: orgDisabledTool
+            ? false
+            : isMcpToolAllowed(effectiveSettings, accountId, tool.name),
         };
       }),
     });

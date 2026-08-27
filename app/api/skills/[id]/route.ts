@@ -11,6 +11,11 @@ import {
   parseConnectedSkillId,
 } from "@/lib/ai/skills/catalog";
 import { getUserSettings } from "@/lib/db/queries";
+import {
+  listEnabledOrgConnectedSkillSources,
+  resolveConnectedSkillsScopeId,
+} from "@/lib/org/connected-skills";
+import { isOrgInstallMode } from "@/lib/org/install-config";
 
 export async function GET(
   _request: Request,
@@ -54,17 +59,24 @@ export async function GET(
         : null,
       settings?.customInstructions,
     );
-    const ownsSource = userSkillSettings.connectedSkillSources.some(
+    const connectedSources =
+      isOrgInstallMode() && session.user.orgId
+        ? await listEnabledOrgConnectedSkillSources(session.user.orgId)
+        : userSkillSettings.connectedSkillSources;
+    const scopeId = resolveConnectedSkillsScopeId(
+      session.user.id,
+      session.user.orgId,
+    );
+    const ownsSource = connectedSources.some(
       (source) => source.id === parsed.sourceId,
     );
     if (!ownsSource) {
       return NextResponse.json({ error: "Skill not found" }, { status: 404 });
     }
-    const meta = listConnectedCatalogSkills(
-      session.user.id,
-      userSkillSettings.connectedSkillSources,
-    ).find((skill) => skill.id === id);
-    const content = getConnectedSkillContent(session.user.id, id);
+    const meta = listConnectedCatalogSkills(scopeId, connectedSources).find(
+      (skill) => skill.id === id,
+    );
+    const content = getConnectedSkillContent(scopeId, id);
     if (!meta || content === null) {
       return NextResponse.json({ error: "Skill not found" }, { status: 404 });
     }

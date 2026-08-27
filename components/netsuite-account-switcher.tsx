@@ -32,7 +32,7 @@ async function fetchNetSuiteStatus(): Promise<NetSuiteStatusResponse> {
     return { connected: false, connectedAccountIds: [], accounts: [] };
   }
   if (!response.ok) {
-    throw new Error("Failed to load NetSuite accounts");
+    throw new Error("Failed to load NetSuite connections");
   }
   return response.json();
 }
@@ -94,7 +94,7 @@ export function NetSuiteAccountSwitcher() {
       });
       if (!response.ok) {
         const error = await response.json().catch(() => ({}));
-        throw new Error(error.error || "Failed to switch NetSuite account");
+        throw new Error(error.error || "Failed to switch NetSuite connection");
       }
       await Promise.all([mutate("netsuite-status"), mutate("settings")]);
       toast({
@@ -107,7 +107,7 @@ export function NetSuiteAccountSwitcher() {
         description:
           error instanceof Error
             ? error.message
-            : "Failed to switch NetSuite account",
+            : "Failed to switch NetSuite connection",
       });
     }
   };

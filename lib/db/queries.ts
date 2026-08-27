@@ -10,21 +10,23 @@ import {
   gte,
   inArray,
   lt,
+  notLike,
   type SQL,
 } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
 import type { VisibilityType } from "@/components/visibility-selector";
+import { assignUserToDefaultOrgMember } from "@/lib/org/queries";
 import type {
   CustomPersona,
   PersonaInterviewState,
 } from "../ai/personas/types";
 import type { AiProviderConfig } from "../ai/provider-entries";
+import type { SearchResourceEntry } from "../ai/search-resources";
 import type { ConnectedSkillSource, CustomSkill } from "../ai/skills/catalog";
 import { ChatSDKError } from "../errors";
 import type { NetsuiteMcpToolSettings } from "../netsuite/mcp-tool-settings";
 import type { AppUsage } from "../usage";
 import { generateUUID } from "../utils";
+import { db } from "./client";
 import {
   type Chat,
   chat,
@@ -43,26 +45,7 @@ import { generateHashedPassword } from "./utils";
 // use the Drizzle adapter for Auth.js / NextAuth
 // https://authjs.dev/reference/adapter/drizzle
 
-const globalForDb = globalThis as typeof globalThis & {
-  postgresClient?: ReturnType<typeof postgres>;
-};
-
-function createPostgresClient() {
-  // biome-ignore lint: Forbidden non-null assertion.
-  return postgres(process.env.POSTGRES_URL!, {
-    max: 10,
-    idle_timeout: 20,
-    connect_timeout: 10,
-    max_lifetime: 60 * 30,
-  });
-}
-
-const client = globalForDb.postgresClient ?? createPostgresClient();
-if (process.env.NODE_ENV !== "production") {
-  globalForDb.postgresClient = client;
-}
-
-export const db = drizzle(client);
+export { db } from "./client";
 
 export async function getUser(email: string): Promise<User[]> {
   try {
@@ -98,11 +81,52 @@ export async function updateUserLastLogin(userId: string): Promise<void> {
   }
 }
 
+export async function createOAuthUser(email: string) {
+  const normalizedEmail = email.trim().toLowerCase();
+
+  try {
+    const [created] = await db
+      .insert(user)
+      .values({ email: normalizedEmail })
+      .returning({
+        id: user.id,
+        email: user.email,
+      });
+
+    if (!created) {
+      throw new Error("Failed to create OAuth user");
+    }
+
+    await assignUserToDefaultOrgMember(created.id);
+
+    return created;
+  } catch (_error) {
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to create OAuth user",
+    );
+  }
+}
+
 export async function createUser(email: string, password: string) {
   const hashedPassword = generateHashedPassword(password);
 
   try {
-    return await db.insert(user).values({ email, password: hashedPassword });
+    const [created] = await db
+      .insert(user)
+      .values({ email, password: hashedPassword })
+      .returning({
+        id: user.id,
+        email: user.email,
+      });
+
+    if (!created) {
+      throw new Error("Failed to create user");
+    }
+
+    await assignUserToDefaultOrgMember(created.id);
+
+    return created;
   } catch (_error) {
     throw new ChatSDKError("bad_request:database", "Failed to create user");
   }
@@ -113,15 +137,39 @@ export async function createGuestUser() {
   const password = generateHashedPassword(generateUUID());
 
   try {
-    return await db.insert(user).values({ email, password }).returning({
-      id: user.id,
-      email: user.email,
-    });
+    const [guestUser] = await db
+      .insert(user)
+      .values({ email, password })
+      .returning({
+        id: user.id,
+        email: user.email,
+      });
+
+    if (!guestUser) {
+      throw new Error("Failed to create guest user");
+    }
+
+    await assignUserToDefaultOrgMember(guestUser.id);
+
+    return [guestUser];
   } catch (_error) {
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to create guest user",
     );
+  }
+}
+
+export async function countNonGuestUsers(): Promise<number> {
+  try {
+    const [row] = await db
+      .select({ value: count() })
+      .from(user)
+      .where(notLike(user.email, "guest-%"));
+
+    return row?.value ?? 0;
+  } catch (_error) {
+    throw new ChatSDKError("bad_request:database", "Failed to count users");
   }
 }
 
@@ -672,11 +720,13 @@ export async function upsertUserSettings({
   netsuiteAccounts,
   timezone,
   searchDomainIds,
+  searchResources,
   maxIterations,
   customInstructions,
   enabledSkillIds,
   customSkills,
   connectedSkillSources,
+  disabledOrgConnectedSkillSourceIds,
   aiProviders,
   netsuiteMcpTools,
   defaultPersonaId,
@@ -700,11 +750,13 @@ export async function upsertUserSettings({
     | null;
   timezone?: string | null;
   searchDomainIds?: string[] | null;
+  searchResources?: SearchResourceEntry[] | null;
   maxIterations?: string | null;
   customInstructions?: string | null;
   enabledSkillIds?: string[] | null;
   customSkills?: CustomSkill[] | null;
   connectedSkillSources?: ConnectedSkillSource[] | null;
+  disabledOrgConnectedSkillSourceIds?: string[] | null;
   aiProviders?: AiProviderConfig | null;
   netsuiteMcpTools?: NetsuiteMcpToolSettings | null;
   defaultPersonaId?: string | null;
@@ -757,6 +809,10 @@ export async function upsertUserSettings({
             searchDomainIds !== undefined
               ? (searchDomainIds ?? [])
               : (existing.searchDomainIds ?? []),
+          searchResources:
+            searchResources !== undefined
+              ? (searchResources ?? [])
+              : (existing.searchResources ?? []),
           maxIterations:
             maxIterations !== undefined
               ? maxIterations
@@ -777,6 +833,10 @@ export async function upsertUserSettings({
             connectedSkillSources !== undefined
               ? (connectedSkillSources ?? [])
               : (existing.connectedSkillSources ?? []),
+          disabledOrgConnectedSkillSourceIds:
+            disabledOrgConnectedSkillSourceIds !== undefined
+              ? (disabledOrgConnectedSkillSourceIds ?? [])
+              : (existing.disabledOrgConnectedSkillSourceIds ?? []),
           aiProviders:
             aiProviders !== undefined
               ? (aiProviders ?? {
@@ -826,11 +886,14 @@ export async function upsertUserSettings({
         netsuiteAccounts: netsuiteAccounts ?? [],
         timezone: timezone ?? "UTC",
         searchDomainIds: searchDomainIds ?? [],
+        searchResources: searchResources ?? [],
         maxIterations: maxIterations ?? "10",
         customInstructions: customInstructions ?? null,
         enabledSkillIds: enabledSkillIds ?? [],
         customSkills: customSkills ?? [],
         connectedSkillSources: connectedSkillSources ?? [],
+        disabledOrgConnectedSkillSourceIds:
+          disabledOrgConnectedSkillSourceIds ?? [],
         aiProviders: aiProviders ?? {
           defaultId: null,
           providers: [],

@@ -17,9 +17,9 @@ export class AuthPage {
   }
 
   async gotoRegister() {
-    await this.page.goto("/register");
+    await this.page.goto("/login?account=create");
     await expect(
-      this.page.getByRole("heading", { name: "Sign Up" }),
+      this.page.getByRole("button", { name: "Create account" }),
     ).toBeVisible();
   }
 
@@ -29,7 +29,7 @@ export class AuthPage {
     await this.page.getByPlaceholder("user@acme.com").fill(email);
     await this.page.getByLabel("Password").click();
     await this.page.getByLabel("Password").fill(password);
-    await this.page.getByRole("button", { name: "Sign Up" }).click();
+    await this.page.getByRole("button", { name: "Create account" }).click();
   }
 
   async login(email: string, password: string) {

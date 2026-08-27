@@ -108,7 +108,7 @@ export function AppPortal({ user }: { user: User | undefined }) {
         open={open}
       >
         <DialogContent
-          className="flex h-[min(82vh,42rem)] w-[min(56rem,calc(100vw-1.5rem))] max-w-4xl flex-col gap-0 overflow-hidden p-0"
+          className="flex h-[min(82vh,42rem)] w-[calc(100vw-1.5rem)] max-w-[calc(100vw-1.5rem)] flex-col gap-0 overflow-hidden p-0 md:h-[min(90vh,56rem)] md:w-[min(72rem,calc(100vw-2rem))] md:max-w-6xl"
           data-testid="app-portal"
           onInteractOutside={(event) => {
             event.preventDefault();
@@ -128,7 +128,7 @@ export function AppPortal({ user }: { user: User | undefined }) {
           </DialogHeader>
 
           <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
-            <nav className="hidden w-52 shrink-0 flex-col gap-5 border-border/60 border-r bg-muted/20 px-3 py-4 sm:flex">
+            <nav className="hidden w-52 shrink-0 flex-col gap-5 border-border/60 border-r bg-muted/20 px-3 py-4 md:w-60 sm:flex">
               <p className="px-2 font-medium text-sm">OpenSuiteMCP</p>
               {NAV_GROUPS.map((group) => {
                 const items = visibleNav.filter((item) => item.group === group);

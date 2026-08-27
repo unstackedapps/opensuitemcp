@@ -7,11 +7,13 @@ import {
   findDuplicateProviderLabel,
   isCanonicalSeedEntry,
   isMultiAiProviders,
+  listVisibleProviderEntries,
   migrateLegacyKeysToEntries,
   parseAiProviderConfig,
   resolveChatProviderSelection,
   seedDefaultProviderList,
   stockCanonicalSeedEntry,
+  stripUnconfiguredCanonicalSeeds,
   supportsHostedModelOverrides,
 } from "./provider-entries";
 
@@ -197,23 +199,43 @@ describe("provider-entries", () => {
     assert.equal(parsed.providers[0]?.maxIterations, "10");
   });
 
-  it("seeds Google, Anthropic, and OpenAI by default", () => {
-    const config = seedDefaultProviderList({
+  it("starts with no providers when there is no saved config or legacy keys", () => {
+    const config = ensureSeededProviderConfig(null);
+    assert.equal(config.providers.length, 0);
+    assert.equal(config.defaultId, null);
+  });
+
+  it("migrates legacy keys without seeding empty hosted slots", () => {
+    const config = ensureSeededProviderConfig(null, {
       openaiApiKey: "test-key",
       aiProvider: "openai",
     });
-    assert.equal(config.providers.length, 3);
-    assert.deepEqual(
-      config.providers.map((entry) => entry.label),
-      ["Google", "Anthropic", "OpenAI"],
+    assert.equal(config.providers.length, 1);
+    assert.equal(config.providers[0]?.type, "openai");
+    assert.equal(config.providers[0]?.apiKey, "test-key");
+  });
+
+  it("strips unconfigured canonical seeds from saved config", () => {
+    const config = stripUnconfiguredCanonicalSeeds(
+      seedDefaultProviderList({
+        openaiApiKey: "test-key",
+        aiProvider: "openai",
+      }),
     );
-    assert.equal(
-      config.providers.find((entry) => entry.type === "openai")?.apiKey,
-      "test-key",
+    assert.equal(config.providers.length, 1);
+    assert.equal(config.providers[0]?.type, "openai");
+    assert.deepEqual(
+      listVisibleProviderEntries(
+        seedDefaultProviderList({
+          openaiApiKey: "test-key",
+          aiProvider: "openai",
+        }),
+      ).map((entry) => entry.type),
+      ["openai"],
     );
   });
 
-  it("ensures canonical seeds are present without dropping extras", () => {
+  it("keeps configured canonical seeds visible", () => {
     const config = ensureSeededProviderConfig(
       {
         defaultId: "extra",
@@ -230,9 +252,33 @@ describe("provider-entries", () => {
       { googleApiKey: "g" },
       () => "seed-google",
     );
-    assert.equal(config.providers.length, 4);
-    assert.ok(config.providers.some((entry) => isCanonicalSeedEntry(entry)));
-    assert.ok(config.providers.some((entry) => entry.label === "openai: work"));
+    assert.equal(
+      listVisibleProviderEntries(config).some(
+        (entry) => entry.type === "openai",
+      ),
+      true,
+    );
+  });
+
+  it("does not auto-add missing canonical seeds", () => {
+    const config = ensureSeededProviderConfig(
+      {
+        defaultId: "extra",
+        providers: [
+          {
+            id: "extra",
+            label: "openai: work",
+            type: "openai",
+            apiKey: "w",
+            maxIterations: "10",
+          },
+        ],
+      },
+      { googleApiKey: "g" },
+      () => "seed-google",
+    );
+    assert.equal(config.providers.length, 1);
+    assert.equal(config.providers[0]?.label, "openai: work");
   });
 
   it("treats a new draft with canonical label as non-canonical when id differs", () => {

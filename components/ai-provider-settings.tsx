@@ -1,13 +1,22 @@
 "use client";
 
 import { Eraser, Pencil, Plus, Trash2 } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { type ReactNode, useEffect, useId, useRef, useState } from "react";
+import { ConfirmDestructiveDialog } from "@/components/confirm-destructive-dialog";
 import {
   EyeIcon,
   EyeOffIcon,
   LoaderIcon,
   WarningIcon,
 } from "@/components/icons";
+import {
+  INFO_NOTICE_BODY_CLASS,
+  INFO_NOTICE_CARD_CLASS,
+  INFO_NOTICE_ICON_CLASS,
+  INFO_NOTICE_TITLE_CLASS,
+} from "@/components/info-notice-styles";
+import { OnboardingPanelSkeleton } from "@/components/onboarding/onboarding-panel-skeleton";
+import { OnboardingStepProse } from "@/components/onboarding/onboarding-step-prose";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -26,7 +35,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
 import { modelsForProvider } from "@/lib/ai/model-registry";
 import {
   type AiProviderConfig,
@@ -36,8 +44,11 @@ import {
   defaultLabelForProviderType,
   ensureUniqueProviderLabel,
   entryUsesModelOverrides,
+  HOSTED_PROVIDER_API_TEST_SUCCESS,
   isCanonicalSeedEntry,
+  isHostedCuratedProviderTest,
   isProviderEntryConfigured,
+  listVisibleProviderEntries,
   providerTypeLabel,
   resolveDefaultProviderId,
   stockCanonicalSeedEntry,
@@ -47,11 +58,18 @@ import {
 import { cn, generateUUID } from "@/lib/utils";
 import { toast } from "./toast";
 
+type AiProviderSettingsEmbedded = {
+  title: string;
+  description: ReactNode;
+};
+
 type AiProviderSettingsProps = {
   showSkeletons: boolean;
   aiProviders: AiProviderConfig;
   onAiProvidersChange: (value: AiProviderConfig) => void;
   onPersistProviders: (value: AiProviderConfig) => Promise<void>;
+  orgManaged?: boolean;
+  embedded?: AiProviderSettingsEmbedded;
 };
 
 const TYPE_OPTIONS: Array<{ value: AiProviderType; label: string }> = [
@@ -66,23 +84,29 @@ export function AiProviderSettings({
   aiProviders,
   onAiProvidersChange,
   onPersistProviders,
+  orgManaged = false,
+  embedded,
 }: AiProviderSettingsProps) {
   const [addOpen, setAddOpen] = useState(false);
   const [configureId, setConfigureId] = useState<string | null>(null);
   const [draft, setDraft] = useState<AiProviderEntry>(() =>
-    emptyDraft("openai"),
+    emptyDraft("google"),
   );
   const [showDraftKey, setShowDraftKey] = useState(false);
   const [models, setModels] = useState<CustomModelOption[]>([]);
   const [loadingModels, setLoadingModels] = useState(false);
   const [savingModal, setSavingModal] = useState(false);
+  const [pendingDestructive, setPendingDestructive] = useState<{
+    kind: "reset" | "delete";
+    entry: AiProviderEntry;
+  } | null>(null);
 
   const configureEntry = configureId
     ? aiProviders.providers.find((entry) => entry.id === configureId)
     : undefined;
 
   const openAddModal = () => {
-    setDraft(emptyDraft("openai"));
+    setDraft(emptyDraft("google"));
     setModels([]);
     setShowDraftKey(false);
     setAddOpen(true);
@@ -102,10 +126,10 @@ export function AiProviderSettings({
   };
 
   const handleReloadModels = async (entry: AiProviderEntry) => {
-    const canonicalKeyTest =
-      entry.type !== "custom" &&
-      isCanonicalSeedEntry(entry, aiProviders.providers) &&
-      !supportsHostedModelOverrides(entry, aiProviders.providers);
+    const curatedKeyTest = isHostedCuratedProviderTest(
+      entry,
+      aiProviders.providers,
+    );
 
     setLoadingModels(true);
     try {
@@ -124,9 +148,12 @@ export function AiProviderSettings({
       }
       const nextModels = (data.models ?? []) as CustomModelOption[];
 
-      if (canonicalKeyTest) {
+      if (curatedKeyTest) {
         setModels([]);
-        toast({ type: "success", description: "API key is valid." });
+        toast({
+          type: "success",
+          description: HOSTED_PROVIDER_API_TEST_SUCCESS,
+        });
         return;
       }
 
@@ -262,13 +289,6 @@ export function AiProviderSettings({
   };
 
   const handleDelete = async (entry: AiProviderEntry) => {
-    if (isCanonicalSeedEntry(entry, aiProviders.providers)) {
-      toast({
-        type: "error",
-        description: `${entry.label} is a built-in provider and cannot be removed.`,
-      });
-      return;
-    }
     const providers = aiProviders.providers.filter(
       (provider) => provider.id !== entry.id,
     );
@@ -323,41 +343,60 @@ export function AiProviderSettings({
     }
   };
 
+  let pendingTitle = "Confirm";
+  if (pendingDestructive?.kind === "reset") {
+    pendingTitle = `Reset ${pendingDestructive.entry.label}?`;
+  } else if (pendingDestructive) {
+    pendingTitle = `Remove ${pendingDestructive.entry.label}?`;
+  }
+
+  const visibleProviders = listVisibleProviderEntries(aiProviders);
+
+  const addButton = orgManaged ? null : (
+    <Button
+      className="w-full shrink-0 sm:w-auto"
+      onClick={openAddModal}
+      size="sm"
+      type="button"
+      variant="outline"
+    >
+      <Plus className="size-4" />
+      Add Provider
+    </Button>
+  );
+
   if (showSkeletons) {
     return (
-      <div className="space-y-3">
-        <Skeleton className="h-8 w-28 self-end" />
-        <Skeleton className="h-16 w-full" />
-        <Skeleton className="h-16 w-full" />
-        <Skeleton className="h-16 w-full" />
-      </div>
+      <OnboardingPanelSkeleton
+        headerClassName="h-4 w-28 self-end"
+        rowClassName="h-16 w-full"
+      />
     );
   }
 
-  return (
+  const panelContent = (
     <div className="space-y-3">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-        <div className="min-w-0 space-y-1">
-          <p className="font-medium text-sm">Configured providers</p>
-          <p className="text-muted-foreground text-xs leading-relaxed">
-            Add API keys and model options. The default is for new chats;
-            existing chats keep their last provider.
-          </p>
+      {!embedded ? (
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+          <div className="min-w-0 space-y-1">
+            <p className="font-medium text-sm">Configured providers</p>
+            <p className="text-muted-foreground text-xs leading-relaxed">
+              {orgManaged
+                ? "Your organization administrator manages API keys and model options. Choose the default for new chats."
+                : "Add API keys and model options. The default is for new chats; existing chats keep their last provider."}
+            </p>
+          </div>
+          {addButton}
         </div>
-        <Button
-          className="w-full shrink-0 sm:w-auto"
-          onClick={openAddModal}
-          size="sm"
-          type="button"
-          variant="outline"
-        >
-          <Plus className="size-4" />
-          Add Provider
-        </Button>
-      </div>
+      ) : null}
 
       <ul className="divide-y divide-border/60 rounded-md border border-border/60">
-        {aiProviders.providers.map((entry) => {
+        {visibleProviders.length === 0 ? (
+          <li className="px-2.5 py-4 text-center text-muted-foreground text-xs">
+            No providers yet. Add one to get started.
+          </li>
+        ) : null}
+        {visibleProviders.map((entry) => {
           const configured = isProviderEntryConfigured(entry);
           const isSeed = isCanonicalSeedEntry(entry, aiProviders.providers);
           const speedLabel = slotModelLabel(
@@ -421,46 +460,54 @@ export function AiProviderSettings({
                     <p className="truncate">Reasoning · {reasoningLabel}</p>
                   </div>
                 </label>
-                <div className="flex shrink-0 items-center">
-                  <Button
-                    aria-label={`Configure ${entry.label}`}
-                    className="size-7"
-                    onClick={() => openConfigureModal(entry)}
-                    size="icon"
-                    type="button"
-                    variant="ghost"
-                  >
-                    <Pencil className="size-3.5" />
-                  </Button>
-                  {isSeed ? (
+                {orgManaged ? null : (
+                  <div className="flex shrink-0 items-center">
                     <Button
-                      aria-label={`Reset ${entry.label} to stock settings`}
-                      className="size-7 text-muted-foreground hover:text-foreground"
-                      disabled={atStock}
-                      onClick={() => {
-                        void handleResetSeed(entry);
-                      }}
+                      aria-label={`Configure ${entry.label}`}
+                      className="size-7"
+                      onClick={() => openConfigureModal(entry)}
                       size="icon"
                       type="button"
                       variant="ghost"
                     >
-                      <Eraser className="size-3.5" />
+                      <Pencil className="size-3.5" />
                     </Button>
-                  ) : (
-                    <Button
-                      aria-label={`Remove ${entry.label}`}
-                      className="size-7 text-muted-foreground hover:text-red-500 dark:hover:text-red-400"
-                      onClick={() => {
-                        void handleDelete(entry);
-                      }}
-                      size="icon"
-                      type="button"
-                      variant="ghost"
-                    >
-                      <Trash2 className="size-3.5" />
-                    </Button>
-                  )}
-                </div>
+                    {isSeed ? (
+                      <Button
+                        aria-label={`Reset ${entry.label} to stock settings`}
+                        className="size-7 text-muted-foreground hover:text-foreground"
+                        disabled={atStock}
+                        onClick={() => {
+                          setPendingDestructive({
+                            kind: "reset",
+                            entry,
+                          });
+                        }}
+                        size="icon"
+                        type="button"
+                        variant="ghost"
+                      >
+                        <Eraser className="size-3.5" />
+                      </Button>
+                    ) : (
+                      <Button
+                        aria-label={`Remove ${entry.label}`}
+                        className="size-7 text-muted-foreground hover:text-red-500 dark:hover:text-red-400"
+                        onClick={() => {
+                          setPendingDestructive({
+                            kind: "delete",
+                            entry,
+                          });
+                        }}
+                        size="icon"
+                        type="button"
+                        variant="ghost"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
             </li>
           );
@@ -528,8 +575,47 @@ export function AiProviderSettings({
         title="Add AI Provider"
         onToggleKey={() => setShowDraftKey((value) => !value)}
       />
+      <ConfirmDestructiveDialog
+        confirmLabel={pendingDestructive?.kind === "reset" ? "Reset" : "Remove"}
+        description={
+          pendingDestructive?.kind === "reset"
+            ? "This clears the API key and custom model choices for this provider."
+            : "This removes the provider and its API key from your account."
+        }
+        onConfirm={() => {
+          if (!pendingDestructive) {
+            return;
+          }
+          if (pendingDestructive.kind === "reset") {
+            return handleResetSeed(pendingDestructive.entry);
+          }
+          return handleDelete(pendingDestructive.entry);
+        }}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingDestructive(null);
+          }
+        }}
+        open={pendingDestructive !== null}
+        title={pendingTitle}
+      />
     </div>
   );
+
+  if (embedded) {
+    return (
+      <div className="space-y-6">
+        <OnboardingStepProse
+          action={addButton}
+          description={embedded.description}
+          title={embedded.title}
+        />
+        {panelContent}
+      </div>
+    );
+  }
+
+  return panelContent;
 }
 
 type ProviderConfigDialogProps = {
@@ -551,7 +637,7 @@ type ProviderConfigDialogProps = {
   savedProviders: AiProviderEntry[];
 };
 
-function ProviderConfigDialog({
+export function ProviderConfigDialog({
   open,
   onOpenChange,
   title,
@@ -981,7 +1067,7 @@ function ModelSlotsSection({
   );
 }
 
-function withResolvedLabel(
+export function withResolvedLabel(
   draft: AiProviderEntry,
   existing: AiProviderEntry[],
   excludeId?: string,
@@ -994,7 +1080,7 @@ function withResolvedLabel(
   return { ...draft, label };
 }
 
-function emptyDraft(type: AiProviderType): AiProviderEntry {
+export function emptyDraft(type: AiProviderType): AiProviderEntry {
   return {
     id: generateUUID(),
     label: "",
@@ -1007,7 +1093,7 @@ function emptyDraft(type: AiProviderType): AiProviderEntry {
   };
 }
 
-function validateDraft(
+export function validateDraft(
   draft: AiProviderEntry,
   existing: AiProviderEntry[],
 ): string | null {
@@ -1260,16 +1346,16 @@ function MaxIterationsField({
 
 function OpenAiWarning() {
   return (
-    <div className="rounded-lg border border-yellow-500/50 bg-yellow-500/10 p-3 dark:border-yellow-400/20 dark:bg-yellow-400/5">
+    <div className={INFO_NOTICE_CARD_CLASS}>
       <div className="flex items-start gap-2">
-        <div className="mt-0.5 shrink-0 text-yellow-600 dark:text-yellow-400/70">
+        <div className={cn("mt-0.5 shrink-0", INFO_NOTICE_ICON_CLASS)}>
           <WarningIcon size={16} />
         </div>
         <div className="min-w-0 flex-1 space-y-1">
-          <p className="font-medium text-sm text-yellow-900 dark:text-yellow-200">
+          <p className={INFO_NOTICE_TITLE_CLASS}>
             Organization Verification Required
           </p>
-          <p className="text-xs text-yellow-800 dark:text-yellow-200/80">
+          <p className={INFO_NOTICE_BODY_CLASS}>
             For enhanced reasoning features, verify your organization at{" "}
             <a
               className="break-all text-primary underline hover:no-underline"

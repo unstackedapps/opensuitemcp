@@ -110,3 +110,7 @@ export function useAppPortal() {
   }
   return ctx;
 }
+
+export function useOptionalAppPortal() {
+  return useContext(AppPortalContext);
+}

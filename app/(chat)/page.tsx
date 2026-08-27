@@ -14,6 +14,7 @@ import {
   parseAiProviderConfig,
   resolveDefaultProviderId,
 } from "@/lib/ai/provider-entries";
+import { isGuestAuthEnabled } from "@/lib/auth/guest-policy";
 import { guestRegex } from "@/lib/constants";
 import { getUserSettings } from "@/lib/db/queries";
 import { generateUUID } from "@/lib/utils";
@@ -23,7 +24,7 @@ export default async function Page() {
   const session = await auth();
 
   if (!session) {
-    redirect("/api/auth/guest");
+    redirect(isGuestAuthEnabled() ? "/api/auth/guest" : "/login");
   }
 
   const id = generateUUID();

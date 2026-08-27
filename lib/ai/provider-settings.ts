@@ -6,7 +6,6 @@ import { assertAllowedProviderUrl } from "./custom-provider-url";
 import {
   type AiProviderConfig,
   type AiProviderEntry,
-  assertCanonicalSeedsPresent,
   clampMaxIterations,
   ensureSeededProviderConfig,
   findDuplicateProviderLabel,
@@ -15,6 +14,7 @@ import {
   MAX_AI_PROVIDERS,
   parseAiProviderConfig,
   resolveDefaultProviderId,
+  stripUnconfiguredCanonicalSeeds,
   supportsHostedModelOverrides,
 } from "./provider-entries";
 
@@ -64,12 +64,12 @@ export async function persistProviderConfig(params: {
   };
 }): Promise<AiProviderConfig> {
   const existing = parseAiProviderConfig(params.existingConfig);
-  const seeded = ensureSeededProviderConfig(
-    parseAiProviderConfig(params.incoming),
-    params.legacy,
+  const seeded = stripUnconfiguredCanonicalSeeds(
+    ensureSeededProviderConfig(
+      parseAiProviderConfig(params.incoming),
+      params.legacy,
+    ),
   );
-
-  assertCanonicalSeedsPresent(seeded.providers);
 
   if (seeded.providers.length > MAX_AI_PROVIDERS) {
     throw new Error(`You can save at most ${MAX_AI_PROVIDERS} AI providers.`);

@@ -6,6 +6,7 @@ import {
 } from "@/lib/ai/skills/catalog";
 import { removeConnectedSkillSource } from "@/lib/ai/skills/sync-connected";
 import { getUserSettings, upsertUserSettings } from "@/lib/db/queries";
+import { assertOrgPersonalConnectedSkillsAllowed } from "@/lib/org/enforcement";
 
 export async function DELETE(
   _request: Request,
@@ -18,6 +19,20 @@ export async function DELETE(
   }
 
   const { sourceId } = await context.params;
+
+  try {
+    assertOrgPersonalConnectedSkillsAllowed(session.user.orgId);
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Connected skill packs cannot be changed.",
+      },
+      { status: 403 },
+    );
+  }
 
   try {
     const settings = await getUserSettings({ userId: session.user.id });

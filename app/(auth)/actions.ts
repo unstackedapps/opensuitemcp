@@ -1,8 +1,11 @@
 "use server";
 
+import { unstable_rethrow } from "next/navigation";
 import { z } from "zod";
 
 import { createUser, getUser } from "@/lib/db/queries";
+import { isOrgInstallMode } from "@/lib/org/install-config";
+import { isSoloBootstrapOpen } from "@/lib/org/solo-bootstrap";
 import { allowAuthAttempt } from "@/lib/rate-limit";
 
 import { signIn } from "./auth";
@@ -33,11 +36,13 @@ export const login = async (
     await signIn("credentials", {
       email: validatedData.email,
       password: validatedData.password,
-      redirect: false,
+      redirectTo: "/",
     });
 
     return { status: "success" };
   } catch (error) {
+    unstable_rethrow(error);
+
     if (error instanceof z.ZodError) {
       return { status: "invalid_data" };
     }
@@ -53,13 +58,18 @@ export type RegisterActionState = {
     | "success"
     | "failed"
     | "user_exists"
-    | "invalid_data";
+    | "invalid_data"
+    | "registration_closed";
 };
 
 export const register = async (
   _: RegisterActionState,
   formData: FormData,
 ): Promise<RegisterActionState> => {
+  if (isOrgInstallMode() || !(await isSoloBootstrapOpen())) {
+    return { status: "registration_closed" };
+  }
+
   try {
     const validatedData = authFormSchema.parse({
       email: formData.get("email"),
@@ -79,11 +89,13 @@ export const register = async (
     await signIn("credentials", {
       email: validatedData.email,
       password: validatedData.password,
-      redirect: false,
+      redirectTo: "/",
     });
 
     return { status: "success" };
   } catch (error) {
+    unstable_rethrow(error);
+
     if (error instanceof z.ZodError) {
       return { status: "invalid_data" };
     }

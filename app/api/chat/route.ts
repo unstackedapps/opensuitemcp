@@ -38,8 +38,12 @@ import {
 import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
 import type { AiProviderType } from "@/lib/ai/provider-entries";
 import { getUserProvider } from "@/lib/ai/providers";
-import { resolveUserChatProvider } from "@/lib/ai/resolve-user-chat-provider";
-import { searchDomains } from "@/lib/ai/search-domains";
+import {
+  hydrateSearchResources,
+  mergeOrgSearchResourcesForUser,
+  type SearchResourceEntry,
+  searchResourceToolName,
+} from "@/lib/ai/search-resources";
 import {
   buildSkillsPromptSection,
   listConnectedCatalogSkills,
@@ -52,7 +56,7 @@ import {
   createUpdatePersonaInterviewTool,
 } from "@/lib/ai/tools/persona-interview";
 import { createReadWebpageTool } from "@/lib/ai/tools/read-webpage";
-import { createSearchNetsuiteDocsTool } from "@/lib/ai/tools/search-netsuite-docs";
+import { createSearchResourceTool } from "@/lib/ai/tools/search-web-resource";
 import { isProductionEnvironment, isTestEnvironment } from "@/lib/constants";
 import {
   createStreamId,
@@ -70,6 +74,18 @@ import type { DBMessage } from "@/lib/db/schema";
 import { ChatSDKError } from "@/lib/errors";
 import { normalizeNetSuiteAccountId } from "@/lib/netsuite/accounts";
 import { loadNetSuiteMCPTools } from "@/lib/netsuite/mcp";
+import { resolveConnectedSkillsScopeId } from "@/lib/org/connected-skills";
+import {
+  assertOrgPersonaAllowed,
+  buildOrgAwareSkillSettings,
+  normalizeDisabledOrgConnectedSkillSourceIds,
+  resolveOrgAwareChatProvider,
+} from "@/lib/org/enforcement";
+import { isOrgInstallMode } from "@/lib/org/install-config";
+import {
+  listEnabledOrgSearchResources,
+  orgSearchResourceToClient,
+} from "@/lib/org/search-resources";
 import { allowChatBurst } from "@/lib/rate-limit";
 import type { ChatMessage } from "@/lib/types";
 import type { AppUsage } from "@/lib/usage";
@@ -197,7 +213,9 @@ export async function POST(request: Request) {
       if (session.user?.id) {
         try {
           cachedSettings = await getUserSettings({ userId: session.user.id });
-          const resolved = resolveUserChatProvider({
+          const resolved = await resolveOrgAwareChatProvider({
+            orgId: session.user.orgId,
+            userId: session.user.id,
             chatAiProviderId: aiProviderId ?? null,
             settings: cachedSettings,
           });
@@ -227,6 +245,22 @@ export async function POST(request: Request) {
             "Unknown persona. Pick a valid persona and try again.",
           ).toResponse();
         }
+        if (isOrgInstallMode() && session.user.orgId) {
+          try {
+            await assertOrgPersonaAllowed({
+              orgId: session.user.orgId,
+              userId: session.user.id,
+              personaId: requested,
+            });
+          } catch (error) {
+            return new ChatSDKError(
+              "bad_request:api",
+              error instanceof Error
+                ? error.message
+                : "Persona is not allowed for your organization.",
+            ).toResponse();
+          }
+        }
         stampedPersonaId = requested === AVA_PERSONA_ID ? null : requested;
       } else if (cachedSettings?.defaultPersonaId) {
         const def = cachedSettings.defaultPersonaId.trim();
@@ -235,7 +269,21 @@ export async function POST(request: Request) {
           def !== AVA_PERSONA_ID &&
           !isPersonaBuilderId(def)
         ) {
-          stampedPersonaId = def;
+          let defaultAllowed = true;
+          if (isOrgInstallMode() && session.user.orgId) {
+            try {
+              await assertOrgPersonaAllowed({
+                orgId: session.user.orgId,
+                userId: session.user.id,
+                personaId: def,
+              });
+            } catch {
+              defaultAllowed = false;
+            }
+          }
+          if (defaultAllowed) {
+            stampedPersonaId = def;
+          }
         }
       }
 
@@ -350,7 +398,7 @@ export async function POST(request: Request) {
           let userProviderType: AiProvider = "google";
           let userTimezone = "UTC";
           let userMaxIterations = 10; // Default to 10
-          let selectedSearchDomainIds: string[] = [];
+          let enabledSearchResources: SearchResourceEntry[] = [];
           let skillsPromptSection = "";
           let enabledSkillNames: string[] = [
             "AI Connector Instructions (always on)",
@@ -405,7 +453,9 @@ export async function POST(request: Request) {
                 customPersonasForPrompt = normalizeCustomPersonas(
                   settings.customPersonas,
                 );
-                const resolved = resolveUserChatProvider({
+                const resolved = await resolveOrgAwareChatProvider({
+                  orgId: session.user.orgId,
+                  userId: session.user.id,
                   chatAiProviderId: latestChat?.aiProviderId,
                   settings,
                 });
@@ -427,7 +477,10 @@ export async function POST(request: Request) {
                 customSpeedModelId = resolved.entry?.speedModelId;
                 customReasoningModelId = resolved.entry?.reasoningModelId;
                 userTimezone = settings.timezone ?? "UTC";
-                selectedSearchDomainIds = settings.searchDomainIds ?? [];
+                enabledSearchResources = hydrateSearchResources({
+                  searchResources: settings.searchResources,
+                  searchDomainIds: settings.searchDomainIds,
+                }).filter((resource) => resource.enabled);
                 const skillSettings = normalizeUserSkillSettings(
                   {
                     enabledSkillIds: settings.enabledSkillIds ?? [],
@@ -436,19 +489,37 @@ export async function POST(request: Request) {
                   },
                   settings.customInstructions,
                 );
+                const skillSettingsForChat =
+                  isOrgInstallMode() && session.user.orgId
+                    ? await buildOrgAwareSkillSettings({
+                        orgId: session.user.orgId,
+                        enabledSkillIds: skillSettings.enabledSkillIds,
+                        customSkills: skillSettings.customSkills,
+                        connectedSkillSources:
+                          skillSettings.connectedSkillSources,
+                        disabledOrgConnectedSkillSourceIds:
+                          normalizeDisabledOrgConnectedSkillSourceIds(
+                            settings.disabledOrgConnectedSkillSourceIds,
+                          ),
+                      })
+                    : skillSettings;
                 const invokedConnectedSkillIds = (
                   requestInvokedConnectedSkillIds ?? []
                 ).filter(
                   (skillId) =>
                     typeof skillId === "string" &&
                     skillId.startsWith("connected:") &&
-                    skillSettings.connectedSkillSources.some((source) =>
+                    skillSettingsForChat.connectedSkillSources.some((source) =>
                       skillId.startsWith(`connected:${source.id}:`),
                     ),
                 );
-                const invokedConnectedSkills = listConnectedCatalogSkills(
+                const connectedScopeId = resolveConnectedSkillsScopeId(
                   session.user.id,
-                  skillSettings.connectedSkillSources,
+                  session.user.orgId,
+                );
+                const invokedConnectedSkills = listConnectedCatalogSkills(
+                  connectedScopeId,
+                  skillSettingsForChat.connectedSkillSources,
                 ).filter((skill) =>
                   invokedConnectedSkillIds.includes(skill.id),
                 );
@@ -463,18 +534,24 @@ export async function POST(request: Request) {
                     .join(", ");
                   invokedSkillFallbackText = `Use the ${fallbackNames} skill${invokedConnectedSkills.length === 1 ? "" : "s"}.`;
                 }
-                skillsPromptSection = buildSkillsPromptSection(skillSettings, {
-                  invokedConnectedSkillIds,
-                  userId: session.user.id,
-                });
-                enabledSkillNames = listEnabledSkillNames(skillSettings, {
-                  invokedConnectedSkillIds,
-                  userId: session.user.id,
-                });
+                skillsPromptSection = buildSkillsPromptSection(
+                  skillSettingsForChat,
+                  {
+                    invokedConnectedSkillIds,
+                    userId: connectedScopeId,
+                  },
+                );
+                enabledSkillNames = listEnabledSkillNames(
+                  skillSettingsForChat,
+                  {
+                    invokedConnectedSkillIds,
+                    userId: connectedScopeId,
+                  },
+                );
                 console.log("[Skills] Session skills:", {
-                  enabledIds: skillSettings.enabledSkillIds,
+                  enabledIds: skillSettingsForChat.enabledSkillIds,
                   enabledNames: enabledSkillNames,
-                  customCount: skillSettings.customSkills.filter(
+                  customCount: skillSettingsForChat.customSkills.filter(
                     (skill) => skill.enabled !== false,
                   ).length,
                   invokedConnectedSkillIds,
@@ -485,6 +562,16 @@ export async function POST(request: Request) {
                   "[Settings] No settings found for user:",
                   session.user.id,
                 );
+              }
+
+              if (isOrgInstallMode() && session.user.orgId) {
+                const orgSearchRows = await listEnabledOrgSearchResources(
+                  session.user.orgId,
+                );
+                enabledSearchResources = mergeOrgSearchResourcesForUser({
+                  orgResources: orgSearchRows.map(orgSearchResourceToClient),
+                  userResources: settings?.searchResources,
+                }).filter((resource) => resource.enabled);
               }
             } catch (error) {
               console.error("[Settings] Error loading user settings:", error);
@@ -544,6 +631,7 @@ export async function POST(request: Request) {
             try {
               const loaded = await loadNetSuiteMCPTools(session.user.id, {
                 settings: sessionSettings,
+                orgId: session.user.orgId,
               });
               netsuiteTools = loaded.tools;
               netsuiteActiveToolKeys = loaded.activeToolKeys;
@@ -564,16 +652,14 @@ export async function POST(request: Request) {
           }
 
           // Custom web search tools: only register tools for domains enabled in settings
-          const enabledSearchDomainIds = new Set(selectedSearchDomainIds);
           const searchToolEntries: [string, unknown][] = [];
-          if (
-            !isBuilderSession &&
-            enabledSearchDomainIds.has("oracle-netsuite-help")
-          ) {
-            searchToolEntries.push([
-              "searchNetsuiteDocs",
-              createSearchNetsuiteDocsTool(),
-            ]);
+          if (!isBuilderSession) {
+            for (const resource of enabledSearchResources) {
+              searchToolEntries.push([
+                searchResourceToolName(resource),
+                createSearchResourceTool(resource),
+              ]);
+            }
           }
           const searchTools = Object.fromEntries(searchToolEntries);
 
@@ -637,6 +723,7 @@ export async function POST(request: Request) {
                 netsuiteTools: netsuiteToolNames,
                 timezone: userTimezone,
                 enabledSearchToolNames: Object.keys(searchTools),
+                searchManagedByOrg: isOrgInstallMode(),
                 maxSteps: userMaxIterations,
                 netsuiteAccountId,
                 persona: {
@@ -666,9 +753,9 @@ export async function POST(request: Request) {
               resolvedModelId: modelId,
               provider: userProviderType,
               timezone: userTimezone,
-              enabledSearchDomains: searchDomains
-                .filter((d) => enabledSearchDomainIds.has(d.id))
-                .map((d) => d.label),
+              enabledSearchDomains: enabledSearchResources.map(
+                (resource) => resource.label,
+              ),
               enabledSkills: enabledSkillNames,
               persona: {
                 id: activePersona.id,

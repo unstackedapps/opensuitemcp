@@ -41,6 +41,8 @@ export type CustomSkill = {
   content: string;
   updatedAt: string;
   enabled?: boolean;
+  /** Org admin skill — users can disable, not edit or delete. */
+  managedByOrg?: boolean;
 };
 
 export type UserSkillSettings = {

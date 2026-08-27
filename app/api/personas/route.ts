@@ -5,6 +5,8 @@ import {
   normalizeCustomPersonas,
 } from "@/lib/ai/personas/catalog";
 import { getUserSettings } from "@/lib/db/queries";
+import { buildOrgAwarePersonaList } from "@/lib/org/enforcement";
+import { isOrgInstallMode } from "@/lib/org/install-config";
 
 /** Builtin + this user's custom personas for the picker. */
 export async function GET() {
@@ -16,8 +18,16 @@ export async function GET() {
   try {
     const settings = await getUserSettings({ userId: session.user.id });
     const customPersonas = normalizeCustomPersonas(settings?.customPersonas);
+    const personas =
+      isOrgInstallMode() && session.user.orgId
+        ? await buildOrgAwarePersonaList(
+            session.user.orgId,
+            session.user.id,
+            customPersonas,
+          )
+        : listPersonasForClient(customPersonas);
     return NextResponse.json({
-      personas: listPersonasForClient(customPersonas),
+      personas,
       hidePersonaPicker: settings?.hidePersonaPicker ?? false,
       defaultPersonaId: settings?.defaultPersonaId ?? null,
     });
