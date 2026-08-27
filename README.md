@@ -10,7 +10,7 @@ Bring your own LLM keys (**Google Gemini**, **Anthropic Claude**, **OpenAI**, or
 
 **Star this repo** if it helps your NetSuite team — it makes the project discoverable.
 
-**Current release:** [v5.0.0](https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.0.0) · [Changelog](CHANGELOG.md)
+**Current release:** [v5.0.1](https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.0.1) · [Changelog](CHANGELOG.md)
 
 <img src="./docs/screenshot-chat.png" alt="OpenSuiteMCP chat UI" width="100%" />
 

@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.0.1] - 2026-08-27
+
+### 🐛 Fixed
+
+- **`publicAppUrl` TypeScript build** — narrow `isSafeAppPath` to `` `/${string}` `` so `next build` typechecking passes (wip CI caught this; public lint-only workflow did not)
+
+---
+
 ## [5.0.0] - 2026-08-27
 
 ### ✨ Added
@@ -613,6 +621,7 @@ First stable release of OpenSuiteMCP - an open source, production-ready NetSuite
 
 ---
 
+[5.0.1]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.0.1
 [5.0.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.0.0
 [4.1.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v4.1.0
 [3.0.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v3.0.0
