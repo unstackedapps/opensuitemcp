@@ -12,5 +12,6 @@ export const guestRegex = /^guest-\d+$/;
 
 /** Canonical product docs — not shipped inside self-hosted app instances. */
 export const PUBLIC_DOCS_ORIGIN = "https://opensuitemcp.com";
+export const NETSUITE_INTEGRATION_DOCS_URL = `${PUBLIC_DOCS_ORIGIN}/docs/netsuite-integration`;
 
 export const DUMMY_PASSWORD = generateDummyPassword();

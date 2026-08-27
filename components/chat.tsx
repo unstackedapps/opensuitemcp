@@ -947,7 +947,7 @@ export function Chat({
         />
 
         {messages.length > 0 && (
-          <div className="sticky bottom-0 z-1 mx-auto flex w-full max-w-3xl flex-col gap-2 border-t-0 bg-background px-2 pb-3 md:px-4 md:pb-4">
+          <div className="sticky bottom-0 z-1 mx-auto flex w-full max-w-chat flex-col gap-2 border-t-0 bg-background px-2 pb-3 md:px-4 md:pb-4">
             {maxIterationsReached && !isReadonly && (
               <Card className="w-full border-blue-500/50 bg-blue-500/10 dark:bg-blue-500/20">
                 <CardContent className="p-4">

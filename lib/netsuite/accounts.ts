@@ -1,3 +1,5 @@
+export { getNetSuiteRedirectUri } from "@/lib/netsuite/oauth/redirect-uris";
+
 export const NETSUITE_DCR_CLIENT_NAME = "OpenSuiteMCP";
 
 export type NetSuiteAccountEntry = {
@@ -93,12 +95,6 @@ export function tokenBelongsToAccount(
     return normalizeNetSuiteAccountId(activeAccountId) === target;
   }
   return normalizeNetSuiteAccountId(tokenAccountId) === target;
-}
-
-export function getNetSuiteRedirectUri(): string {
-  const base =
-    process.env.AUTH_URL || process.env.NEXTAUTH_URL || "http://localhost:3000";
-  return `${base.replace(/\/$/, "")}/api/netsuite/callback`;
 }
 
 /**

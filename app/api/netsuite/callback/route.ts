@@ -1,58 +1,73 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { getUserSettings } from "@/lib/db/queries";
-import { publicAppUrl } from "@/lib/http/public-origin";
+import { publicAppUrl, sanitizeReturnTo } from "@/lib/http/public-origin";
 import { normalizeNetSuiteAccountId } from "@/lib/netsuite/accounts";
 import { invalidateMcpToolsListCache } from "@/lib/netsuite/mcp";
 import { callbackSchema, exchangeCodeForToken } from "@/lib/netsuite/oauth";
 import { saveNetSuiteToken } from "@/lib/netsuite/tokens";
 
+function oauthErrorRedirect(
+  request: Request,
+  cookieStore: Awaited<ReturnType<typeof cookies>>,
+  error: string,
+  errorDescription?: string,
+): NextResponse {
+  const returnPath = cookieStore.get("netsuite_return_path")?.value;
+  const basePath = sanitizeReturnTo(returnPath);
+  const separator = basePath.includes("?") ? "&" : "?";
+  const description = errorDescription?.trim();
+  const query = description
+    ? `error=${encodeURIComponent(error)}&error_description=${encodeURIComponent(description)}`
+    : `error=${encodeURIComponent(error)}`;
+
+  cookieStore.delete("netsuite_code_verifier");
+  cookieStore.delete("netsuite_state");
+  cookieStore.delete("netsuite_user_id");
+  cookieStore.delete("netsuite_account_id");
+  cookieStore.delete("netsuite_return_path");
+
+  return NextResponse.redirect(
+    publicAppUrl(`${basePath}${separator}${query}`, request),
+  );
+}
+
 export async function GET(request: Request) {
+  const cookieStore = await cookies();
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const state = searchParams.get("state");
   const error = searchParams.get("error");
 
   if (error) {
-    return NextResponse.redirect(
-      publicAppUrl(
-        `/?error=netsuite_auth_failed&error_description=${encodeURIComponent(error)}`,
-        request,
-      ),
+    return oauthErrorRedirect(
+      request,
+      cookieStore,
+      "netsuite_auth_failed",
+      error,
     );
   }
 
-  // Validate callback parameters
   const validation = callbackSchema.safeParse({ code, state });
 
   if (!validation.success || !code || !state) {
-    return NextResponse.redirect(
-      publicAppUrl("/?error=invalid_callback", request),
-    );
+    return oauthErrorRedirect(request, cookieStore, "invalid_callback");
   }
 
-  // Get stored values from cookies
-  const cookieStore = await cookies();
   const storedCodeVerifier = cookieStore.get("netsuite_code_verifier")?.value;
   const storedState = cookieStore.get("netsuite_state")?.value;
   const userId = cookieStore.get("netsuite_user_id")?.value;
   const storedAccountId = cookieStore.get("netsuite_account_id")?.value;
 
-  // Validate state to prevent CSRF attacks
   if (!storedState || storedState !== state) {
-    return NextResponse.redirect(
-      publicAppUrl("/?error=state_mismatch", request),
-    );
+    return oauthErrorRedirect(request, cookieStore, "state_mismatch");
   }
 
   if (!storedCodeVerifier || !userId) {
-    return NextResponse.redirect(
-      publicAppUrl("/?error=missing_session_data", request),
-    );
+    return oauthErrorRedirect(request, cookieStore, "missing_session_data");
   }
 
   try {
-    // Exchange authorization code for tokens
     const tokenResponse = await exchangeCodeForToken({
       userId,
       accountId: storedAccountId,
@@ -74,22 +89,51 @@ export async function GET(request: Request) {
     });
     invalidateMcpToolsListCache(userId, accountId);
 
+    const returnPath = cookieStore.get("netsuite_return_path")?.value;
+    cookieStore.delete("netsuite_return_path");
+
+    try {
+      const { getUserOrgContext } = await import("@/lib/org/queries");
+      const { markOrgNetSuiteMcpAccountConnectedFromOAuth } = await import(
+        "@/lib/org/admin/netsuite-mcp-verify"
+      );
+      const orgContext = await getUserOrgContext(userId);
+      if (
+        orgContext &&
+        (orgContext.role === "owner" || orgContext.role === "admin") &&
+        accountId
+      ) {
+        await markOrgNetSuiteMcpAccountConnectedFromOAuth({
+          orgId: orgContext.orgId,
+          accountId,
+          actorUserId: userId,
+        });
+      }
+    } catch (markError) {
+      console.error("[NetSuite Callback] Org MCP mark connected:", markError);
+    }
+
+    const successPath = sanitizeReturnTo(returnPath);
+    const successUrl = successPath.includes("netsuite_connected=true")
+      ? successPath
+      : successPath.includes("?")
+        ? `${successPath}&netsuite_connected=true`
+        : `${successPath}?netsuite_connected=true`;
+
     cookieStore.delete("netsuite_code_verifier");
     cookieStore.delete("netsuite_state");
     cookieStore.delete("netsuite_user_id");
     cookieStore.delete("netsuite_account_id");
 
-    return NextResponse.redirect(
-      publicAppUrl("/?netsuite_connected=true", request),
-    );
+    return NextResponse.redirect(publicAppUrl(successUrl, request));
   } catch (tokenError) {
     const errorMessage =
       tokenError instanceof Error ? tokenError.message : "Unknown error";
-    return NextResponse.redirect(
-      publicAppUrl(
-        `/?error=netsuite_token_exchange_failed&error_description=${encodeURIComponent(errorMessage)}`,
-        request,
-      ),
+    return oauthErrorRedirect(
+      request,
+      cookieStore,
+      "netsuite_token_exchange_failed",
+      errorMessage,
     );
   }
 }

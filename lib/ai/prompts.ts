@@ -55,11 +55,17 @@ RESPONSE RULES:
    OPTIONAL ORACLE DOCS SEARCH
 ========================================================= */
 
-function buildSearchSection(enabledSearchToolNames: string[]): string {
+function buildSearchSection(
+  enabledSearchToolNames: string[],
+  searchManagedByOrg: boolean,
+): string {
   if (enabledSearchToolNames.length === 0) {
+    const enableHint = searchManagedByOrg
+      ? "ask an organization administrator to enable a web search resource"
+      : "ask the user to enable a web search resource in Settings";
     return `
 DOCUMENTATION SEARCH:
-No web search tools are enabled. For product how-to questions, reason from NetSuite knowledge and available MCP tools, or ask the user to enable Oracle NetSuite Help Center search in Settings.
+No web search tools are enabled. For product how-to questions, reason from NetSuite knowledge and available MCP tools, or ${enableHint}.
 Never fabricate documentation or citations.`;
   }
 
@@ -73,7 +79,7 @@ Use docs search only when:
 - the question is about product semantics rather than this account's records.
 
 Do not use docs search for live account facts (customers, transactions, balances, reports).
-When you use search, cite real Help Center URLs. Never substitute documentation for account data.`;
+When you use search, cite real URLs from the selected site. Never substitute documentation for account data.`;
 }
 
 /* =========================================================
@@ -126,11 +132,12 @@ function buildNetSuiteEngine(
   /** When false, omit the SuiteQL confirmation hard rule (SuiteQL Analyst). */
   confirmBeforeSuiteQL = true,
   netsuiteAccountId: string | null = null,
+  searchManagedByOrg = false,
 ): string {
   const connected =
     netsuiteTools.length > 0
       ? `Connected MCP tools: ${netsuiteTools.join(", ")}`
-      : `No NetSuite MCP tools are connected. Tell the user to connect a NetSuite account in Settings before you can retrieve live data.`;
+      : `No NetSuite MCP tools are connected. Tell the user to add a NetSuite MCP connection in Settings before you can retrieve live data.`;
 
   const suiteQlConfirmRule = confirmBeforeSuiteQL
     ? `- Never run SuiteQL without user confirmation that a custom query is acceptable.
@@ -154,7 +161,7 @@ You have up to ${maxSteps} reasoning steps for this turn. Use them to ground the
 SOURCE PRIORITY:
 1. Live NetSuite MCP tools for account facts
 2. Clarifying question when scope is materially ambiguous
-3. Oracle Help Center search (only if enabled; see below) for product/how-to guidance
+3. Enabled web search resources (see below) for product/how-to guidance
 4. General reasoning only when no retrieval is required
 
 TOOL SELECTION ORDER (follow unless the user names a specific tool/path, or an active persona playbook overrides):
@@ -191,7 +198,7 @@ Self-recover before telling the user (one attempt per distinct fix):
 Never auto-retry ns_createRecord or other writes.
 If still blocked, switch to the next tool in the priority order or explain the limitation (permissions, missing filter) with a NetSuite UI path when useful. Never fabricate a substitute answer.
 
-${buildSearchSection(enabledSearchToolNames)}`;
+${buildSearchSection(enabledSearchToolNames, searchManagedByOrg)}`;
 }
 
 /* =========================================================
@@ -276,6 +283,7 @@ export const systemPrompt = ({
   netsuiteTools = [],
   timezone = "UTC",
   enabledSearchToolNames = [],
+  searchManagedByOrg = false,
   maxSteps = 10,
   additionalInstructions,
   persona,
@@ -286,6 +294,7 @@ export const systemPrompt = ({
   netsuiteTools?: string[];
   timezone?: string;
   enabledSearchToolNames?: string[];
+  searchManagedByOrg?: boolean;
   maxSteps?: number;
   /** User-provided custom instructions (e.g. from instructions.md) */
   additionalInstructions?: string | null;
@@ -314,6 +323,7 @@ export const systemPrompt = ({
       maxSteps,
       confirmBeforeSuiteQL,
       netsuiteAccountId,
+      searchManagedByOrg,
     ),
     hasSpecialist ? PERSONA_TOOL_POLICY : null,
     CONFIG_PROMPT,

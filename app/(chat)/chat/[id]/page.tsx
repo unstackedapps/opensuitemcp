@@ -20,6 +20,7 @@ import {
   parseAiProviderConfig,
   resolveDefaultProviderId,
 } from "@/lib/ai/provider-entries";
+import { isGuestAuthEnabled } from "@/lib/auth/guest-policy";
 import { guestRegex } from "@/lib/constants";
 import {
   getChatById,
@@ -35,7 +36,7 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
   const session = await auth();
 
   if (!session) {
-    redirect("/api/auth/guest");
+    redirect(isGuestAuthEnabled() ? "/api/auth/guest" : "/login");
   }
 
   const chat = await getChatById({ id });

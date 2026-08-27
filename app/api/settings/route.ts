@@ -17,17 +17,47 @@ import {
   decryptProviderConfig,
   persistProviderConfig,
 } from "@/lib/ai/provider-settings";
+import {
+  assertSearchResourceList,
+  enabledSearchResourceIds,
+  hydrateSearchResources,
+  mergeOrgSearchResourcesForUser,
+  overlayUserSearchResourceEnabled,
+  type SearchResourceEntry,
+} from "@/lib/ai/search-resources";
 import { normalizeUserSkillSettings } from "@/lib/ai/skills/catalog";
 import { getUserSettings, upsertUserSettings } from "@/lib/db/queries";
 import { decrypt, encrypt } from "@/lib/encryption";
 import {
+  type NetSuiteAccountEntry,
   normalizeNetSuiteAccountId,
   resolveNetSuiteAccounts,
 } from "@/lib/netsuite/accounts";
 import {
   mergeNetsuiteMcpToolSettings,
   parseNetsuiteMcpToolSettings,
+  withMcpToolDisabledNames,
 } from "@/lib/netsuite/mcp-tool-settings";
+import {
+  assertOrgPersonaAllowed,
+  buildOrgAwarePersonaList,
+  buildOrgAwareSkillSettings,
+  normalizeDisabledOrgConnectedSkillSourceIds,
+  validateOrgMcpToolSettingsPatch,
+  validateOrgNetSuiteAccountsPatch,
+  validateOrgProviderSettingsPatch,
+  validateOrgSkillSettingsPatch,
+} from "@/lib/org/enforcement";
+import { getInstallMode, isOrgInstallMode } from "@/lib/org/install-config";
+import { syncUserLlmProvidersWithOrg } from "@/lib/org/llm-user-sync";
+import {
+  enforceOrgNetSuiteMcpAccountLabels,
+  syncUserNetSuiteMcpAccountsWithOrg,
+} from "@/lib/org/netsuite-mcp-user-sync";
+import {
+  listOrgSearchResources,
+  orgSearchResourceToClient,
+} from "@/lib/org/search-resources";
 
 const aiProviderSchema = z.enum(["google", "anthropic", "openai"]);
 const aiProviderTypeSchema = z.enum([
@@ -102,6 +132,19 @@ const settingsSchema = z.object({
     .nullable(),
   timezone: z.string().max(64).optional().nullable(),
   searchDomainIds: z.array(z.string()).max(16).optional().nullable(),
+  searchResources: z
+    .array(
+      z.object({
+        id: z.string().min(1).max(128),
+        label: z.string().min(1).max(128),
+        url: z.string().min(1).max(2048),
+        enabled: z.boolean().optional(),
+        catalogId: z.string().max(64).nullable().optional(),
+      }),
+    )
+    .max(16)
+    .optional()
+    .nullable(),
   maxIterations: z
     .string()
     .regex(/^\d+$/)
@@ -115,6 +158,11 @@ const settingsSchema = z.object({
   customInstructions: z.string().max(32_000).optional().nullable(),
   enabledSkillIds: z.array(z.string().max(128)).max(128).optional().nullable(),
   customSkills: z.array(customSkillSchema).max(32).optional().nullable(),
+  disabledOrgConnectedSkillSourceIds: z
+    .array(z.string().max(64))
+    .max(64)
+    .optional()
+    .nullable(),
   aiProviders: aiProviderConfigSchema.optional().nullable(),
   netsuiteMcpTools: netsuiteMcpToolsSchema.optional().nullable(),
   defaultPersonaId: z.string().max(64).optional().nullable(),
@@ -174,6 +222,7 @@ export async function GET() {
   }
 
   try {
+    const installMode = getInstallMode();
     const settings = await getUserSettings({ userId: session.user.id });
 
     console.log("[Settings API] Raw settings from DB:", {
@@ -185,27 +234,152 @@ export async function GET() {
 
     if (!settings) {
       const emptySkills = resolveSkillSettings(null);
+      const seededProviderConfig = ensureSeededProviderConfig(null);
+
+      let aiProvidersForClient = seededProviderConfig;
+      let netsuiteAccountsForClient: NetSuiteAccountEntry[] = [];
+      let enabledSkillIds = emptySkills.enabledSkillIds;
+      let customSkills = emptySkills.customSkills;
+      let connectedSkillSources = emptySkills.connectedSkillSources;
+      let searchResourcesForClient = hydrateSearchResources({});
+      let orgSearchPolicy = { managedByOrg: false };
+      let orgMcpPolicy = {
+        managedByOrg: false,
+        allowFreeAdd: true,
+        lockedAccountIds: [] as string[],
+        addableAccounts: [] as NetSuiteAccountEntry[],
+      };
+      let orgLlmPolicy = { managedByOrg: false };
+      const orgPersonasPolicy =
+        isOrgInstallMode() && session.user.orgId
+          ? { managedByOrg: true }
+          : undefined;
+      const orgMcpToolsPolicy =
+        isOrgInstallMode() && session.user.orgId
+          ? { managedByOrg: true }
+          : undefined;
+      let personasForClient = listPersonasForClient([]);
+
+      if (isOrgInstallMode() && session.user.orgId) {
+        const llmSync = await syncUserLlmProvidersWithOrg({
+          orgId: session.user.orgId,
+          userId: session.user.id,
+          userConfig: seededProviderConfig,
+        });
+        aiProvidersForClient = llmSync.config;
+        orgLlmPolicy = llmSync.policy;
+
+        if (llmSync.configChanged) {
+          try {
+            await upsertUserSettings({
+              userId: session.user.id,
+              aiProviders: {
+                defaultId: llmSync.config.defaultId,
+                providers: llmSync.config.providers.map((entry) => ({
+                  ...entry,
+                  apiKey: null,
+                })),
+              },
+            });
+          } catch (error) {
+            console.warn(
+              "[Settings API] Failed to persist org LLM provider sync:",
+              error,
+            );
+          }
+        }
+
+        const mcpSync = await syncUserNetSuiteMcpAccountsWithOrg({
+          orgId: session.user.orgId,
+          userId: session.user.id,
+          userAccounts: [],
+        });
+        netsuiteAccountsForClient = mcpSync.accounts;
+        orgMcpPolicy = mcpSync.policy;
+
+        if (mcpSync.accountsChanged) {
+          const activeId = mcpSync.accounts[0]?.accountId ?? null;
+          const activeAccount = mcpSync.accounts.find(
+            (account) => account.accountId === activeId,
+          );
+          try {
+            await upsertUserSettings({
+              userId: session.user.id,
+              netsuiteAccounts: mcpSync.accounts,
+              netsuiteAccountId: activeId,
+              netsuiteClientId: activeAccount?.clientId ?? null,
+            });
+          } catch (error) {
+            console.warn(
+              "[Settings API] Failed to persist org MCP account sync:",
+              error,
+            );
+          }
+        }
+
+        const orgSkillSettings = await buildOrgAwareSkillSettings({
+          orgId: session.user.orgId,
+          enabledSkillIds,
+          customSkills,
+          connectedSkillSources,
+          disabledOrgConnectedSkillSourceIds: [],
+        });
+        enabledSkillIds = orgSkillSettings.enabledSkillIds;
+        customSkills = orgSkillSettings.customSkills;
+        connectedSkillSources = orgSkillSettings.connectedSkillSources;
+
+        personasForClient = await buildOrgAwarePersonaList(
+          session.user.orgId,
+          session.user.id,
+          [],
+        );
+
+        const orgSearchRows = await listOrgSearchResources(session.user.orgId);
+        searchResourcesForClient = mergeOrgSearchResourcesForUser({
+          orgResources: orgSearchRows.map(orgSearchResourceToClient),
+          userResources: [],
+        });
+        orgSearchPolicy = { managedByOrg: true };
+      }
+
+      const activeAccountIdForClient =
+        netsuiteAccountsForClient[0]?.accountId ?? null;
+      const activeAccountForClient = netsuiteAccountsForClient.find(
+        (account) => account.accountId === activeAccountIdForClient,
+      );
+
       return NextResponse.json({
         googleApiKey: null,
         anthropicApiKey: null,
         openaiApiKey: null,
         aiProvider: "google",
-        netsuiteAccountId: null,
-        netsuiteClientId: null,
-        netsuiteAccounts: [],
+        netsuiteAccountId: activeAccountIdForClient,
+        netsuiteClientId: activeAccountForClient?.clientId ?? null,
+        netsuiteAccounts: netsuiteAccountsForClient,
         timezone: "UTC",
-        searchDomainIds: [],
+        searchDomainIds: enabledSearchResourceIds(searchResourcesForClient),
+        searchResources: searchResourcesForClient,
+        orgSearchPolicy,
         maxIterations: "10",
         customInstructions: null,
-        enabledSkillIds: emptySkills.enabledSkillIds,
-        customSkills: emptySkills.customSkills,
-        connectedSkillSources: emptySkills.connectedSkillSources,
-        aiProviders: ensureSeededProviderConfig(null),
+        enabledSkillIds,
+        customSkills,
+        connectedSkillSources,
+        aiProviders: aiProvidersForClient,
         netsuiteMcpTools: { byAccount: {} },
         defaultPersonaId: null,
         hidePersonaPicker: false,
         customPersonas: [],
-        personas: listPersonasForClient([]),
+        personas: personasForClient,
+        orgMcpPolicy,
+        orgLlmPolicy,
+        orgPersonasPolicy,
+        orgMcpToolsPolicy,
+        orgSkillsPolicy:
+          isOrgInstallMode() && session.user.orgId
+            ? { managedByOrg: true }
+            : undefined,
+        installMode,
       });
     }
 
@@ -260,14 +434,12 @@ export async function GET() {
 
     const provider = normalizeAiProvider(settings.aiProvider);
     const netsuiteAccounts = resolveNetSuiteAccounts(settings);
-    const activeAccountId = settings.netsuiteAccountId
-      ? normalizeNetSuiteAccountId(settings.netsuiteAccountId)
-      : (netsuiteAccounts[0]?.accountId ?? null);
-    const activeAccount = netsuiteAccounts.find(
-      (account) => account.accountId === activeAccountId,
-    );
 
     const skillSettings = resolveSkillSettings(settings);
+
+    let decryptedGoogleKeyForClient = decryptedGoogleKey;
+    let decryptedAnthropicKeyForClient = decryptedAnthropicKey;
+    let decryptedOpenAIKeyForClient = decryptedOpenAIKey;
 
     const legacyForProviders = {
       googleApiKey: decryptedGoogleKey,
@@ -325,30 +497,167 @@ export async function GET() {
       }
     }
 
+    let aiProvidersForClient = seededProviderConfig;
+    let netsuiteAccountsForClient = netsuiteAccounts;
+    let enabledSkillIdsForClient = skillSettings.enabledSkillIds;
+
+    let orgMcpPolicy = {
+      managedByOrg: false,
+      allowFreeAdd: true,
+      lockedAccountIds: [] as string[],
+      addableAccounts: [] as NetSuiteAccountEntry[],
+    };
+    let orgLlmPolicy = { managedByOrg: false };
+    let searchResourcesForClient = hydrateSearchResources({
+      searchResources: settings.searchResources,
+      searchDomainIds: settings.searchDomainIds,
+    });
+    let orgSearchPolicy = { managedByOrg: false };
+    const orgPersonasPolicy =
+      isOrgInstallMode() && session.user.orgId
+        ? { managedByOrg: true }
+        : undefined;
+    const orgMcpToolsPolicy =
+      isOrgInstallMode() && session.user.orgId
+        ? { managedByOrg: true }
+        : undefined;
+    let personasForClient = listPersonasForClient(
+      normalizeCustomPersonas(settings.customPersonas),
+    );
+
+    if (isOrgInstallMode() && session.user.orgId) {
+      const llmSync = await syncUserLlmProvidersWithOrg({
+        orgId: session.user.orgId,
+        userId: session.user.id,
+        userConfig: seededProviderConfig,
+      });
+      aiProvidersForClient = llmSync.config;
+      orgLlmPolicy = llmSync.policy;
+
+      if (llmSync.configChanged) {
+        try {
+          await upsertUserSettings({
+            userId: session.user.id,
+            aiProviders: {
+              defaultId: llmSync.config.defaultId,
+              providers: llmSync.config.providers.map((entry) => ({
+                ...entry,
+                apiKey: null,
+              })),
+            },
+          });
+        } catch (error) {
+          console.warn(
+            "[Settings API] Failed to persist org LLM provider sync:",
+            error,
+          );
+        }
+      }
+
+      decryptedGoogleKeyForClient = null;
+      decryptedAnthropicKeyForClient = null;
+      decryptedOpenAIKeyForClient = null;
+
+      const mcpSync = await syncUserNetSuiteMcpAccountsWithOrg({
+        orgId: session.user.orgId,
+        userId: session.user.id,
+        userAccounts: netsuiteAccounts,
+      });
+      netsuiteAccountsForClient = mcpSync.accounts;
+      orgMcpPolicy = mcpSync.policy;
+
+      if (mcpSync.accountsChanged) {
+        const activeId = settings.netsuiteAccountId
+          ? normalizeNetSuiteAccountId(settings.netsuiteAccountId)
+          : (mcpSync.accounts[0]?.accountId ?? null);
+        const activeAccount = mcpSync.accounts.find(
+          (account) => account.accountId === activeId,
+        );
+        try {
+          await upsertUserSettings({
+            userId: session.user.id,
+            netsuiteAccounts: mcpSync.accounts,
+            netsuiteAccountId: activeId,
+            netsuiteClientId:
+              activeAccount?.clientId ?? settings.netsuiteClientId ?? null,
+          });
+        } catch (error) {
+          console.warn(
+            "[Settings API] Failed to persist org MCP account sync:",
+            error,
+          );
+        }
+      }
+
+      const orgSkillSettings = await buildOrgAwareSkillSettings({
+        orgId: session.user.orgId,
+        enabledSkillIds: skillSettings.enabledSkillIds,
+        customSkills: skillSettings.customSkills,
+        connectedSkillSources: skillSettings.connectedSkillSources,
+        disabledOrgConnectedSkillSourceIds:
+          normalizeDisabledOrgConnectedSkillSourceIds(
+            settings.disabledOrgConnectedSkillSourceIds,
+          ),
+      });
+      enabledSkillIdsForClient = orgSkillSettings.enabledSkillIds;
+      skillSettings.customSkills = orgSkillSettings.customSkills;
+      skillSettings.connectedSkillSources =
+        orgSkillSettings.connectedSkillSources;
+
+      personasForClient = await buildOrgAwarePersonaList(
+        session.user.orgId,
+        session.user.id,
+        normalizeCustomPersonas(settings.customPersonas),
+      );
+
+      const orgSearchRows = await listOrgSearchResources(session.user.orgId);
+      searchResourcesForClient = mergeOrgSearchResourcesForUser({
+        orgResources: orgSearchRows.map(orgSearchResourceToClient),
+        userResources: settings.searchResources,
+      });
+      orgSearchPolicy = { managedByOrg: true };
+    }
+
+    const activeAccountIdForClient = settings.netsuiteAccountId
+      ? normalizeNetSuiteAccountId(settings.netsuiteAccountId)
+      : (netsuiteAccountsForClient[0]?.accountId ?? null);
+    const activeAccountForClient = netsuiteAccountsForClient.find(
+      (account) => account.accountId === activeAccountIdForClient,
+    );
+
     const response = {
-      googleApiKey: decryptedGoogleKey,
-      anthropicApiKey: decryptedAnthropicKey,
-      openaiApiKey: decryptedOpenAIKey,
+      googleApiKey: decryptedGoogleKeyForClient,
+      anthropicApiKey: decryptedAnthropicKeyForClient,
+      openaiApiKey: decryptedOpenAIKeyForClient,
       aiProvider: provider,
-      netsuiteAccountId: activeAccountId,
+      netsuiteAccountId: activeAccountIdForClient,
       netsuiteClientId:
-        activeAccount?.clientId ?? settings.netsuiteClientId ?? null,
-      netsuiteAccounts,
+        activeAccountForClient?.clientId ?? settings.netsuiteClientId ?? null,
+      netsuiteAccounts: netsuiteAccountsForClient,
       timezone: settings.timezone ?? "UTC",
-      searchDomainIds: settings.searchDomainIds ?? [],
+      searchDomainIds: enabledSearchResourceIds(searchResourcesForClient),
+      searchResources: searchResourcesForClient,
+      orgSearchPolicy,
       maxIterations: settings.maxIterations ?? "10",
       customInstructions: settings.customInstructions ?? null,
-      enabledSkillIds: skillSettings.enabledSkillIds,
+      enabledSkillIds: enabledSkillIdsForClient,
       customSkills: skillSettings.customSkills,
       connectedSkillSources: skillSettings.connectedSkillSources,
-      aiProviders: seededProviderConfig,
+      aiProviders: aiProvidersForClient,
       netsuiteMcpTools: parseNetsuiteMcpToolSettings(settings.netsuiteMcpTools),
       defaultPersonaId: settings.defaultPersonaId ?? null,
       hidePersonaPicker: settings.hidePersonaPicker ?? false,
       customPersonas: normalizeCustomPersonas(settings.customPersonas),
-      personas: listPersonasForClient(
-        normalizeCustomPersonas(settings.customPersonas),
-      ),
+      personas: personasForClient,
+      orgMcpPolicy,
+      orgLlmPolicy,
+      orgPersonasPolicy,
+      orgMcpToolsPolicy,
+      orgSkillsPolicy:
+        isOrgInstallMode() && session.user.orgId
+          ? { managedByOrg: true }
+          : undefined,
+      installMode,
     };
 
     console.log("[Settings API] Sending response:", {
@@ -465,7 +774,7 @@ export async function POST(request: Request) {
         ? normalizeAiProvider(validated.aiProvider)
         : undefined;
 
-    const nextAccounts =
+    let nextAccounts =
       validated.netsuiteAccounts !== undefined
         ? resolveNetSuiteAccounts({
             netsuiteAccounts: validated.netsuiteAccounts ?? [],
@@ -509,7 +818,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const nextCustomSkills =
+    let nextCustomSkills =
       validated.customSkills !== undefined
         ? normalizeUserSkillSettings({
             enabledSkillIds:
@@ -518,12 +827,19 @@ export async function POST(request: Request) {
           }).customSkills
         : undefined;
 
-    const nextEnabledSkillIds =
+    let nextEnabledSkillIds =
       validated.enabledSkillIds !== undefined
         ? normalizeUserSkillSettings({
             enabledSkillIds: validated.enabledSkillIds ?? [],
             customSkills: nextCustomSkills ?? existing?.customSkills ?? [],
           }).enabledSkillIds
+        : undefined;
+
+    let nextDisabledOrgConnectedSkillSourceIds =
+      validated.disabledOrgConnectedSkillSourceIds !== undefined
+        ? normalizeDisabledOrgConnectedSkillSourceIds(
+            validated.disabledOrgConnectedSkillSourceIds,
+          )
         : undefined;
 
     const nextCustomPersonas =
@@ -594,6 +910,51 @@ export async function POST(request: Request) {
       nextDefaultPersonaId = null;
     }
 
+    if (isOrgInstallMode() && session.user.orgId && nextDefaultPersonaId) {
+      try {
+        await assertOrgPersonaAllowed({
+          orgId: session.user.orgId,
+          userId: session.user.id,
+          personaId: nextDefaultPersonaId,
+        });
+      } catch (error) {
+        return NextResponse.json(
+          {
+            error:
+              error instanceof Error
+                ? error.message
+                : "Default persona is not allowed for your organization.",
+          },
+          { status: 400 },
+        );
+      }
+    }
+
+    let nextNetsuiteMcpTools =
+      validated.netsuiteMcpTools !== undefined
+        ? mergeNetsuiteMcpToolSettings(
+            existing?.netsuiteMcpTools,
+            validated.netsuiteMcpTools,
+          )
+        : undefined;
+
+    if (isOrgInstallMode() && session.user.orgId && nextNetsuiteMcpTools) {
+      for (const [accountId, entry] of Object.entries(
+        nextNetsuiteMcpTools.byAccount,
+      )) {
+        const clamped = await validateOrgMcpToolSettingsPatch({
+          orgId: session.user.orgId,
+          accountId,
+          incomingDisabledNames: entry.disabledNames,
+        });
+        nextNetsuiteMcpTools = withMcpToolDisabledNames(
+          nextNetsuiteMcpTools,
+          accountId,
+          clamped,
+        );
+      }
+    }
+
     let nextAiProviders:
       | Awaited<ReturnType<typeof persistProviderConfig>>
       | undefined;
@@ -638,6 +999,150 @@ export async function POST(request: Request) {
       nextMaxIterations = legacyFromList.maxIterations;
     }
 
+    if (isOrgInstallMode() && session.user.orgId) {
+      if (nextAccounts) {
+        try {
+          await validateOrgNetSuiteAccountsPatch({
+            orgId: session.user.orgId,
+            userId: session.user.id,
+            accounts: nextAccounts,
+          });
+          nextAccounts = await enforceOrgNetSuiteMcpAccountLabels({
+            orgId: session.user.orgId,
+            userId: session.user.id,
+            accounts: nextAccounts,
+          });
+        } catch (error) {
+          return NextResponse.json(
+            {
+              error:
+                error instanceof Error
+                  ? error.message
+                  : "NetSuite account not allowed.",
+            },
+            { status: 400 },
+          );
+        }
+      }
+
+      if (
+        nextEnabledSkillIds ||
+        nextCustomSkills !== undefined ||
+        nextDisabledOrgConnectedSkillSourceIds !== undefined
+      ) {
+        try {
+          const overlaid = await validateOrgSkillSettingsPatch({
+            orgId: session.user.orgId,
+            nextEnabledSkillIds: nextEnabledSkillIds ?? undefined,
+            nextCustomSkills: nextCustomSkills ?? undefined,
+            nextDisabledOrgConnectedSkillSourceIds:
+              nextDisabledOrgConnectedSkillSourceIds ?? undefined,
+          });
+          if (overlaid.enabledSkillIds !== undefined) {
+            nextEnabledSkillIds = overlaid.enabledSkillIds;
+          }
+          if (overlaid.customSkills !== undefined) {
+            nextCustomSkills = overlaid.customSkills;
+          }
+          if (overlaid.disabledOrgConnectedSkillSourceIds !== undefined) {
+            nextDisabledOrgConnectedSkillSourceIds =
+              overlaid.disabledOrgConnectedSkillSourceIds;
+          }
+        } catch (error) {
+          return NextResponse.json(
+            {
+              error:
+                error instanceof Error ? error.message : "Skill not allowed.",
+            },
+            { status: 400 },
+          );
+        }
+      }
+
+      if (nextAiProviders) {
+        try {
+          nextAiProviders = await validateOrgProviderSettingsPatch({
+            orgId: session.user.orgId,
+            userId: session.user.id,
+            existing: parseAiProviderConfig(existing?.aiProviders),
+            incoming: nextAiProviders,
+            legacyKeys: {
+              googleApiKey: encryptedGoogleKey,
+              anthropicApiKey: encryptedAnthropicKey,
+              openaiApiKey: encryptedOpenAIKey,
+            },
+          });
+        } catch (error) {
+          return NextResponse.json(
+            {
+              error:
+                error instanceof Error
+                  ? error.message
+                  : "Provider settings not allowed.",
+            },
+            { status: 400 },
+          );
+        }
+      }
+
+      if (
+        validated.googleApiKey !== undefined ||
+        validated.anthropicApiKey !== undefined ||
+        validated.openaiApiKey !== undefined
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "LLM provider API keys are managed by your organization administrator.",
+          },
+          { status: 400 },
+        );
+      }
+    }
+
+    let nextSearchResources: SearchResourceEntry[] | undefined;
+    let nextSearchDomainIds: string[] | undefined;
+    if (validated.searchResources !== undefined) {
+      try {
+        if (isOrgInstallMode() && session.user.orgId) {
+          const orgSearchRows = await listOrgSearchResources(
+            session.user.orgId,
+          );
+          nextSearchResources = overlayUserSearchResourceEnabled({
+            orgResources: orgSearchRows.map(orgSearchResourceToClient),
+            incoming: (validated.searchResources ?? []).map((item) => ({
+              id: item.id,
+              label: item.label,
+              url: item.url,
+              enabled: item.enabled !== false,
+              catalogId: item.catalogId ?? null,
+            })),
+          });
+        } else {
+          nextSearchResources = assertSearchResourceList(
+            (validated.searchResources ?? []).map((item) => ({
+              id: item.id,
+              label: item.label,
+              url: item.url,
+              enabled: item.enabled !== false,
+              catalogId: item.catalogId ?? null,
+            })),
+          );
+        }
+        nextSearchDomainIds = enabledSearchResourceIds(nextSearchResources);
+      } catch (error) {
+        return NextResponse.json(
+          {
+            error:
+              error instanceof Error
+                ? error.message
+                : "Invalid search resources.",
+          },
+          { status: 400 },
+        );
+      }
+    }
+
     await upsertUserSettings({
       userId: session.user.id,
       googleApiKey: nextGoogleKey,
@@ -650,22 +1155,16 @@ export async function POST(request: Request) {
       netsuiteClientId: nextClientId,
       netsuiteAccounts: nextAccounts,
       timezone: validated.timezone,
-      searchDomainIds:
-        validated.searchDomainIds !== undefined
-          ? (validated.searchDomainIds ?? [])
-          : undefined,
+      searchDomainIds: nextSearchDomainIds,
+      searchResources: nextSearchResources,
       maxIterations: nextMaxIterations,
       customInstructions: validated.customInstructions,
       enabledSkillIds: nextEnabledSkillIds,
       customSkills: nextCustomSkills,
+      disabledOrgConnectedSkillSourceIds:
+        nextDisabledOrgConnectedSkillSourceIds,
       aiProviders: nextAiProviders,
-      netsuiteMcpTools:
-        validated.netsuiteMcpTools !== undefined
-          ? mergeNetsuiteMcpToolSettings(
-              existing?.netsuiteMcpTools,
-              validated.netsuiteMcpTools,
-            )
-          : undefined,
+      netsuiteMcpTools: nextNetsuiteMcpTools,
       defaultPersonaId: nextDefaultPersonaId,
       hidePersonaPicker: nextHidePersonaPicker,
       customPersonas: nextCustomPersonas,

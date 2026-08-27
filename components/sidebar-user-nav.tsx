@@ -1,10 +1,12 @@
 "use client";
 
-import { ChevronUp, Settings } from "lucide-react";
+import { ChevronUp, Moon, Settings, Shield, Sun } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { User } from "next-auth";
 import { signOut, useSession } from "next-auth/react";
+import { useTheme } from "next-themes";
 import { useEffect } from "react";
 import { useAppPortal } from "@/components/portal/context";
 import {
@@ -26,13 +28,21 @@ import { cn } from "@/lib/utils";
 import { LoaderIcon, SignInIcon } from "./icons";
 import { toast } from "./toast";
 
-export function SidebarUserNav({ user }: { user: User }) {
+export function SidebarUserNav({
+  user,
+  showAdminLink = false,
+}: {
+  user: User;
+  showAdminLink?: boolean;
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data, status } = useSession();
   const { openPortal } = useAppPortal();
   const { state, isMobile } = useSidebar();
+  const { setTheme, resolvedTheme } = useTheme();
   const iconOnly = state === "collapsed" && !isMobile;
+  const isDark = resolvedTheme === "dark";
 
   const isGuest = guestRegex.test(data?.user?.email ?? "");
 
@@ -44,7 +54,7 @@ export function SidebarUserNav({ user }: { user: User }) {
     if (netsuiteConnected === "true") {
       toast({
         type: "success",
-        description: "NetSuite account connected successfully!",
+        description: "NetSuite connected successfully!",
       });
       // Clean up URL
       router.replace("/");
@@ -153,6 +163,29 @@ export function SidebarUserNav({ user }: { user: User }) {
               <Settings className="h-4 w-4" />
               Settings
             </DropdownMenuItem>
+            <DropdownMenuItem
+              className="cursor-pointer"
+              data-testid="user-nav-item-theme"
+              onSelect={(event) => {
+                event.preventDefault();
+                setTheme(isDark ? "light" : "dark");
+              }}
+            >
+              {isDark ? (
+                <Moon className="h-4 w-4" />
+              ) : (
+                <Sun className="h-4 w-4" />
+              )}
+              {isDark ? "Dark" : "Light"}
+            </DropdownMenuItem>
+            {showAdminLink ? (
+              <DropdownMenuItem asChild className="cursor-pointer">
+                <Link data-testid="user-nav-item-admin" href="/admin/users">
+                  <Shield className="h-4 w-4" />
+                  Admin
+                </Link>
+              </DropdownMenuItem>
+            ) : null}
             <DropdownMenuSeparator />
             <DropdownMenuItem
               className="cursor-pointer"

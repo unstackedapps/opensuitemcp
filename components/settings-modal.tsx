@@ -13,12 +13,14 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useEffect, useId, useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
+import { AccountExtrasSkeleton } from "@/components/account-extras-skeleton";
+import { AccountPasswordForm } from "@/components/account-password-form";
+import { AccountSignInMethods } from "@/components/account-sign-in-methods";
 import { AiProviderSettings } from "@/components/ai-provider-settings";
 import { LoaderIcon } from "@/components/icons";
-import {
-  NetSuiteConnectPanel,
-  type NetSuiteDcrProbeState,
-} from "@/components/netsuite-connect-panel";
+import { NetSuiteConnectPanel } from "@/components/netsuite-connect-panel";
+import { NetSuiteOidcLoginSettings } from "@/components/netsuite-oidc-login-settings";
+import { OnboardingPanelSkeleton } from "@/components/onboarding/onboarding-panel-skeleton";
 import { useAppPortal } from "@/components/portal/context";
 import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
@@ -29,15 +31,25 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { WebSearchSettings } from "@/components/web-search-settings";
+import {
+  getDcrProbeForAccount,
+  useNetSuiteDcrProbes,
+} from "@/hooks/use-netsuite-dcr-probes";
 import {
   type AiProviderConfig,
+  EMPTY_AI_PROVIDER_CONFIG,
   ensureSeededProviderConfig,
   parseAiProviderConfig,
 } from "@/lib/ai/provider-entries";
-import { getSearchDomainUrl, searchDomains } from "@/lib/ai/search-domains";
-import { guestRegex, PUBLIC_DOCS_ORIGIN } from "@/lib/constants";
+import type { SearchResourceEntry } from "@/lib/ai/search-resources";
+import { postSearchResources } from "@/lib/client/persist-search-resources";
+import {
+  guestRegex,
+  NETSUITE_INTEGRATION_DOCS_URL,
+  PUBLIC_DOCS_ORIGIN,
+} from "@/lib/constants";
 import type { NetSuiteAccountEntry } from "@/lib/netsuite/accounts";
 import {
   getNetSuiteNewIntegrationUrl,
@@ -143,11 +155,11 @@ const SECTION_META: Record<
   netsuite: {
     icon: Cloud,
     title: "NetSuite",
-    subtitle: "Connect MCP tools to your NetSuite account.",
+    subtitle: "Connect MCP tools to your NetSuite connections.",
     docsLinks: [
       {
         label: "Setup guide",
-        href: `${PUBLIC_DOCS_ORIGIN}/docs/netsuite-integration`,
+        href: NETSUITE_INTEGRATION_DOCS_URL,
       },
       {
         label: "AI Connector",
@@ -158,8 +170,7 @@ const SECTION_META: Record<
   search: {
     icon: Globe,
     title: "Web Search",
-    subtitle:
-      "Enable Oracle NetSuite Help Center search tools available in chat.",
+    subtitle: "Add sites the assistant can search in chat.",
   },
   timezone: {
     icon: Clock,
@@ -169,7 +180,7 @@ const SECTION_META: Record<
   account: {
     icon: User,
     title: "Account",
-    subtitle: "Your account details and session information.",
+    subtitle: "Account details and sign-in.",
   },
 };
 
@@ -210,9 +221,20 @@ async function fetchSettings() {
       netsuiteClientId: string | null;
       netsuiteAccounts: NetSuiteAccountEntry[];
       timezone: string;
-      searchDomainIds: string[];
+      searchResources?: SearchResourceEntry[];
+      orgSearchPolicy?: { managedByOrg: boolean };
       maxIterations: string;
       aiProviders?: AiProviderConfig;
+      orgMcpPolicy?: {
+        managedByOrg: boolean;
+        allowFreeAdd: boolean;
+        lockedAccountIds: string[];
+        addableAccounts: NetSuiteAccountEntry[];
+      };
+      orgLlmPolicy?: {
+        managedByOrg: boolean;
+      };
+      installMode?: "org" | "solo";
     };
   } catch (error) {
     console.error("[Settings] Error in fetchSettings:", error);
@@ -315,49 +337,48 @@ function getAllTimezones(): string[] {
 }
 
 export function SettingsPanel({ active, section }: SettingsPanelProps) {
-  const { closePortal } = useAppPortal();
+  const { closePortal, setSection } = useAppPortal();
   const { data: session } = useSession();
   const router = useRouter();
   const isGuest = guestRegex.test(session?.user?.email ?? "");
 
   // Fetch user info including lastLoginAt
-  const { data: userInfo } = useSWR(
-    session?.user?.id ? "/api/user/info" : null,
-    async () => {
-      const response = await fetch("/api/user/info");
-      if (!response.ok) {
-        throw new Error("Failed to fetch user info");
-      }
-      return response.json() as Promise<{
-        id: string;
-        email: string;
-        lastLoginAt: string | null;
-      }>;
-    },
-  );
+  const {
+    data: userInfo,
+    mutate: refreshUserInfo,
+    isLoading: isUserInfoLoading,
+  } = useSWR(session?.user?.id ? "/api/user/info" : null, async () => {
+    const response = await fetch("/api/user/info");
+    if (!response.ok) {
+      throw new Error("Failed to fetch user info");
+    }
+    return response.json() as Promise<{
+      id: string;
+      email: string;
+      lastLoginAt: string | null;
+      hasPassword: boolean;
+      mustResetPassword: boolean;
+      isSoloInstall: boolean;
+      signInMethods: {
+        password: boolean;
+        oidcConfigured: boolean;
+        hasOidcAccess: boolean;
+        oidcEmailLinked: boolean;
+        oidcLoginEmails: string[];
+        oidcLinked: boolean;
+      };
+    }>;
+  });
   const timezoneId = useId();
-  const [settingsCacheKey, setSettingsCacheKey] = useState<string | null>(null);
   const { mutate: globalMutate } = useSWRConfig();
 
-  // Create new cache key when panel becomes active to force fresh fetch
-  useEffect(() => {
-    if (active) {
-      setSettingsCacheKey(`settings-${Date.now()}`);
-    } else {
-      setSettingsCacheKey(null);
-    }
-  }, [active]);
-
-  // Fetch settings only when panel is active
   const {
     data: settings,
     mutate: refreshSettings,
     isLoading,
-  } = useSWR(settingsCacheKey, fetchSettings, {
+  } = useSWR(active ? "settings" : null, fetchSettings, {
     revalidateOnFocus: false,
     revalidateOnReconnect: false,
-    dedupeInterval: 0, // Always fetch fresh data, don't dedupe
-    revalidateIfStale: true, // Revalidate if data is stale
   });
   const { data: netsuiteStatus, mutate: refreshNetsuiteStatus } = useSWR(
     active ? "netsuite-status" : null,
@@ -374,20 +395,17 @@ export function SettingsPanel({ active, section }: SettingsPanelProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [timezoneSearch, setTimezoneSearch] = useState("");
   const [timezoneOpen, setTimezoneOpen] = useState(false);
-  const [searchDomainIds, setSearchDomainIds] = useState<string[]>([]);
-  const [aiProviders, setAiProviders] = useState<AiProviderConfig>(() =>
-    ensureSeededProviderConfig(null),
+  const [aiProviders, setAiProviders] = useState<AiProviderConfig>(
+    () => EMPTY_AI_PROVIDER_CONFIG,
   );
-  const [isConnectingNetSuite, setIsConnectingNetSuite] = useState(false);
-  const [dcrProbe, setDcrProbe] = useState<NetSuiteDcrProbeState>({
-    status: "idle",
-  });
+  const [connectingAccountId, setConnectingAccountId] = useState<string | null>(
+    null,
+  );
   const [editingLabels, setEditingLabels] = useState<Record<string, string>>(
     {},
   );
   const searchInputRef = useRef<HTMLInputElement>(null);
   const initializedForThisOpenRef = useRef(false);
-  const dcrProbeRequestIdRef = useRef(0);
   const timezones = getAllTimezones();
 
   // Filter timezones based on search
@@ -411,6 +429,12 @@ export function SettingsPanel({ active, section }: SettingsPanelProps) {
       initializedForThisOpenRef.current = false;
     }
   }, [active, refreshSettings]);
+
+  useEffect(() => {
+    if (active && (section === "account" || section === "netsuite")) {
+      void refreshUserInfo();
+    }
+  }, [active, section, refreshUserInfo]);
 
   // Populate form when settings load and panel is active
   useEffect(() => {
@@ -451,7 +475,6 @@ export function SettingsPanel({ active, section }: SettingsPanelProps) {
         ),
       );
       setTimezone(settings.timezone ?? "UTC");
-      setSearchDomainIds(settings.searchDomainIds ?? []);
       setAiProviders(
         ensureSeededProviderConfig(
           parseAiProviderConfig(
@@ -517,6 +540,49 @@ export function SettingsPanel({ active, section }: SettingsPanelProps) {
     return accountOptions[0]?.accountId ?? "";
   })();
 
+  const { probes, probeAccount, setProbe } = useNetSuiteDcrProbes(
+    accountOptions.map((account) => account.accountId),
+    {
+      enabled: active && !isGuest && section === "netsuite",
+      getAccountLabel: (accountId) =>
+        accountOptions.find((account) => account.accountId === accountId)
+          ?.label,
+      onProbeReady: async (accountId, clientId) => {
+        setNetsuiteAccounts((previous) => {
+          const base =
+            previous.length > 0
+              ? previous
+              : (settings?.netsuiteAccounts ?? [
+                  {
+                    accountId,
+                    label: accountId,
+                    clientId: null,
+                  },
+                ]);
+          const exists = base.some(
+            (account) => account.accountId === accountId,
+          );
+          const next = exists
+            ? base.map((account) =>
+                account.accountId === accountId
+                  ? { ...account, clientId }
+                  : account,
+              )
+            : [
+                ...base,
+                {
+                  accountId,
+                  label: accountId,
+                  clientId,
+                },
+              ];
+          return next;
+        });
+        await refreshSettings();
+      },
+    },
+  );
+
   // Auto-focus search input when dropdown opens
   useEffect(() => {
     if (timezoneOpen && searchInputRef.current) {
@@ -530,9 +596,6 @@ export function SettingsPanel({ active, section }: SettingsPanelProps) {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      // Include all selected domains (both included and premium tiers)
-      const effectiveSearchDomainIds = Array.from(new Set(searchDomainIds));
-
       const accountsToSave =
         netsuiteAccounts.length > 0
           ? netsuiteAccounts
@@ -547,7 +610,6 @@ export function SettingsPanel({ active, section }: SettingsPanelProps) {
         netsuiteAccountId: activeToSave,
         netsuiteAccounts: accountsToSave,
         timezone: timezone?.trim() || "UTC",
-        searchDomainIds: effectiveSearchDomainIds,
         aiProviders,
       };
 
@@ -590,128 +652,6 @@ export function SettingsPanel({ active, section }: SettingsPanelProps) {
     }
   };
 
-  const probeNetSuiteDcr = async (accountId: string) => {
-    const normalized = normalizeNetSuiteAccountId(accountId);
-    if (!normalized) {
-      setDcrProbe({ status: "idle" });
-      return;
-    }
-
-    const requestId = ++dcrProbeRequestIdRef.current;
-    setDcrProbe({ status: "probing" });
-
-    const selected = netsuiteAccounts.find(
-      (account) => account.accountId === normalized,
-    );
-
-    try {
-      const response = await fetch("/api/netsuite/probe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          accountId: normalized,
-          label: selected?.label || normalized,
-        }),
-      });
-      const data = await response.json().catch(() => ({}));
-
-      if (requestId !== dcrProbeRequestIdRef.current) {
-        return;
-      }
-
-      if (!response.ok) {
-        setDcrProbe({
-          status: "error",
-          error: data.error || "Failed to check NetSuite integration",
-        });
-        return;
-      }
-
-      if (data.status === "ready") {
-        setDcrProbe({ status: "ready", clientId: data.clientId });
-        setNetsuiteAccounts((previous) => {
-          const base =
-            previous.length > 0
-              ? previous
-              : (settings?.netsuiteAccounts ?? [
-                  {
-                    accountId: normalized,
-                    label: selected?.label || normalized,
-                    clientId: null,
-                  },
-                ]);
-          const exists = base.some(
-            (account) => account.accountId === normalized,
-          );
-          const next = exists
-            ? base.map((account) =>
-                account.accountId === normalized
-                  ? { ...account, clientId: data.clientId }
-                  : account,
-              )
-            : [
-                ...base,
-                {
-                  accountId: normalized,
-                  label: selected?.label || normalized,
-                  clientId: data.clientId,
-                },
-              ];
-          return next;
-        });
-        await refreshSettings();
-        return;
-      }
-
-      if (data.status === "needs_integration") {
-        setDcrProbe({
-          status: "needs_integration",
-          accountId: data.accountId,
-          integrationUrl: data.integrationUrl,
-          redirectUri: data.redirectUri,
-          dcrClientName: data.dcrClientName,
-          checklist: data.checklist ?? [],
-        });
-        await refreshSettings();
-        return;
-      }
-
-      setDcrProbe({
-        status: "error",
-        error: data.error || "Unexpected probe response",
-      });
-    } catch (error) {
-      if (requestId !== dcrProbeRequestIdRef.current) {
-        return;
-      }
-      setDcrProbe({
-        status: "error",
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to check NetSuite integration",
-      });
-    }
-  };
-
-  // Probe whenever the active account changes while Settings is active.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: account selection drives probe; probeNetSuiteDcr is recreated each render
-  useEffect(() => {
-    if (!active || isGuest || !selectedAccountId) {
-      // Invalidate in-flight probes so a late response can't show a miss card
-      // when nothing is selected.
-      dcrProbeRequestIdRef.current += 1;
-      setDcrProbe({ status: "idle" });
-      return;
-    }
-
-    if (netsuiteAccountId !== selectedAccountId) {
-      setNetsuiteAccountId(selectedAccountId);
-    }
-
-    void probeNetSuiteDcr(selectedAccountId);
-  }, [active, isGuest, selectedAccountId]);
-
   const persistAccounts = async (
     accounts: NetSuiteAccountEntry[],
     activeId: string,
@@ -727,6 +667,38 @@ export function SettingsPanel({ active, section }: SettingsPanelProps) {
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
       throw new Error(error.error || "Failed to save NetSuite accounts");
+    }
+  };
+
+  const handleAddOrgNetSuiteMcpAccount = async (
+    account: NetSuiteAccountEntry,
+  ) => {
+    const accountId = normalizeNetSuiteAccountId(account.accountId);
+    const nextAccounts = [
+      ...netsuiteAccounts.filter((entry) => entry.accountId !== accountId),
+      {
+        accountId,
+        label: account.label,
+        clientId: account.clientId ?? null,
+      },
+    ].sort((a, b) => a.label.localeCompare(b.label));
+
+    try {
+      await persistAccounts(nextAccounts, accountId);
+      setNetsuiteAccounts(nextAccounts);
+      setNetsuiteAccountId(accountId);
+      setEditingLabels((previous) => ({
+        ...previous,
+        [accountId]: account.label,
+      }));
+      await refreshSettings();
+      toast({ type: "success", description: `Added ${account.label}` });
+    } catch (error) {
+      toast({
+        type: "error",
+        description:
+          error instanceof Error ? error.message : "Failed to add connection",
+      });
     }
   };
 
@@ -761,7 +733,7 @@ export function SettingsPanel({ active, section }: SettingsPanelProps) {
       toast({
         type: "error",
         description:
-          error instanceof Error ? error.message : "Failed to add account",
+          error instanceof Error ? error.message : "Failed to add connection",
       });
     }
   };
@@ -792,13 +764,25 @@ export function SettingsPanel({ active, section }: SettingsPanelProps) {
       toast({
         type: "error",
         description:
-          error instanceof Error ? error.message : "Failed to remove account",
+          error instanceof Error
+            ? error.message
+            : "Failed to remove connection",
       });
     }
   };
 
   const handleRenameNetSuiteAccount = async (accountId: string) => {
     const normalized = normalizeNetSuiteAccountId(accountId);
+    const lockedIds = settings?.orgMcpPolicy?.lockedAccountIds ?? [];
+    if (lockedIds.includes(normalized)) {
+      toast({
+        type: "error",
+        description:
+          "NetSuite connection nicknames are managed by your organization.",
+      });
+      return;
+    }
+
     const label =
       editingLabels[normalized]?.trim() ||
       netsuiteAccounts.find((account) => account.accountId === normalized)
@@ -817,7 +801,9 @@ export function SettingsPanel({ active, section }: SettingsPanelProps) {
       toast({
         type: "error",
         description:
-          error instanceof Error ? error.message : "Failed to rename account",
+          error instanceof Error
+            ? error.message
+            : "Failed to rename connection",
       });
     }
   };
@@ -834,7 +820,7 @@ export function SettingsPanel({ active, section }: SettingsPanelProps) {
         description:
           error instanceof Error
             ? error.message
-            : "Failed to switch NetSuite account",
+            : "Failed to switch NetSuite connection",
       });
     }
   };
@@ -853,7 +839,7 @@ export function SettingsPanel({ active, section }: SettingsPanelProps) {
       }
       toast({
         type: "success",
-        description: "NetSuite account disconnected successfully",
+        description: "NetSuite connection disconnected successfully",
       });
       await refreshNetsuiteStatus();
     } catch (error) {
@@ -862,33 +848,35 @@ export function SettingsPanel({ active, section }: SettingsPanelProps) {
         description:
           error instanceof Error
             ? error.message
-            : "Failed to disconnect NetSuite account",
+            : "Failed to disconnect NetSuite connection",
       });
     }
   };
 
-  const handleNetSuiteConnect = async () => {
-    if (!netsuiteAccountId || dcrProbe.status !== "ready") {
+  const handleNetSuiteConnect = async (accountId: string) => {
+    const normalized = normalizeNetSuiteAccountId(accountId);
+    const probe = getDcrProbeForAccount(probes, normalized);
+    if (!normalized || probe.status !== "ready") {
       return;
     }
 
-    if (isNetSuiteAccountConnected(selectedAccountId, netsuiteStatus)) {
+    if (isNetSuiteAccountConnected(normalized, netsuiteStatus)) {
       return;
     }
 
     const selected = netsuiteAccounts.find(
-      (account) => account.accountId === netsuiteAccountId,
+      (account) => account.accountId === normalized,
     );
 
-    setIsConnectingNetSuite(true);
+    setConnectingAccountId(normalized);
     try {
       const response = await fetch("/api/netsuite/connect", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          accountId: netsuiteAccountId,
-          label: selected?.label || netsuiteAccountId,
-          clientId: dcrProbe.clientId,
+          accountId: normalized,
+          label: selected?.label || normalized,
+          clientId: probe.clientId,
         }),
       });
       const data = await response.json().catch(() => ({}));
@@ -898,7 +886,7 @@ export function SettingsPanel({ active, section }: SettingsPanelProps) {
       }
 
       if (data.status === "needs_integration") {
-        setDcrProbe({
+        setProbe(normalized, {
           status: "needs_integration",
           accountId: data.accountId,
           integrationUrl: data.integrationUrl,
@@ -918,19 +906,21 @@ export function SettingsPanel({ active, section }: SettingsPanelProps) {
         description:
           error instanceof Error
             ? error.message
-            : "Failed to connect NetSuite account",
+            : "Failed to connect NetSuite connection",
       });
     } finally {
-      setIsConnectingNetSuite(false);
+      setConnectingAccountId(null);
     }
   };
 
-  const openIntegrationSetup = () => {
+  const openIntegrationSetup = (accountId: string) => {
+    const normalized = normalizeNetSuiteAccountId(accountId);
+    const probe = getDcrProbeForAccount(probes, normalized);
     const url =
-      dcrProbe.status === "needs_integration"
-        ? dcrProbe.integrationUrl
-        : netsuiteAccountId
-          ? getNetSuiteNewIntegrationUrl(netsuiteAccountId)
+      probe.status === "needs_integration"
+        ? probe.integrationUrl
+        : normalized
+          ? getNetSuiteNewIntegrationUrl(normalized)
           : null;
     if (!url) {
       return;
@@ -938,38 +928,71 @@ export function SettingsPanel({ active, section }: SettingsPanelProps) {
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
-  const handleDomainToggle = (domainId: string, checked: boolean) => {
-    setSearchDomainIds((previous) => {
-      const next = new Set(previous);
-      if (checked) {
-        next.add(domainId);
-      } else {
-        next.delete(domainId);
+  const handlePersistSearchResources = async (next: SearchResourceEntry[]) => {
+    await globalMutate(
+      "settings",
+      (current) =>
+        current && typeof current === "object"
+          ? { ...current, searchResources: next }
+          : current,
+      { revalidate: false },
+    );
+    try {
+      await postSearchResources(next);
+      await refreshSettings();
+      await globalMutate("settings");
+    } catch (error) {
+      await globalMutate("settings");
+      throw error;
+    }
+  };
+
+  const handlePersistTimezone = async (next: string) => {
+    const value = next.trim() || "UTC";
+    const previous = timezone;
+    setTimezone(value);
+    setTimezoneOpen(false);
+    setTimezoneSearch("");
+    try {
+      const response = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ timezone: value }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to save timezone");
       }
-      return Array.from(next);
-    });
+      await refreshSettings();
+      await globalMutate("settings");
+      toast({ type: "success", description: "Timezone saved." });
+    } catch (error) {
+      setTimezone(previous);
+      toast({
+        type: "error",
+        description:
+          error instanceof Error ? error.message : "Failed to save timezone",
+      });
+    }
   };
 
   const connectedAccountIds = (
     netsuiteStatus?.connectedAccountIds ??
     (netsuiteStatus?.connected && selectedAccountId ? [selectedAccountId] : [])
   ).map((id) => normalizeNetSuiteAccountId(id));
-  const isSelectedAccountConnected = isNetSuiteAccountConnected(
-    selectedAccountId,
-    {
-      connected: netsuiteStatus?.connected,
-      connectedAccountIds,
-    },
-  );
-  const canConnectNetSuite =
-    Boolean(selectedAccountId) &&
-    !isConnectingNetSuite &&
-    !isSelectedAccountConnected &&
-    dcrProbe.status === "ready";
 
   // Show skeletons while loading
   const showSkeletons = isLoading;
   const sectionMeta = SECTION_META[section];
+  const isSoloInstall = settings?.installMode === "solo";
+  let panelSubtitle = sectionMeta.subtitle;
+  if (section === "netsuite" && isSoloInstall) {
+    panelSubtitle =
+      "Configure NetSuite sign-in and connect MCP tools for chat.";
+  } else if (section === "search" && settings?.orgSearchPolicy?.managedByOrg) {
+    panelSubtitle =
+      "Your organization provides these resources. You can disable them for your chats.";
+  }
   const defaultProviderType = aiProviders.providers.find(
     (entry) => entry.id === aiProviders.defaultId,
   )?.type;
@@ -995,6 +1018,63 @@ export function SettingsPanel({ active, section }: SettingsPanelProps) {
     await globalMutate("settings");
   };
 
+  const mcpConnectPanel = (
+    <NetSuiteConnectPanel
+      addableOrgAccounts={settings?.orgMcpPolicy?.addableAccounts ?? []}
+      allowFreeAccountAdd={
+        settings?.orgMcpPolicy?.managedByOrg
+          ? false
+          : (settings?.orgMcpPolicy?.allowFreeAdd ?? true)
+      }
+      accounts={accountOptions}
+      connectedAccountIds={connectedAccountIds}
+      connectingAccountId={connectingAccountId}
+      dcrProbesByAccountId={probes}
+      editingLabels={editingLabels}
+      lockedAccountIds={settings?.orgMcpPolicy?.lockedAccountIds ?? []}
+      newAccountId={newAccountId}
+      newAccountLabel={newAccountLabel}
+      onAddAccount={() => {
+        void handleAddNetSuiteAccount();
+      }}
+      onAddOrgAccount={(account) => {
+        void handleAddOrgNetSuiteMcpAccount(account);
+      }}
+      onConnect={(accountId) => {
+        void handleNetSuiteConnect(accountId);
+      }}
+      onDisconnect={(accountId) => {
+        void handleNetSuiteDisconnect(accountId);
+      }}
+      onEditingLabelChange={(accountId, value) => {
+        setEditingLabels((previous) => ({
+          ...previous,
+          [accountId]: value,
+        }));
+      }}
+      onNewAccountIdChange={setNewAccountId}
+      onNewAccountLabelChange={setNewAccountLabel}
+      onOpenIntegration={(accountId) => {
+        openIntegrationSetup(accountId);
+      }}
+      onProbe={(accountId) => {
+        void probeAccount(accountId);
+      }}
+      onRemoveAccount={(accountId) => {
+        void handleRemoveNetSuiteAccount(accountId);
+      }}
+      onRenameAccount={(accountId) => {
+        void handleRenameNetSuiteAccount(accountId);
+      }}
+      onSelectAccount={(accountId) => {
+        void handleSelectNetSuiteAccount(accountId);
+      }}
+      selectedAccountId={selectedAccountId}
+      settingsActive={active && section === "netsuite"}
+      showSkeletons={showSkeletons}
+    />
+  );
+
   return (
     <form
       autoComplete="off"
@@ -1006,7 +1086,7 @@ export function SettingsPanel({ active, section }: SettingsPanelProps) {
       <PortalPanelHeader
         docsLinks={headerDocsLinks}
         icon={sectionMeta.icon}
-        subtitle={sectionMeta.subtitle}
+        subtitle={panelSubtitle}
         title={sectionMeta.title}
       />
 
@@ -1016,6 +1096,7 @@ export function SettingsPanel({ active, section }: SettingsPanelProps) {
             aiProviders={aiProviders}
             onAiProvidersChange={setAiProviders}
             onPersistProviders={handlePersistProviders}
+            orgManaged={settings?.orgLlmPolicy?.managedByOrg ?? false}
             showSkeletons={showSkeletons || !settings}
           />
         ) : null}
@@ -1036,51 +1117,28 @@ export function SettingsPanel({ active, section }: SettingsPanelProps) {
                 Login
               </Button>
             </div>
+          ) : isSoloInstall ? (
+            <Tabs className="w-full" defaultValue="oidc">
+              <TabsList className="grid h-8 w-full grid-cols-2 p-0.5">
+                <TabsTrigger className="h-7 text-xs sm:text-sm" value="oidc">
+                  Sign in
+                </TabsTrigger>
+                <TabsTrigger className="h-7 text-xs sm:text-sm" value="mcp">
+                  MCP tools
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent className="mt-4" value="oidc">
+                <NetSuiteOidcLoginSettings
+                  active={active && section === "netsuite"}
+                  testReturnTo="/?settings=netsuite&netsuite_connected=true"
+                />
+              </TabsContent>
+              <TabsContent className="mt-4" value="mcp">
+                {mcpConnectPanel}
+              </TabsContent>
+            </Tabs>
           ) : (
-            <NetSuiteConnectPanel
-              accounts={accountOptions}
-              canConnect={canConnectNetSuite}
-              dcrProbe={dcrProbe}
-              editingLabels={editingLabels}
-              connectedAccountIds={connectedAccountIds}
-              isConnected={isSelectedAccountConnected}
-              isConnecting={isConnectingNetSuite}
-              newAccountId={newAccountId}
-              newAccountLabel={newAccountLabel}
-              onAddAccount={() => {
-                void handleAddNetSuiteAccount();
-              }}
-              onConnect={() => {
-                void handleNetSuiteConnect();
-              }}
-              onDisconnect={(accountId) => {
-                void handleNetSuiteDisconnect(accountId);
-              }}
-              onEditingLabelChange={(accountId, value) => {
-                setEditingLabels((previous) => ({
-                  ...previous,
-                  [accountId]: value,
-                }));
-              }}
-              onNewAccountIdChange={setNewAccountId}
-              onNewAccountLabelChange={setNewAccountLabel}
-              onOpenIntegration={openIntegrationSetup}
-              onProbe={(accountId) => {
-                void probeNetSuiteDcr(accountId);
-              }}
-              onRemoveAccount={(accountId) => {
-                void handleRemoveNetSuiteAccount(accountId);
-              }}
-              onRenameAccount={(accountId) => {
-                void handleRenameNetSuiteAccount(accountId);
-              }}
-              onSelectAccount={(accountId) => {
-                void handleSelectNetSuiteAccount(accountId);
-              }}
-              selectedAccountId={selectedAccountId}
-              settingsActive={active && section === "netsuite"}
-              showSkeletons={showSkeletons}
-            />
+            mcpConnectPanel
           )
         ) : null}
 
@@ -1100,47 +1158,21 @@ export function SettingsPanel({ active, section }: SettingsPanelProps) {
                 Login
               </Button>
             </div>
-          ) : showSkeletons ? (
-            <div className="space-y-2">
-              {[1, 2, 3].map((i) => (
-                <Skeleton className="h-14 w-full" key={i} />
-              ))}
-            </div>
           ) : (
-            <div>
-              {searchDomains.map((domain) => {
-                const checked = searchDomainIds.includes(domain.id);
-                return (
-                  <div
-                    className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-border/60 border-b py-3 last:border-b-0"
-                    key={domain.id}
-                  >
-                    <div className="min-w-0">
-                      <p className="font-medium text-sm">{domain.label}</p>
-                      <p className="text-muted-foreground text-xs">
-                        {domain.description}
-                      </p>
-                      <p className="mt-0.5 truncate text-muted-foreground text-xs">
-                        {getSearchDomainUrl(domain)}
-                      </p>
-                    </div>
-                    <Switch
-                      checked={checked}
-                      onCheckedChange={(isChecked) =>
-                        handleDomainToggle(domain.id, isChecked)
-                      }
-                    />
-                  </div>
-                );
-              })}
-            </div>
+            <WebSearchSettings
+              disabled={isSaving || isLoading}
+              managedByOrg={settings?.orgSearchPolicy?.managedByOrg ?? false}
+              onPersist={handlePersistSearchResources}
+              resources={settings?.searchResources ?? []}
+              showSkeletons={showSkeletons}
+            />
           )
         ) : null}
 
         {section === "timezone" ? (
           <div className="space-y-2">
             {showSkeletons ? (
-              <Skeleton className="h-10 w-full" />
+              <OnboardingPanelSkeleton rows={1} />
             ) : (
               <DropdownMenu
                 onOpenChange={(isOpen) => {
@@ -1199,9 +1231,7 @@ export function SettingsPanel({ active, section }: SettingsPanelProps) {
                           <DropdownMenuItem
                             key={tz}
                             onSelect={() => {
-                              setTimezone(tz);
-                              setTimezoneOpen(false);
-                              setTimezoneSearch("");
+                              void handlePersistTimezone(tz);
                             }}
                           >
                             {displayText}
@@ -1221,35 +1251,79 @@ export function SettingsPanel({ active, section }: SettingsPanelProps) {
         ) : null}
 
         {section === "account" && session?.user?.id ? (
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <p className="font-medium text-muted-foreground text-xs">
+          <div className="space-y-3">
+            <div className="grid gap-2.5 sm:grid-cols-2">
+              <div className="min-w-0 space-y-0.5">
+                <p className="font-medium text-[11px] text-muted-foreground sm:text-xs">
+                  Email
+                </p>
+                <p className="truncate text-sm">
+                  {userInfo?.email || session.user.email || "—"}
+                </p>
+              </div>
+              <div className="space-y-0.5">
+                <p className="font-medium text-[11px] text-muted-foreground sm:text-xs">
+                  Last login
+                </p>
+                <p className="text-sm">
+                  {userInfo?.lastLoginAt
+                    ? new Date(userInfo.lastLoginAt).toLocaleString(undefined, {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })
+                    : "—"}
+                </p>
+              </div>
+            </div>
+            <div className="min-w-0 space-y-0.5">
+              <p className="font-medium text-[11px] text-muted-foreground sm:text-xs">
                 User ID
               </p>
-              <p className="font-mono text-sm">{session.user.id}</p>
-            </div>
-            <div className="space-y-1.5">
-              <p className="font-medium text-muted-foreground text-xs">Email</p>
-              <p className="text-sm">
-                {userInfo?.email || session.user.email || "N/A"}
+              <p className="break-all font-mono text-[11px] sm:text-xs">
+                {session.user.id}
               </p>
             </div>
-            <div className="space-y-1.5">
-              <p className="font-medium text-muted-foreground text-xs">
-                Last Login
-              </p>
-              <p className="text-sm">
-                {userInfo?.lastLoginAt
-                  ? new Date(userInfo.lastLoginAt).toLocaleString()
-                  : "Never"}
-              </p>
-            </div>
+
+            {!isGuest && isUserInfoLoading ? (
+              <AccountExtrasSkeleton showPasswordSection />
+            ) : null}
+
+            {!isGuest && !isUserInfoLoading && userInfo?.signInMethods ? (
+              <AccountSignInMethods
+                hasOidcAccess={userInfo.signInMethods.hasOidcAccess}
+                hasPassword={userInfo.signInMethods.password}
+                isSoloInstall={userInfo.isSoloInstall}
+                oidcConfigured={userInfo.signInMethods.oidcConfigured}
+                oidcEmailLinked={userInfo.signInMethods.oidcEmailLinked}
+                oidcLoginEmails={userInfo.signInMethods.oidcLoginEmails}
+                onConfigureOidc={() => setSection("netsuite")}
+                onUpdated={() => {
+                  void refreshUserInfo();
+                }}
+              />
+            ) : null}
+
+            {!isGuest &&
+            !isUserInfoLoading &&
+            userInfo &&
+            (userInfo.hasPassword || userInfo.isSoloInstall) ? (
+              <AccountPasswordForm
+                hasPassword={userInfo.hasPassword}
+                mustResetPassword={userInfo.mustResetPassword}
+                onUpdated={() => {
+                  void refreshUserInfo();
+                }}
+              />
+            ) : null}
           </div>
         ) : null}
       </div>
 
       <DialogFooter className="shrink-0 gap-2 border-t border-border/60 px-4 py-3 sm:justify-end sm:px-5">
-        {section === "netsuite" ? (
+        {section === "netsuite" ||
+        section === "account" ||
+        section === "search" ||
+        section === "timezone" ? (
           <Button onClick={() => closePortal()} type="button">
             Close
           </Button>

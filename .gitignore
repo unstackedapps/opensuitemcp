@@ -18,6 +18,7 @@ tsconfig.tsbuildinfo
 
 # misc
 .DS_Store
+.eve/
 *.pem
 
 # debug

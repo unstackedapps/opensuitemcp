@@ -1,86 +1,48 @@
-"use client";
+import { Suspense } from "react";
+import { OrgAuthTabs } from "@/app/(auth)/login/org-auth-tabs";
+import { SoloAuthTabs } from "@/app/(auth)/login/solo-auth-tabs";
+import { AuthBrand } from "@/components/auth-brand";
+import { NetSuiteAuthErrorToast } from "@/components/netsuite-auth-error-toast";
+import { isOrgInstallMode } from "@/lib/org/install-config";
+import { listLoginOidcOptions } from "@/lib/org/oidc-accounts";
+import { isSoloBootstrapOpen } from "@/lib/org/solo-bootstrap";
 
-import Link from "next/link";
-import { useSession } from "next-auth/react";
-import { useActionState, useEffect, useRef, useState } from "react";
-
-import { AuthForm } from "@/components/auth-form";
-import { SubmitButton } from "@/components/submit-button";
-import { toast } from "@/components/toast";
-import { type LoginActionState, login } from "../actions";
-
-export default function Page() {
-  const [email, setEmail] = useState("");
-  const [isSuccessful, setIsSuccessful] = useState(false);
-  const hasNavigatedRef = useRef(false);
-
-  const [state, formAction] = useActionState<LoginActionState, FormData>(
-    login,
-    {
-      status: "idle",
-    },
-  );
-
-  const { update: updateSession } = useSession();
-
-  useEffect(() => {
-    // Early return for success status if already processed
-    if (state.status === "success") {
-      if (hasNavigatedRef.current) {
-        return; // Already processed, prevent duplicate
-      }
-      hasNavigatedRef.current = true; // Mark as processing immediately
-
-      setIsSuccessful(true);
-      // Update session and wait before navigating to ensure session is set
-      updateSession().then(() => {
-        // Use window.location for a clean navigation that fully reloads
-        window.location.href = "/";
-      });
-      return;
-    }
-
-    // Handle other statuses
-    if (state.status === "failed") {
-      toast({
-        type: "error",
-        description: "Invalid credentials!",
-      });
-    } else if (state.status === "invalid_data") {
-      toast({
-        type: "error",
-        description: "Failed validating your submission!",
-      });
-    }
-  }, [state.status, updateSession]);
-
-  const handleSubmit = (formData: FormData) => {
-    setEmail(formData.get("email") as string);
-    formAction(formData);
-  };
+export default async function Page() {
+  const oidcOptions = await listLoginOidcOptions();
+  const isOrgMode = isOrgInstallMode();
+  const isInitialSoloSetup = !isOrgMode && (await isSoloBootstrapOpen());
+  const allowPublicRegister = isInitialSoloSetup;
 
   return (
     <div className="flex h-dvh w-screen items-start justify-center bg-background pt-12 md:items-center md:pt-0">
-      <div className="flex w-full max-w-md flex-col gap-12 overflow-hidden rounded-2xl">
-        <div className="flex flex-col items-center justify-center gap-2 px-4 text-center sm:px-16">
-          <h3 className="font-semibold text-xl dark:text-zinc-50">Sign In</h3>
-          <p className="text-gray-500 text-sm dark:text-zinc-400">
-            Use your email and password to sign in
-          </p>
+      <Suspense fallback={null}>
+        <NetSuiteAuthErrorToast />
+      </Suspense>
+      <div className="flex w-full max-w-md flex-col gap-8 px-4 sm:px-0">
+        <div className="flex flex-col items-center text-center">
+          <AuthBrand size="lg" />
+          {!isOrgMode ? (
+            <p className="mt-3 text-muted-foreground text-sm">
+              {isInitialSoloSetup
+                ? "Create your account with NetSuite or email."
+                : "Sign in with NetSuite or email."}
+            </p>
+          ) : null}
         </div>
-        <AuthForm action={handleSubmit} defaultEmail={email}>
-          <SubmitButton isSuccessful={isSuccessful}>Sign in</SubmitButton>
-          <p className="mt-4 text-center text-gray-600 text-sm dark:text-zinc-400">
-            {"Don't have an account? "}
-            <Link
-              className="font-semibold text-gray-800 hover:underline dark:text-zinc-200"
-              href="/register"
-            >
-              Sign up
-            </Link>
-            {" for free."}
-          </p>
-        </AuthForm>
+
+        {isOrgMode ? (
+          <Suspense fallback={null}>
+            <OrgAuthTabs oidcOptions={oidcOptions} />
+          </Suspense>
+        ) : (
+          <Suspense fallback={null}>
+            <SoloAuthTabs
+              allowPublicRegister={allowPublicRegister}
+              isInitialSetup={isInitialSoloSetup}
+              oidcOptions={oidcOptions}
+            />
+          </Suspense>
+        )}
       </div>
     </div>
   );

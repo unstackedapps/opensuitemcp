@@ -38,12 +38,12 @@ export async function createAuthenticatedContext({
   const email = `test-${name}@playwright.com`;
   const password = generateId();
 
-  await page.goto("/register");
+  await page.goto("/login?account=create");
   await page.getByPlaceholder("user@acme.com").click();
   await page.getByPlaceholder("user@acme.com").fill(email);
   await page.getByLabel("Password").click();
   await page.getByLabel("Password").fill(password);
-  await page.getByRole("button", { name: "Sign Up" }).click();
+  await page.getByRole("button", { name: "Create account" }).click();
 
   await page.waitForURL("/");
   const createdToast = page.getByTestId("toast").filter({

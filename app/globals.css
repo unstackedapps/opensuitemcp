@@ -67,8 +67,8 @@
   --muted-foreground: hsl(40 4% 62%);
   --accent: hsl(240 2% 15%);
   --accent-foreground: hsl(40 6% 82%);
-  --destructive: hsl(0 62.8% 30.6%);
-  --destructive-foreground: hsl(40 6% 82%);
+  --destructive: hsl(0 72% 58%);
+  --destructive-foreground: hsl(0 0% 98%);
   --border: hsl(240 2% 20%);
   --input: hsl(210 3% 20%);
   --ring: hsl(40 6% 70%);
@@ -94,6 +94,7 @@
   --font-mono: var(--font-geist-mono);
 
   --breakpoint-toast-mobile: 600px;
+  --max-width-chat: 56.25rem;
 
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
@@ -206,6 +207,13 @@
 
   html {
     overflow-x: hidden;
+    scrollbar-gutter: stable;
+  }
+
+  /* Radix Select/Dialog scroll lock adds margin-right; gutter already reserves space. */
+  body[data-scroll-locked] {
+    margin-right: 0 !important;
+    padding-right: 0 !important;
   }
 }
 

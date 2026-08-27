@@ -321,11 +321,21 @@ const PurePreviewMessage = ({
               }
             }
 
-            if (type === "tool-searchNetsuiteDocs") {
-              const toolPart = part as Extract<
-                ChatMessage["parts"][number],
-                { type: "tool-searchNetsuiteDocs" }
-              >;
+            if (
+              type === "tool-searchNetsuiteDocs" ||
+              (typeof type === "string" && type.startsWith("tool-searchWeb_"))
+            ) {
+              const toolPart = part as {
+                type: string;
+                toolCallId: string;
+                state:
+                  | "input-streaming"
+                  | "input-available"
+                  | "output-available"
+                  | "output-error";
+                input: { query: string; maxResults?: number };
+                output?: WebSearchToolResult | { error: string };
+              };
               const { toolCallId, state } = toolPart;
 
               const hasError =
@@ -357,7 +367,7 @@ const PurePreviewMessage = ({
                   }
                   state={state}
                   toolCallId={toolCallId}
-                  type={type}
+                  type={type as `tool-${string}`}
                 />
               );
             }
@@ -686,7 +696,7 @@ export const ThinkingMessage = () => {
         left: isSidebarOpen ? "var(--sidebar-width, 20rem)" : "0",
       }}
     >
-      <div className="mx-auto flex max-w-3xl justify-center px-2 md:px-4">
+      <div className="mx-auto flex max-w-chat justify-center px-2 md:px-4">
         <div className="-translate-y-1/2 flex items-center gap-2">
           <span
             className="size-3 animate-smooth-bounce rounded-full bg-blue-500"

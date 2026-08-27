@@ -24,11 +24,13 @@ type McpToolRow = {
   displayName: string;
   description: string;
   allowed: boolean;
+  orgDisabled?: boolean;
 };
 
 type McpToolsResponse = {
   connected: boolean;
   accountId: string | null;
+  orgMcpToolsManaged?: boolean;
   tools?: McpToolRow[];
   error?: string;
   message?: string;
@@ -212,6 +214,10 @@ export function NetSuiteMcpToolsPanel({
     if (pending) {
       return;
     }
+    const target = tools.find((tool) => tool.originalName === toolName);
+    if (target?.orgDisabled && access === "allowed") {
+      return;
+    }
     const nextTools = tools.map((tool) =>
       tool.originalName === toolName
         ? { ...tool, allowed: access === "allowed" }
@@ -225,10 +231,16 @@ export function NetSuiteMcpToolsPanel({
       return;
     }
     const allowed = access === "allowed";
-    if (tools.every((tool) => tool.allowed === allowed)) {
+    const changeableTools = tools.filter((tool) => !tool.orgDisabled);
+    if (
+      changeableTools.length === 0 ||
+      changeableTools.every((tool) => tool.allowed === allowed)
+    ) {
       return;
     }
-    const nextTools = tools.map((tool) => ({ ...tool, allowed }));
+    const nextTools = tools.map((tool) =>
+      tool.orgDisabled ? tool : { ...tool, allowed },
+    );
     await applyToolAccess(nextTools, tools);
   };
 
@@ -240,7 +252,7 @@ export function NetSuiteMcpToolsPanel({
 
   if (!accountId) {
     return (
-      <EmptyState message="Select a NetSuite account to manage MCP tools." />
+      <EmptyState message="Select a NetSuite connection to manage MCP tools." />
     );
   }
 
@@ -270,8 +282,12 @@ export function NetSuiteMcpToolsPanel({
     );
   }
 
-  const allAllowed = sortedTools.every((tool) => tool.allowed !== false);
-  const allDisabled = sortedTools.every((tool) => tool.allowed === false);
+  const allAllowed = sortedTools.every(
+    (tool) => tool.allowed !== false || tool.orgDisabled,
+  );
+  const allDisabled = sortedTools.every(
+    (tool) => tool.allowed === false || tool.orgDisabled,
+  );
 
   return (
     <div className="space-y-2">
@@ -314,13 +330,17 @@ export function NetSuiteMcpToolsPanel({
               )}
             </div>
             <Select
-              disabled={pending}
+              disabled={pending || tool.orgDisabled}
               onValueChange={(value) => {
                 if (value === "allowed" || value === "disabled") {
                   void handleAccessChange(tool.originalName, value);
                 }
               }}
-              value={tool.allowed === false ? "disabled" : "allowed"}
+              value={
+                tool.orgDisabled || tool.allowed === false
+                  ? "disabled"
+                  : "allowed"
+              }
             >
               <SelectTrigger
                 aria-label={`${tool.displayName} access`}
@@ -334,6 +354,11 @@ export function NetSuiteMcpToolsPanel({
               </SelectContent>
             </Select>
           </div>
+          {tool.orgDisabled ? (
+            <p className="text-[11px] text-muted-foreground">
+              Disabled by your organization
+            </p>
+          ) : null}
           <McpToolDescription description={tool.description} />
         </div>
       ))}
@@ -347,6 +372,7 @@ export function NetSuiteMcpToolsSection({
   active,
   connected,
   nested = false,
+  defaultExpanded = true,
 }: {
   accountId: string;
   accountLabel?: string;
@@ -354,32 +380,64 @@ export function NetSuiteMcpToolsSection({
   connected: boolean;
   /** When true, sits under the account row (no outer top border). */
   nested?: boolean;
+  defaultExpanded?: boolean;
 }) {
+  const [sectionExpanded, setSectionExpanded] = useState(defaultExpanded);
   const scopeLabel = formatNetSuiteAccountDisplay({
     accountId,
     label: accountLabel,
   });
+  const { total, allowed, isLoading } = useNetSuiteMcpToolSummary(
+    accountId,
+    active && connected,
+  );
+  const sectionSummary =
+    total != null && allowed != null
+      ? `${allowed} of ${total} allowed`
+      : isLoading
+        ? "Loading…"
+        : null;
+
   return (
     <div
       className={
         nested ? "space-y-2 pt-1" : "space-y-3 border-border/60 border-t pt-3"
       }
     >
-      <div className="space-y-1">
-        <p className="flex items-center gap-1.5 font-medium text-sm">
-          <Wrench className="size-3.5 text-muted-foreground" />
-          MCP tools for {scopeLabel}
-        </p>
-        <p className="text-muted-foreground text-xs leading-relaxed">
-          Allowed or disabled for this account. Changes apply immediately. All
-          tools stay allowed by default.
-        </p>
-      </div>
-      <NetSuiteMcpToolsPanel
-        accountId={accountId}
-        active={active}
-        connected={connected}
-      />
+      <button
+        className="flex w-full min-w-0 items-start gap-2 text-left"
+        onClick={() => setSectionExpanded((value) => !value)}
+        type="button"
+      >
+        <ChevronDown
+          className={cn(
+            "mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform",
+            sectionExpanded && "rotate-180",
+          )}
+        />
+        <div className="min-w-0 flex-1 space-y-1">
+          <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 font-medium text-sm">
+            <Wrench className="size-3.5 text-muted-foreground" />
+            <span>MCP tools for {scopeLabel}</span>
+            {sectionSummary ? (
+              <span className="text-muted-foreground text-xs">
+                {sectionSummary}
+              </span>
+            ) : null}
+          </p>
+          <p className="text-muted-foreground text-xs leading-relaxed">
+            Allowed or disabled for this account. Changes apply immediately. All
+            tools stay allowed by default.
+          </p>
+        </div>
+      </button>
+      {sectionExpanded ? (
+        <NetSuiteMcpToolsPanel
+          accountId={accountId}
+          active={active}
+          connected={connected}
+        />
+      ) : null}
     </div>
   );
 }

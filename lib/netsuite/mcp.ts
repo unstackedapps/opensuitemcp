@@ -517,7 +517,7 @@ export function createMCPTool(params: {
       if (!accessToken) {
         return {
           error:
-            "NetSuite authentication required. Please connect your NetSuite account first.",
+            "NetSuite authentication required. Connect a NetSuite MCP connection in Settings first.",
         };
       }
 
@@ -605,6 +605,7 @@ export async function loadNetSuiteMCPTools(
   userId: string,
   options?: {
     settings?: Awaited<ReturnType<typeof getUserSettings>>;
+    orgId?: string | null;
   },
 ): Promise<LoadedNetSuiteMcpTools> {
   const settings =
@@ -619,6 +620,16 @@ export async function loadNetSuiteMCPTools(
     console.log("[NetSuite] No account configured for user:", userId);
     return EMPTY_LOADED_MCP_TOOLS;
   }
+
+  const { resolveEffectiveNetsuiteMcpToolSettings } = await import(
+    "@/lib/org/mcp-tool-policy"
+  );
+  const effectiveMcpToolSettings =
+    await resolveEffectiveNetsuiteMcpToolSettings({
+      orgId: options?.orgId,
+      accountId,
+      userSettings: settings?.netsuiteMcpTools,
+    });
 
   try {
     const memory = mcpToolsListCache.getLookup(userId, accountId);
@@ -637,7 +648,7 @@ export async function loadNetSuiteMCPTools(
         mcpTools: memory.value,
         userId,
         accountId,
-        netsuiteMcpTools: settings?.netsuiteMcpTools,
+        netsuiteMcpTools: effectiveMcpToolSettings,
       });
     }
 
@@ -664,7 +675,7 @@ export async function loadNetSuiteMCPTools(
         mcpTools: durable.tools as MCPTool[],
         userId,
         accountId,
-        netsuiteMcpTools: settings?.netsuiteMcpTools,
+        netsuiteMcpTools: effectiveMcpToolSettings,
       });
     }
 
@@ -690,7 +701,7 @@ export async function loadNetSuiteMCPTools(
       mcpTools,
       userId,
       accountId,
-      netsuiteMcpTools: settings?.netsuiteMcpTools,
+      netsuiteMcpTools: effectiveMcpToolSettings,
     });
   } catch (error) {
     console.error("[NetSuite] Error fetching/creating tools:", error);

@@ -4,21 +4,34 @@
  */
 import { syncCommunitySkills } from "./sync-community";
 import { syncOracleSkills } from "./sync-oracle";
+import {
+  formatSkillSyncError,
+  skillSyncAttemptCount,
+  withSkillSyncRetry,
+} from "./sync-with-retry";
 
 async function main() {
-  await syncOracleSkills();
+  const attempts = skillSyncAttemptCount();
+
   try {
-    await syncCommunitySkills();
+    await withSkillSyncRetry("Oracle sync", syncOracleSkills);
   } catch (error) {
-    console.warn("[skills] Community sync failed:", error);
+    console.error(
+      `[skills] Oracle sync failed after ${attempts} attempt(s): ${formatSkillSyncError(error)}`,
+    );
+    process.exit(1);
+  }
+
+  try {
+    await withSkillSyncRetry("Community sync", syncCommunitySkills);
+  } catch (error) {
+    console.warn(
+      `[skills] Community sync failed after ${attempts} attempt(s): ${formatSkillSyncError(error)}`,
+    );
   }
 }
 
-main()
-  .then(() => {
-    process.exit(0);
-  })
-  .catch((error) => {
-    console.error("[skills] Sync failed:", error);
-    process.exit(1);
-  });
+main().catch((error) => {
+  console.error(`[skills] Sync failed: ${formatSkillSyncError(error)}`);
+  process.exit(1);
+});

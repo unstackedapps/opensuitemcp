@@ -9,6 +9,7 @@ import {
   MCP_TOOL_DISABLED_MESSAGE,
 } from "@/lib/netsuite/mcp-tool-settings";
 import { getNetSuiteToken } from "@/lib/netsuite/tokens";
+import { resolveEffectiveNetsuiteMcpToolSettings } from "@/lib/org/mcp-tool-policy";
 
 const bodySchema = z.object({
   name: z.string().min(1).max(256),
@@ -42,7 +43,13 @@ export async function POST(request: Request) {
 
   try {
     const parsed = bodySchema.parse(await request.json());
-    if (!isMcpToolAllowed(settings?.netsuiteMcpTools, accountId, parsed.name)) {
+    const effectiveMcpToolSettings =
+      await resolveEffectiveNetsuiteMcpToolSettings({
+        orgId: session.user.orgId,
+        accountId,
+        userSettings: settings?.netsuiteMcpTools,
+      });
+    if (!isMcpToolAllowed(effectiveMcpToolSettings, accountId, parsed.name)) {
       return NextResponse.json(
         {
           error: MCP_TOOL_DISABLED_MESSAGE,

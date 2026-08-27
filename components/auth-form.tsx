@@ -3,6 +3,10 @@
 import Form from "next/form";
 import { useId } from "react";
 
+import {
+  AUTH_FIELD_INPUT_CLASS,
+  AUTH_FIELD_LABEL_CLASS,
+} from "@/components/auth-field-styles";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 
@@ -21,19 +25,16 @@ export function AuthForm({
   const passwordId = useId();
 
   return (
-    <Form action={action} className="flex flex-col gap-4 px-4 sm:px-16">
+    <Form action={action} className="flex w-full flex-col gap-3">
       <div className="flex flex-col gap-2">
-        <Label
-          className="font-normal text-zinc-600 dark:text-zinc-400"
-          htmlFor={emailId}
-        >
-          Email Address
+        <Label className={AUTH_FIELD_LABEL_CLASS} htmlFor={emailId}>
+          Email address
         </Label>
 
         <Input
           autoComplete="email"
           autoFocus
-          className="bg-muted text-md md:text-sm"
+          className={AUTH_FIELD_INPUT_CLASS}
           defaultValue={defaultEmail}
           id={emailId}
           name="email"
@@ -44,15 +45,12 @@ export function AuthForm({
       </div>
 
       <div className="flex flex-col gap-2">
-        <Label
-          className="font-normal text-zinc-600 dark:text-zinc-400"
-          htmlFor={passwordId}
-        >
+        <Label className={AUTH_FIELD_LABEL_CLASS} htmlFor={passwordId}>
           Password
         </Label>
 
         <Input
-          className="bg-muted text-md md:text-sm"
+          className={AUTH_FIELD_INPUT_CLASS}
           id={passwordId}
           name="password"
           required
