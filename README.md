@@ -10,11 +10,16 @@ Bring your own LLM keys (**Google Gemini**, **Anthropic Claude**, **OpenAI**, or
 
 **Star this repo** if it helps your NetSuite team — it makes the project discoverable.
 
-**Current release:** [v5.0.1](https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.0.1) · [Changelog](CHANGELOG.md)
+**Current release:** [v5.2.0](https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.2.0) · [Changelog](CHANGELOG.md)
 
 <img src="./docs/screenshot-chat.png" alt="OpenSuiteMCP chat UI" width="100%" />
 
 _Main chat UI._
+
+## What’s in 5.2
+
+- **Skill invocation modes** — Auto, Slash command, or Off for Oracle, Community, Connected, and Custom skills
+- **Richer chat turns** — thinking chips, per-turn usage, and prettier MCP tool output (including SuiteQL)
 
 ## What’s in 5.0
 
@@ -34,16 +39,16 @@ Built-in personas ship in `.personas/*.md` in this repo. Custom personas are sto
 
 ## Skills
 
-Open **Skills** from the App Portal (or the sidebar). Four sources:
+Open **Skills** from the App Portal (or the sidebar). Four sources, three invocation modes:
 
-| Source | How it works |
-| --- | --- |
-| **Oracle** | Shared pack; opt-in toggles; injected when enabled |
-| **Community** | Shared pack from [opensuitemcp-community-skills](https://github.com/unstackedapps/opensuitemcp-community-skills); opt-in toggles |
-| **Connected** | Paste a public GitHub repo/folder URL; invoke with `/skill-name` in chat (one skill, this turn only) |
-| **Custom** | Paste/import custom `SKILL.md`; per-skill enable |
+| Source | Default | How it works |
+| --- | --- | --- |
+| **Oracle** | Off | Shared pack; Auto / Slash / Off. Core AI Connector instructions stay Auto. |
+| **Community** | Off | Shared pack from [opensuitemcp-community-skills](https://github.com/unstackedapps/opensuitemcp-community-skills); Auto / Slash / Off |
+| **Connected** | Slash | Paste a public GitHub repo/folder URL; Auto / Slash / Off |
+| **Custom** | Auto | Paste/import custom `SKILL.md`; Auto / Slash / Off |
 
-Enabled Oracle/Community/custom skills are injected into the system prompt for **new** messages. Connected skills are **not** toggled on — type `/` in the composer to pick one for that message.
+**Auto** is injected for new messages. **Slash** only when you type `/skill-name`. **Off** is never injected. Composer `/` lists Auto and Slash skills. Modes apply to **new** messages, not as a per-thread override.
 
 Shared packs are **not** vendored in git. Sync them with:
 
@@ -51,7 +56,7 @@ Shared packs are **not** vendored in git. Sync them with:
 pnpm skills:sync
 ```
 
-That downloads Oracle’s [agent-skills](https://github.com/oracle/netsuite-suitecloud-sdk/tree/master/packages/agent-skills) into `.data/oracle-skills` (or `ORACLE_SKILLS_DIR`) and Community skills into `.data/community-skills` (or `COMMUNITY_SKILLS_DIR`). Run after setup, on deploy (production entrypoint), and on a **weekly cron**. New upstream skills appear as new toggles (off by default); removed upstream skills are pruned. Optional: `GITHUB_TOKEN` for higher GitHub API limits.
+That downloads Oracle’s [agent-skills](https://github.com/oracle/netsuite-suitecloud-sdk/tree/master/packages/agent-skills) into `.data/oracle-skills` (or `ORACLE_SKILLS_DIR`) and Community skills into `.data/community-skills` (or `COMMUNITY_SKILLS_DIR`). Run after setup, on deploy (production entrypoint), and on a **weekly cron**. New upstream skills appear as Off until you set a mode; removed upstream skills are pruned. Optional: `GITHUB_TOKEN` for higher GitHub API limits.
 
 **Connected** examples:
 
