@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [5.2.0] - 2026-09-10
+
+### ✨ Added
+
+- **Skill invocation modes** — Auto, Slash command, or Off per skill across Oracle, Community, Connected, and Custom (defaults: Oracle/Community Off, Connected Slash, Custom Auto). Composer `/` lists Auto and Slash skills.
+- **Thinking chips** — model reasoning shown as chips on the turn
+- **Turn usage** — context / token usage for the current turn
+- **Pretty MCP tool output** — formatted tool results, including SuiteQL
+
+### Changed
+
+- Skills panel uses a mode select instead of a boolean toggle
+- Chat message layout: grouped parts, sidebar history, and stick-to-bottom behavior
+
+### 📦 Database
+
+- Migration `0024_skill_modes` — `UserSettings.skillModes` jsonb (`pnpm db:migrate`)
+
+### 🧰 Technical
+
+- `gpt-tokenizer` for context breakdown; `package.json` version aligned to `5.2.0`
+
+---
+
 ## [5.0.1] - 2026-08-27
 
 ### 🐛 Fixed
@@ -621,6 +645,7 @@ First stable release of OpenSuiteMCP - an open source, production-ready NetSuite
 
 ---
 
+[5.2.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.2.0
 [5.0.1]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.0.1
 [5.0.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.0.0
 [4.1.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v4.1.0
