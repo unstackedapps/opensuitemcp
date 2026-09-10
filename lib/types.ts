@@ -42,9 +42,14 @@ export type ChatTools = {
 export type CustomUIDataTypes = {
   appendMessage: string;
   usage: AppUsage;
+  turnDuration: { durationMs: number };
   invokedConnectedSkills: Array<{
     id: string;
     slug: string;
+    name: string;
+  }>;
+  turnSkills: Array<{
+    id: string;
     name: string;
   }>;
 };

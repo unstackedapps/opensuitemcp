@@ -117,7 +117,7 @@ export class ChatPage {
   }
 
   async openSkillsPortal() {
-    await this.page.getByTestId("sidebar-skills-button").click();
+    await this.page.getByTestId("composer-skills-button").first().click();
     const portal = this.page.getByTestId("app-portal");
     await expect(portal).toBeVisible();
     await expect(this.page.getByTestId("skills-panel")).toBeVisible();
