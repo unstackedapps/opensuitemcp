@@ -2,9 +2,10 @@
 
 import { generateText, type UIMessage } from "ai";
 import type { VisibilityType } from "@/components/visibility-selector";
-import { summaryPrompt, titlePrompt } from "@/lib/ai/prompts";
+import { titlePrompt } from "@/lib/ai/prompts";
 import type { AiProviderType } from "@/lib/ai/provider-entries";
 import { getUserProvider } from "@/lib/ai/providers";
+import { fallbackChatTitle, sanitizeChatTitle } from "@/lib/chat/chat-title";
 import {
   deleteMessagesByChatIdAfterTimestamp,
   getMessageById,
@@ -13,28 +14,8 @@ import {
 } from "@/lib/db/queries";
 import { getTextFromMessage } from "@/lib/utils";
 
-function cleanText(text: string): string {
-  return (
-    text
-      .trim()
-      // Remove markdown headers (# ## ###)
-      .replace(/^#+\s*/g, "")
-      // Remove markdown bold/italic
-      .replace(/\*\*/g, "")
-      .replace(/\*/g, "")
-      // Remove quotes if at start/end
-      .replace(/^["']|["']$/g, "")
-      // Remove colons at the start
-      .replace(/^:\s*/, "")
-      // Remove "Title:" or "Summary:" prefix if present
-      .replace(/^(Title|Summary):\s*/i, "")
-      .trim()
-  );
-}
-
 function placeholderChatTitle(message: UIMessage): string {
-  const text = getTextFromMessage(message).trim();
-  return text.slice(0, 50) || "New Chat";
+  return fallbackChatTitle(getTextFromMessage(message));
 }
 
 export async function generateTitleFromUserMessage({
@@ -53,10 +34,10 @@ export async function generateTitleFromUserMessage({
   reasoningModelId?: string;
 }): Promise<{ title: string; summary: string | null }> {
   const text = getTextFromMessage(message);
+  const fallbackTitle = placeholderChatTitle(message);
 
-  // If no API key is provided, use a default title based on message content
   if (!apiKey && provider !== "custom") {
-    return { title: placeholderChatTitle(message), summary: null };
+    return { title: fallbackTitle, summary: null };
   }
 
   try {
@@ -65,42 +46,17 @@ export async function generateTitleFromUserMessage({
       speedModelId,
       reasoningModelId,
     });
-    const titleModel = providerInstance.languageModel("title-model");
-
-    // Step 1: Generate a longer summary (20-30 words)
-    const { text: summaryText } = await generateText({
-      model: titleModel,
-      system: summaryPrompt,
+    const { text: titleText } = await generateText({
+      model: providerInstance.languageModel("title-model"),
+      system: titlePrompt,
       prompt: text,
     });
 
-    let cleanedSummary = cleanText(summaryText);
-    // Limit summary to reasonable length (about 200 characters / 30 words)
-    if (cleanedSummary.length > 200) {
-      cleanedSummary = `${cleanedSummary.slice(0, 197)}...`;
-    }
-
-    // Step 2: Generate a refined short title from the summary
-    const { text: titleText } = await generateText({
-      model: titleModel,
-      system: titlePrompt,
-      prompt: cleanedSummary,
-    });
-
-    let cleanedTitle = cleanText(titleText);
-    // Limit to 60 characters and add ellipsis if truncated
-    if (cleanedTitle.length > 60) {
-      cleanedTitle = `${cleanedTitle.slice(0, 57)}...`;
-    }
-
-    return {
-      title: cleanedTitle || placeholderChatTitle(message),
-      summary: cleanedSummary || null,
-    };
+    const title = sanitizeChatTitle(titleText) || fallbackTitle;
+    return { title, summary: null };
   } catch (error) {
-    // If title generation fails (e.g., API key issue), fall back to default
     console.error("[Title] Error generating title:", error);
-    return { title: placeholderChatTitle(message), summary: null };
+    return { title: fallbackTitle, summary: null };
   }
 }
 

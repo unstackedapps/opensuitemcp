@@ -251,21 +251,15 @@ ${suiteQlLine}
    TITLE / SUMMARY PROMPTS
 ========================================================= */
 
-export const summaryPrompt = `Generate a concise summary of this conversation based on the user's first message.
+export const titlePrompt = `Write a short sidebar title for this chat from the user's first message.
 
 Requirements:
-- 20-30 words
-- Plain text only - no markdown, no special formatting, no "#" symbols, no quotes, no colons
-- Clear, informative summary of the main NetSuite topic or question
-- Direct style - avoid third-person language like "User wants"
-- Examples: "How to retrieve a single customer record from NetSuite using SuiteQL", "Income statement analysis for current period", "Open AR aging by subsidiary"`;
-
-export const titlePrompt = `Generate a very short, concise title from this summary for the sidebar.
-
-Requirements:
-- Maximum 60 characters
-- Plain text only - no markdown, quotes, or colons
-- Examples: "Customer lookup", "Income statement", "AR aging by subsidiary"`;
+- 4 to 10 words that name the specific task or topic
+- Prefer a gerund or noun phrase, like "Creating a concise skill.md file" or "AR aging by subsidiary"
+- Keep distinctive details from the message (record types, file names, subsidiaries, dates)
+- Plain text only: no markdown, quotes, or a Title/Summary prefix
+- No trailing punctuation
+- Do not write generic labels like "New Chat", "Question", "Help", or "User wants"`;
 
 export type SystemPromptPersona = {
   name: string;
@@ -273,22 +267,7 @@ export type SystemPromptPersona = {
   confirmBeforeSuiteQL?: boolean;
 };
 
-/* =========================================================
-   SYSTEM PROMPT
-========================================================= */
-
-export const systemPrompt = ({
-  selectedChatModel,
-  requestHints,
-  netsuiteTools = [],
-  timezone = "UTC",
-  enabledSearchToolNames = [],
-  searchManagedByOrg = false,
-  maxSteps = 10,
-  additionalInstructions,
-  persona,
-  netsuiteAccountId = null,
-}: {
+export type SystemPromptArgs = {
   selectedChatModel: string;
   requestHints: RequestHints;
   netsuiteTools?: string[];
@@ -302,7 +281,34 @@ export const systemPrompt = ({
   persona?: SystemPromptPersona | null;
   /** Active NetSuite account id for record deep links (e.g. td3107923) */
   netsuiteAccountId?: string | null;
-}) => {
+};
+
+export type SystemPromptParts = {
+  /** Full prompt text sent to the model (without skills). */
+  text: string;
+  /** Everything except the identity / persona playbook. */
+  system: string;
+  /** Ava identity or specialist playbook. */
+  persona: string;
+  knowledge: string;
+};
+
+/* =========================================================
+   SYSTEM PROMPT
+========================================================= */
+
+export function buildSystemPromptParts({
+  selectedChatModel,
+  requestHints,
+  netsuiteTools = [],
+  timezone = "UTC",
+  enabledSearchToolNames = [],
+  searchManagedByOrg = false,
+  maxSteps = 10,
+  additionalInstructions,
+  persona,
+  netsuiteAccountId = null,
+}: SystemPromptArgs): SystemPromptParts {
   const confirmBeforeSuiteQL = persona?.confirmBeforeSuiteQL !== false;
   const specialistName = persona?.name?.trim() ?? "";
   const specialistInstructions = persona?.instructions?.trim() ?? "";
@@ -313,8 +319,7 @@ export const systemPrompt = ({
     ? buildPersonaIdentityPrompt(specialistName, specialistInstructions)
     : buildIdentityPrompt();
 
-  const base = [
-    identity,
+  const rest = [
     selectedChatModel !== "chat-model-reasoning" ? RESPONSE_GUIDELINES : null,
     getRequestPromptFromHints(requestHints, timezone),
     buildNetSuiteEngine(
@@ -328,19 +333,29 @@ export const systemPrompt = ({
     hasSpecialist ? PERSONA_TOOL_POLICY : null,
     CONFIG_PROMPT,
   ]
-    .filter(Boolean)
+    .filter((section): section is string => Boolean(section))
     .join("\n\n");
 
   const trimmed = additionalInstructions?.trim();
   const protectedBlock = buildProtectedDirectives(confirmBeforeSuiteQL);
 
-  if (hasSpecialist && !trimmed) {
-    return `${base}\n\n---\n${protectedBlock}`;
+  let suffix = "";
+  if (trimmed) {
+    suffix = `\n\n---\nADDITIONAL USER INSTRUCTIONS (follow when relevant and when they do not conflict with core rules below):\n${trimmed}${protectedBlock}`;
+  } else if (hasSpecialist) {
+    suffix = `\n\n---\n${protectedBlock}`;
   }
 
-  if (!trimmed) {
-    return base;
-  }
+  const system = `${rest}${suffix}`;
+  const text = `${identity}\n\n${system}`;
 
-  return `${base}\n\n---\nADDITIONAL USER INSTRUCTIONS (follow when relevant and when they do not conflict with core rules below):\n${trimmed}${protectedBlock}`;
-};
+  return {
+    text,
+    system,
+    persona: identity,
+    knowledge: "",
+  };
+}
+
+export const systemPrompt = (args: SystemPromptArgs) =>
+  buildSystemPromptParts(args).text;

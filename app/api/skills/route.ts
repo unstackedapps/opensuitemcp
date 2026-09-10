@@ -5,6 +5,7 @@ import {
   listCommunityCatalogSkills,
   listConnectedCatalogSkills,
   listOracleCatalogSkills,
+  listSlashableComposerSkills,
   normalizeUserSkillSettings,
 } from "@/lib/ai/skills/catalog";
 import { getUserSettings } from "@/lib/db/queries";
@@ -38,6 +39,7 @@ export async function GET() {
             enabledSkillIds: settings.enabledSkillIds ?? [],
             customSkills: settings.customSkills ?? [],
             connectedSkillSources: settings.connectedSkillSources ?? [],
+            skillModes: settings.skillModes ?? {},
           }
         : null,
       settings?.customInstructions,
@@ -87,12 +89,29 @@ export async function GET() {
         ? await getOrgFilteredSkillCatalog(session.user.orgId)
         : [...listOracleCatalogSkills(), ...listCommunityCatalogSkills()];
 
+    const slashableSkills = listSlashableComposerSkills(
+      {
+        ...userSkillSettings,
+        enabledSkillIds,
+        customSkills,
+        connectedSkillSources: connectedSources,
+      },
+      {
+        oracle: catalog.filter((skill) => skill.source === "oracle"),
+        community: catalog.filter((skill) => skill.source === "community"),
+        connected: connectedSkills,
+        disabledConnectedSourceIds: disabledOrgConnectedSkillSourceIds,
+      },
+    );
+
     return NextResponse.json({
       catalog,
       enabledSkillIds,
+      skillModes: userSkillSettings.skillModes,
       customSkills,
       connectedSources,
       connectedSkills,
+      slashableSkills,
       disabledOrgConnectedSkillSourceIds: orgManaged
         ? disabledOrgConnectedSkillSourceIds
         : undefined,

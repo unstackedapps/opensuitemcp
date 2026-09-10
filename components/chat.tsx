@@ -876,7 +876,7 @@ export function Chat({
 
   return (
     <>
-      <div className="overscroll-behavior-contain flex h-dvh min-w-0 touch-pan-y flex-col bg-background">
+      <div className="overscroll-behavior-contain flex h-dvh min-h-0 min-w-0 touch-pan-y flex-col overflow-hidden bg-background">
         <ChatHeader
           chatId={id}
           isReadonly={isReadonly}
@@ -943,11 +943,16 @@ export function Chat({
           selectedModelId={initialChatModel}
           setMessages={setMessages}
           status={status}
+          usage={usage}
           votes={votes}
         />
 
         {messages.length > 0 && (
-          <div className="sticky bottom-0 z-1 mx-auto flex w-full max-w-chat flex-col gap-2 border-t-0 bg-background px-2 pb-3 md:px-4 md:pb-4">
+          <div className="relative z-1 mx-auto flex w-full max-w-composer flex-col gap-2 border-t-0 bg-background px-2 pb-3 md:px-4 md:pb-4">
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-x-0 -top-10 h-10 bg-linear-to-t from-background to-transparent"
+            />
             {maxIterationsReached && !isReadonly && (
               <Card className="w-full border-blue-500/50 bg-blue-500/10 dark:bg-blue-500/20">
                 <CardContent className="p-4">

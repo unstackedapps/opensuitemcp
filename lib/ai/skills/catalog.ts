@@ -1,5 +1,14 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import {
+  isSlashableMode,
+  normalizeSkillModes,
+  resolveSkillMode,
+  type SkillKind,
+  type SkillModesMap,
+  shouldInjectSkillForTurn,
+  slugifySkillName,
+} from "./modes";
 import { getCommunitySkillsDir } from "./sync-community";
 import type { ConnectedSkillSource } from "./sync-connected";
 import {
@@ -43,11 +52,15 @@ export type CustomSkill = {
   enabled?: boolean;
   /** Org admin skill — users can disable, not edit or delete. */
   managedByOrg?: boolean;
+  /** Slash token without leading slash */
+  slug?: string;
 };
 
 export type UserSkillSettings = {
   /** Oracle/community skill ids enabled for the session */
   enabledSkillIds: string[];
+  /** Per-skill auto | slash | off (takes precedence over enabledSkillIds) */
+  skillModes: SkillModesMap;
   customSkills: CustomSkill[];
   connectedSkillSources: ConnectedSkillSource[];
 };
@@ -350,12 +363,32 @@ function normalizeConnectedSources(raw: unknown): ConnectedSkillSource[] {
     }));
 }
 
+function assignCustomSkillSlugs(skills: CustomSkill[]): CustomSkill[] {
+  const used = new Set<string>();
+  return skills.map((skill) => {
+    const base =
+      skill.slug?.trim() ||
+      slugifySkillName(skill.name, `custom-${skill.id.slice(0, 8)}`);
+    let slug = base;
+    if (used.has(slug)) {
+      const suffix = skill.id
+        .replace(/[^a-z0-9]/gi, "")
+        .slice(0, 6)
+        .toLowerCase();
+      slug = `${base.slice(0, 40)}-${suffix || "x"}`;
+    }
+    used.add(slug);
+    return { ...skill, slug };
+  });
+}
+
 export function normalizeUserSkillSettings(
   raw: unknown,
   legacyCustomInstructions?: string | null,
 ): UserSkillSettings {
   const empty: UserSkillSettings = {
     enabledSkillIds: getDefaultEnabledSkillIds(),
+    skillModes: {},
     customSkills: [],
     connectedSkillSources: [],
   };
@@ -364,33 +397,41 @@ export function normalizeUserSkillSettings(
   if (raw && typeof raw === "object") {
     const value = raw as Partial<UserSkillSettings> & {
       connectedSkillSources?: unknown;
+      skillModes?: unknown;
     };
+    const customSkills = Array.isArray(value.customSkills)
+      ? value.customSkills
+          .filter(
+            (skill) =>
+              skill &&
+              typeof skill.id === "string" &&
+              typeof skill.name === "string" &&
+              typeof skill.content === "string",
+          )
+          .map((skill) => ({
+            id: skill.id,
+            name: skill.name.trim() || "Custom skill",
+            content: skill.content,
+            updatedAt:
+              typeof skill.updatedAt === "string"
+                ? skill.updatedAt
+                : new Date().toISOString(),
+            enabled: skill.enabled !== false,
+            managedByOrg: skill.managedByOrg === true,
+            slug:
+              typeof skill.slug === "string" && skill.slug.trim().length > 0
+                ? skill.slug.trim()
+                : undefined,
+          }))
+      : [];
     settings = {
       enabledSkillIds: Array.isArray(value.enabledSkillIds)
         ? value.enabledSkillIds.filter(
             (id): id is string => typeof id === "string",
           )
         : [],
-      customSkills: Array.isArray(value.customSkills)
-        ? value.customSkills
-            .filter(
-              (skill) =>
-                skill &&
-                typeof skill.id === "string" &&
-                typeof skill.name === "string" &&
-                typeof skill.content === "string",
-            )
-            .map((skill) => ({
-              id: skill.id,
-              name: skill.name.trim() || "Custom skill",
-              content: skill.content,
-              updatedAt:
-                typeof skill.updatedAt === "string"
-                  ? skill.updatedAt
-                  : new Date().toISOString(),
-              enabled: skill.enabled !== false,
-            }))
-        : [],
+      skillModes: normalizeSkillModes(value.skillModes),
+      customSkills: assignCustomSkillSlugs(customSkills),
       connectedSkillSources: normalizeConnectedSources(
         value.connectedSkillSources,
       ),
@@ -407,7 +448,7 @@ export function normalizeUserSkillSettings(
   ) {
     settings = {
       ...settings,
-      customSkills: [
+      customSkills: assignCustomSkillSlugs([
         {
           id: "migrated-custom-instructions",
           name: "Custom instructions",
@@ -416,11 +457,106 @@ export function normalizeUserSkillSettings(
           enabled: true,
         },
         ...settings.customSkills,
-      ],
+      ]),
     };
   }
 
   return settings;
+}
+
+function catalogSkillKind(skill: CatalogSkill): SkillKind {
+  if (
+    skill.source === "community" ||
+    skill.source === "custom" ||
+    skill.source === "connected"
+  ) {
+    return skill.source;
+  }
+  return "oracle";
+}
+
+function resolveCatalogSkillMode(
+  skill: CatalogSkill,
+  userSettings: UserSkillSettings,
+): ReturnType<typeof resolveSkillMode> {
+  return resolveSkillMode({
+    skillId: skill.id,
+    kind: catalogSkillKind(skill),
+    alwaysOn: skill.alwaysOn,
+    skillModes: userSettings.skillModes,
+    enabledSkillIds: userSettings.enabledSkillIds,
+  });
+}
+
+/** Skills injected for this turn (excludes the always-on connector). */
+export function listTurnSkills(
+  userSettings: UserSkillSettings,
+  options?: { invokedConnectedSkillIds?: string[] | null; userId?: string },
+): Array<{ id: string; name: string }> {
+  const invokedIds = options?.invokedConnectedSkillIds ?? [];
+  const skills: Array<{ id: string; name: string }> = [];
+
+  for (const skill of listOracleCatalogSkills()) {
+    if (skill.alwaysOn) {
+      continue;
+    }
+    if (
+      !shouldInjectSkillForTurn(
+        resolveCatalogSkillMode(skill, userSettings),
+        skill.id,
+        invokedIds,
+      )
+    ) {
+      continue;
+    }
+    skills.push({ id: skill.id, name: skill.name });
+  }
+
+  for (const skill of listCommunityCatalogSkills()) {
+    if (
+      !shouldInjectSkillForTurn(
+        resolveCatalogSkillMode(skill, userSettings),
+        skill.id,
+        invokedIds,
+      )
+    ) {
+      continue;
+    }
+    skills.push({ id: skill.id, name: skill.name });
+  }
+
+  for (const skill of userSettings.customSkills) {
+    const mode = resolveSkillMode({
+      skillId: skill.id,
+      kind: "custom",
+      skillModes: userSettings.skillModes,
+      enabledSkillIds: userSettings.enabledSkillIds,
+      customEnabled: skill.enabled !== false,
+    });
+    if (!shouldInjectSkillForTurn(mode, skill.id, invokedIds)) {
+      continue;
+    }
+    skills.push({
+      id: skill.id,
+      name: skill.name.trim() || "Custom skill",
+    });
+  }
+
+  if (options?.userId) {
+    const connected = listConnectedCatalogSkills(
+      options.userId,
+      userSettings.connectedSkillSources,
+    );
+    for (const skill of connected) {
+      const mode = resolveCatalogSkillMode(skill, userSettings);
+      if (!shouldInjectSkillForTurn(mode, skill.id, invokedIds)) {
+        continue;
+      }
+      skills.push({ id: skill.id, name: skill.name });
+    }
+  }
+
+  return skills;
 }
 
 /** Names of skills active for this session (for inventory / config tools). */
@@ -429,42 +565,62 @@ export function listEnabledSkillNames(
   options?: { invokedConnectedSkillIds?: string[] | null; userId?: string },
 ): string[] {
   const names: string[] = ["AI Connector Instructions (always on)"];
+  const invokedIds = options?.invokedConnectedSkillIds ?? [];
 
   for (const skill of listOracleCatalogSkills()) {
     if (skill.alwaysOn) {
       continue;
     }
-    if (!userSettings.enabledSkillIds.includes(skill.id)) {
+    if (
+      !shouldInjectSkillForTurn(
+        resolveCatalogSkillMode(skill, userSettings),
+        skill.id,
+        invokedIds,
+      )
+    ) {
       continue;
     }
     names.push(skill.name);
   }
 
   for (const skill of listCommunityCatalogSkills()) {
-    if (!userSettings.enabledSkillIds.includes(skill.id)) {
+    if (
+      !shouldInjectSkillForTurn(
+        resolveCatalogSkillMode(skill, userSettings),
+        skill.id,
+        invokedIds,
+      )
+    ) {
       continue;
     }
     names.push(skill.name);
   }
 
   for (const skill of userSettings.customSkills) {
-    if (skill.enabled === false) {
+    const mode = resolveSkillMode({
+      skillId: skill.id,
+      kind: "custom",
+      skillModes: userSettings.skillModes,
+      enabledSkillIds: userSettings.enabledSkillIds,
+      customEnabled: skill.enabled !== false,
+    });
+    if (!shouldInjectSkillForTurn(mode, skill.id, invokedIds)) {
       continue;
     }
     names.push(skill.name?.trim() || "Custom skill");
   }
 
-  const invokedIds = options?.invokedConnectedSkillIds ?? [];
-  if (invokedIds.length > 0 && options?.userId) {
+  if (options?.userId) {
     const connected = listConnectedCatalogSkills(
       options.userId,
       userSettings.connectedSkillSources,
     );
-    for (const skillId of invokedIds) {
-      const match = connected.find((skill) => skill.id === skillId);
-      if (match) {
-        names.push(`${match.name} (invoked)`);
+    for (const skill of connected) {
+      const mode = resolveCatalogSkillMode(skill, userSettings);
+      if (!shouldInjectSkillForTurn(mode, skill.id, invokedIds)) {
+        continue;
       }
+      names.push(mode === "slash" ? `${skill.name} (invoked)` : skill.name);
     }
   }
 
@@ -521,11 +677,19 @@ export function buildSkillsPromptSection(
     }
   }
 
+  const invokedIds = options?.invokedConnectedSkillIds ?? [];
+
   const oracleCatalog = listOracleCatalogSkills().filter(
     (skill) => !skill.alwaysOn,
   );
   for (const skill of oracleCatalog) {
-    if (!userSettings.enabledSkillIds.includes(skill.id)) {
+    if (
+      !shouldInjectSkillForTurn(
+        resolveCatalogSkillMode(skill, userSettings),
+        skill.id,
+        invokedIds,
+      )
+    ) {
       continue;
     }
     const body = readOracleSkillBody(skill.id);
@@ -535,7 +699,13 @@ export function buildSkillsPromptSection(
   }
 
   for (const skill of listCommunityCatalogSkills()) {
-    if (!userSettings.enabledSkillIds.includes(skill.id)) {
+    if (
+      !shouldInjectSkillForTurn(
+        resolveCatalogSkillMode(skill, userSettings),
+        skill.id,
+        invokedIds,
+      )
+    ) {
       continue;
     }
     const body = readCommunitySkillBody(skill.slug ?? "");
@@ -545,26 +715,35 @@ export function buildSkillsPromptSection(
   }
 
   for (const skill of userSettings.customSkills) {
-    if (skill.enabled === false) {
+    const mode = resolveSkillMode({
+      skillId: skill.id,
+      kind: "custom",
+      skillModes: userSettings.skillModes,
+      enabledSkillIds: userSettings.enabledSkillIds,
+      customEnabled: skill.enabled !== false,
+    });
+    if (!shouldInjectSkillForTurn(mode, skill.id, invokedIds)) {
       continue;
     }
     push(skill.name || "Custom skill", skill.content, MAX_OPTIONAL_SKILL_CHARS);
   }
 
-  const invokedIds = options?.invokedConnectedSkillIds ?? [];
-  if (invokedIds.length > 0 && options?.userId) {
+  if (options?.userId) {
     const connectedMeta = listConnectedCatalogSkills(
       options.userId,
       userSettings.connectedSkillSources,
     );
-    for (const skillId of invokedIds) {
-      const body = getConnectedSkillContent(options.userId, skillId);
+    for (const skill of connectedMeta) {
+      const mode = resolveCatalogSkillMode(skill, userSettings);
+      if (!shouldInjectSkillForTurn(mode, skill.id, invokedIds)) {
+        continue;
+      }
+      const body = getConnectedSkillContent(options.userId, skill.id);
       if (!body) {
         continue;
       }
-      const meta = connectedMeta.find((skill) => skill.id === skillId);
       push(
-        meta?.name ?? "Connected skill (invoked)",
+        mode === "slash" ? `${skill.name} (invoked)` : skill.name,
         body,
         MAX_OPTIONAL_SKILL_CHARS,
       );
@@ -578,13 +757,101 @@ ENABLED SKILLS
 These skills are active for this session. If the user asks what skills you have access to, list them by name (do not invent others):
 ${enabledNames.map((name) => `- ${name}`).join("\n")}
 
-AI Connector Instructions are always on (core NetSuite MCP rules are already in your system prompt). Optional Oracle/Community/custom skills below add specialized guidance when relevant. Connected skills appear only when invoked with / in chat for that turn.`;
+AI Connector Instructions are always on (core NetSuite MCP rules are already in your system prompt). Skills set to Auto are injected every turn. Skills set to Slash command are injected when the user types /skill-name.`;
 
   if (parts.length === 0) {
     return `\n\n${inventory}\n`;
   }
 
   return `\n\n${inventory}\n\n==============================\nACTIVE SKILL INSTRUCTIONS\n==============================\n\nApply the following skill instructions when relevant to the user's request.\n\n${parts.join("\n\n---\n\n")}`;
+}
+
+export type SlashableComposerSkill = {
+  id: string;
+  name: string;
+  description: string;
+  slug: string;
+  connectionLabel: string;
+};
+
+export function listSlashableComposerSkills(
+  userSettings: UserSkillSettings,
+  options: {
+    oracle: CatalogSkill[];
+    community: CatalogSkill[];
+    connected: CatalogSkill[];
+    disabledConnectedSourceIds?: string[];
+  },
+): SlashableComposerSkill[] {
+  const disabled = new Set(options.disabledConnectedSourceIds ?? []);
+  const skills: SlashableComposerSkill[] = [];
+
+  const pushIfSlashable = (
+    skill: {
+      id: string;
+      name: string;
+      description?: string;
+      slug?: string;
+      alwaysOn?: boolean;
+    },
+    kind: SkillKind,
+    connectionLabel: string,
+    customEnabled?: boolean,
+  ) => {
+    if (skill.alwaysOn) {
+      return;
+    }
+    const slug = skill.slug?.trim() || slugifySkillName(skill.name);
+    if (!slug) {
+      return;
+    }
+    const mode = resolveSkillMode({
+      skillId: skill.id,
+      kind,
+      alwaysOn: skill.alwaysOn,
+      skillModes: userSettings.skillModes,
+      enabledSkillIds: userSettings.enabledSkillIds,
+      customEnabled,
+    });
+    if (!isSlashableMode(mode)) {
+      return;
+    }
+    skills.push({
+      id: skill.id,
+      name: skill.name,
+      description: skill.description ?? "",
+      slug,
+      connectionLabel,
+    });
+  };
+
+  for (const skill of options.oracle) {
+    pushIfSlashable(skill, "oracle", "Oracle");
+  }
+  for (const skill of options.community) {
+    pushIfSlashable(skill, "community", "Community");
+  }
+  for (const skill of userSettings.customSkills) {
+    pushIfSlashable(
+      {
+        id: skill.id,
+        name: skill.name,
+        description: "Custom skill",
+        slug: skill.slug,
+      },
+      "custom",
+      "Custom",
+      skill.enabled !== false,
+    );
+  }
+  for (const skill of options.connected) {
+    if (skill.sourceId && disabled.has(skill.sourceId)) {
+      continue;
+    }
+    pushIfSlashable(skill, "connected", skill.connectionLabel ?? "Connected");
+  }
+
+  return skills.sort((a, b) => a.slug.localeCompare(b.slug));
 }
 
 export { ALWAYS_ON_SKILL_ID };

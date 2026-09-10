@@ -36,7 +36,7 @@ export const postRequestBodySchema = z.object({
   aiProviderId: z.string().max(64).optional().nullable(),
   personaId: z.string().max(64).optional().nullable(),
   refiningPersonaId: z.string().max(64).optional().nullable(),
-  /** Connected skills invoked via / in the composer for this turn only */
+  /** Skills invoked via / in the composer for this turn only */
   invokedConnectedSkillIds: z.array(z.string().max(256)).max(20).optional(),
 });
 

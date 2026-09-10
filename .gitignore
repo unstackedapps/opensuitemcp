@@ -15,6 +15,7 @@ build
 
 # typescript
 tsconfig.tsbuildinfo
+tsconfig.test.tsbuildinfo
 
 # misc
 .DS_Store

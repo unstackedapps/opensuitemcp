@@ -4,6 +4,7 @@ import { Check, Circle, X } from "lucide-react";
 import { useState } from "react";
 import { toast } from "@/components/toast";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 type AccountSignInMethodsProps = {
   hasPassword: boolean;
@@ -27,19 +28,23 @@ function SignInMethodRow({
 }) {
   return (
     <li className="flex items-start gap-2">
-      {enabled ? (
-        <Check
-          aria-hidden
-          className="mt-0.5 size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400"
-        />
-      ) : (
-        <Circle
-          aria-hidden
-          className="mt-0.5 size-3.5 shrink-0 text-muted-foreground/50"
-        />
-      )}
+      <span className="flex h-5 w-4 shrink-0 items-center justify-center">
+        {enabled ? (
+          <Check
+            aria-hidden
+            className="size-3.5 text-emerald-600 dark:text-emerald-400"
+          />
+        ) : (
+          <Circle aria-hidden className="size-3.5 text-muted-foreground/50" />
+        )}
+      </span>
       <div className="min-w-0">
-        <span className={enabled ? "text-sm" : "text-muted-foreground text-sm"}>
+        <span
+          className={cn(
+            "block text-sm leading-5",
+            enabled ? "text-foreground" : "text-muted-foreground",
+          )}
+        >
           {label}
         </span>
         {hint ? (

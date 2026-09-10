@@ -3,13 +3,21 @@ import equal from "fast-deep-equal";
 import { motion } from "framer-motion";
 import { memo, useEffect, useState } from "react";
 import { useAppPortal } from "@/components/portal/context";
-import { useSidebar } from "@/components/ui/sidebar";
 import type { ProposeCustomPersonaResult } from "@/lib/ai/personas/interview";
 import type { GetCurrentConfigToolResult } from "@/lib/ai/tools/get-current-config";
 import type { ReadWebpageToolResult } from "@/lib/ai/tools/read-webpage";
 import type { WebSearchToolResult } from "@/lib/ai/web-search";
+import {
+  collectToolParts,
+  groupMessageParts,
+} from "@/lib/chat/group-message-parts";
+import { countMcpToolOutcomes } from "@/lib/chat/message-turn-meta";
 import type { Vote } from "@/lib/db/schema";
+import { resolveToolCallArguments } from "@/lib/mcp/format-tool-display";
+import { isMcpToolEmptyResult } from "@/lib/mcp/tool-empty";
+import { getMcpToolError } from "@/lib/mcp/tool-error";
 import type { ChatMessage } from "@/lib/types";
+import type { AppUsage } from "@/lib/usage";
 import { cn, sanitizeText } from "@/lib/utils";
 import { McpAppHost, type McpAppLaunch } from "./mcp-app-host";
 import { MessageActions } from "./message-actions";
@@ -18,7 +26,10 @@ import { MessageContent } from "./message-elements/message";
 import { Response } from "./message-elements/response";
 import { MessageReasoning } from "./message-reasoning";
 import { MessageTool } from "./message-tool";
+import { MessageTurnUsage } from "./message-turn-usage";
+import { type SkillChip, ThinkingIndicator } from "./thinking-indicator";
 import { GetCurrentConfigToolOutput } from "./tool-outputs/get-current-config-tool-output";
+import { McpToolOutput } from "./tool-outputs/mcp-tool-output";
 import { ProposeCustomPersonaToolOutput } from "./tool-outputs/propose-custom-persona-tool-output";
 import { ReadWebpageToolOutput } from "./tool-outputs/read-webpage-tool-output";
 import { WebSearchToolOutput } from "./tool-outputs/web-search-tool-output";
@@ -66,6 +77,11 @@ const PurePreviewMessage = ({
   regenerate,
   isReadonly,
   onMcpAppUserMessage,
+  showThinking = false,
+  activeSkills = [],
+  turnUsage,
+  turnStartedAt,
+  turnSkills = [],
 }: {
   chatId: string;
   message: ChatMessage;
@@ -75,6 +91,11 @@ const PurePreviewMessage = ({
   regenerate: RegenerateFn;
   isReadonly: boolean;
   onMcpAppUserMessage?: (text: string) => void;
+  showThinking?: boolean;
+  activeSkills?: SkillChip[];
+  turnUsage?: AppUsage;
+  turnStartedAt?: string;
+  turnSkills?: SkillChip[];
 }) => {
   const [mode, setMode] = useState<"view" | "edit">("view");
   const [mcpAppLaunch, setMcpAppLaunch] = useState<McpAppLaunch | null>(null);
@@ -124,7 +145,7 @@ const PurePreviewMessage = ({
       className="group/message w-full"
       data-role={message.role}
       data-testid={`message-${message.role}`}
-      initial={{ opacity: 0 }}
+      initial={showThinking ? false : { opacity: 0 }}
     >
       <div
         className={cn("flex w-full min-w-0 items-start gap-2 md:gap-3", {
@@ -142,454 +163,455 @@ const PurePreviewMessage = ({
               message.role === "user" && mode !== "edit",
           })}
         >
-          {message.parts?.map((part, index) => {
-            const { type } = part;
-            const key = `message-${message.id}-part-${index}`;
+          {showThinking ? <ThinkingIndicator skills={activeSkills} /> : null}
+          {(() => {
+            const renderPart = (
+              part: NonNullable<ChatMessage["parts"]>[number],
+              index: number,
+            ) => {
+              const { type } = part;
+              const key = `message-${message.id}-part-${index}`;
 
-            if (type === "data-invokedConnectedSkills") {
-              return null;
-            }
-
-            if (type === "reasoning" && part.text?.trim().length > 0) {
-              // Find all reasoning parts to determine if this is the last one
-              const reasoningParts =
-                message.parts?.filter((p) => p.type === "reasoning") ?? [];
-              const isLastReasoningPart =
-                reasoningParts.length > 0 && reasoningParts.at(-1) === part;
-              // Only the last reasoning part should show as streaming if message is loading
-              const isReasoningStreaming = isLoading && isLastReasoningPart;
-
-              return (
-                <MessageReasoning
-                  isLoading={isReasoningStreaming}
-                  key={key}
-                  reasoning={part.text}
-                />
-              );
-            }
-
-            if ((part as { type?: string }).type === "diffusion") {
-              const diffusionPart = part as unknown as {
-                type: "diffusion";
-                text: string;
-              };
-              if (!diffusionPart.text?.trim().length) {
+              if (type === "data-invokedConnectedSkills") {
                 return null;
               }
-              return (
-                <MessageReasoning
-                  isLoading={false}
-                  key={key}
-                  reasoning={diffusionPart.text}
-                />
-              );
-            }
 
-            if (type === "text") {
-              // Check if text content is an error message (starts with **Error:**)
-              const textContent = part.text || "";
-              const isError = textContent.trim().startsWith("**Error:**");
-
-              if (isError && message.role === "assistant") {
-                // Extract error message and details
-                // Remove **Error:** prefix first
-                const remainingText = textContent.replace(
-                  /^\*\*Error:\*\*\s*/,
-                  "",
-                );
-
-                // Check if there's a **Details:** section
-                const detailsMatch = remainingText.match(
-                  /\n\n\*\*Details:\*\*\n(.+)$/s,
-                );
-                const errorDetails = detailsMatch?.[1]?.trim();
-
-                // Get the error message (everything before **Details:** or the whole thing)
-                let errorMessage = remainingText;
-                if (detailsMatch) {
-                  errorMessage = remainingText
-                    .substring(0, detailsMatch.index)
-                    .trim();
-                } else {
-                  errorMessage = remainingText.trim();
-                }
-
-                // Fallback if extraction failed
-                if (!errorMessage || errorMessage.length === 0) {
-                  errorMessage = textContent
-                    .replace(/\*\*Error:\*\*\s*/, "")
-                    .trim();
-                }
+              if (type === "reasoning" && part.text?.trim().length > 0) {
+                // Find all reasoning parts to determine if this is the last one
+                const reasoningParts =
+                  message.parts?.filter((p) => p.type === "reasoning") ?? [];
+                const isLastReasoningPart =
+                  reasoningParts.length > 0 && reasoningParts.at(-1) === part;
+                // Only the last reasoning part should show as streaming if message is loading
+                const isReasoningStreaming = isLoading && isLastReasoningPart;
 
                 return (
-                  <Card
-                    className="w-full border-destructive/50 bg-destructive/10 dark:bg-destructive/20"
+                  <MessageReasoning
+                    isLoading={isReasoningStreaming}
                     key={key}
-                  >
-                    <CardContent className="p-4">
-                      <div className="mb-2 flex items-center gap-2">
-                        <h4 className="font-semibold text-destructive dark:text-red-400">
-                          Error
-                        </h4>
-                      </div>
-                      <div className="space-y-2">
-                        <div className="wrap-break-word text-sm text-destructive dark:text-red-300">
-                          {errorMessage}
-                        </div>
-                        {errorDetails && (
-                          <details className="mt-2">
-                            <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
-                              Show details
-                            </summary>
-                            <pre className="mt-2 wrap-break-word whitespace-pre-wrap text-xs text-destructive/90 dark:text-red-200">
-                              {errorDetails}
-                            </pre>
-                          </details>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
+                    reasoning={part.text}
+                  />
                 );
               }
 
-              // Regular text rendering
-              if (mode === "view") {
-                if (message.role === "user") {
-                  const invokedSlugs = new Set(
-                    (message.parts ?? []).flatMap((messagePart) => {
-                      if (messagePart.type !== "data-invokedConnectedSkills") {
-                        return [];
-                      }
-                      return messagePart.data.map((skill) =>
-                        skill.slug.toLowerCase(),
-                      );
-                    }),
+              if ((part as { type?: string }).type === "diffusion") {
+                const diffusionPart = part as unknown as {
+                  type: "diffusion";
+                  text: string;
+                };
+                if (!diffusionPart.text?.trim().length) {
+                  return null;
+                }
+                return (
+                  <MessageReasoning
+                    isLoading={false}
+                    key={key}
+                    reasoning={diffusionPart.text}
+                  />
+                );
+              }
+
+              if (type === "text") {
+                // Check if text content is an error message (starts with **Error:**)
+                const textContent = part.text || "";
+                const isError = textContent.trim().startsWith("**Error:**");
+
+                if (isError && message.role === "assistant") {
+                  // Extract error message and details
+                  // Remove **Error:** prefix first
+                  const remainingText = textContent.replace(
+                    /^\*\*Error:\*\*\s*/,
+                    "",
                   );
+
+                  // Check if there's a **Details:** section
+                  const detailsMatch = remainingText.match(
+                    /\n\n\*\*Details:\*\*\n(.+)$/s,
+                  );
+                  const errorDetails = detailsMatch?.[1]?.trim();
+
+                  // Get the error message (everything before **Details:** or the whole thing)
+                  let errorMessage = remainingText;
+                  if (detailsMatch) {
+                    errorMessage = remainingText
+                      .substring(0, detailsMatch.index)
+                      .trim();
+                  } else {
+                    errorMessage = remainingText.trim();
+                  }
+
+                  // Fallback if extraction failed
+                  if (!errorMessage || errorMessage.length === 0) {
+                    errorMessage = textContent
+                      .replace(/\*\*Error:\*\*\s*/, "")
+                      .trim();
+                  }
 
                   return (
                     <Card
-                      className="w-full rounded-tl-3xl rounded-tr rounded-br-3xl rounded-bl-3xl bg-sidebar text-sidebar-foreground shadow-none"
+                      className="w-full border-destructive/50 bg-destructive/10 dark:bg-destructive/20"
                       key={key}
                     >
-                      <CardContent className="px-2 py-1">
-                        <MessageContent
-                          className="wrap-break-word text-left"
-                          data-testid="message-content"
-                        >
-                          <UserMessageTextWithSkillBadges
-                            invokedSlugs={invokedSlugs}
-                            text={part.text}
-                          />
-                        </MessageContent>
+                      <CardContent className="p-4">
+                        <div className="mb-2 flex items-center gap-2">
+                          <h4 className="font-semibold text-destructive dark:text-red-400">
+                            Error
+                          </h4>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="wrap-break-word text-sm text-destructive dark:text-red-300">
+                            {errorMessage}
+                          </div>
+                          {errorDetails && (
+                            <details className="mt-2">
+                              <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                                Show details
+                              </summary>
+                              <pre className="mt-2 wrap-break-word whitespace-pre-wrap text-xs text-destructive/90 dark:text-red-200">
+                                {errorDetails}
+                              </pre>
+                            </details>
+                          )}
+                        </div>
                       </CardContent>
                     </Card>
                   );
                 }
-                return (
-                  <div key={key}>
-                    <MessageContent
-                      className={cn({
-                        "bg-transparent px-0 py-0 text-left":
-                          message.role === "assistant",
-                      })}
-                      data-testid="message-content"
-                    >
-                      <Response>{sanitizeText(part.text)}</Response>
-                    </MessageContent>
-                  </div>
-                );
-              }
 
-              if (mode === "edit") {
-                return (
-                  <div
-                    className="flex w-full flex-row items-start gap-3"
-                    key={key}
-                  >
-                    <div className="size-8" />
-                    <div className="min-w-0 flex-1">
-                      <MessageEditor
-                        key={message.id}
-                        message={message}
-                        regenerate={regenerate}
-                        setMessages={setMessages}
-                        setMode={setMode}
-                      />
+                // Regular text rendering
+                if (mode === "view") {
+                  if (message.role === "user") {
+                    const invokedSlugs = new Set(
+                      (message.parts ?? []).flatMap((messagePart) => {
+                        if (
+                          messagePart.type !== "data-invokedConnectedSkills"
+                        ) {
+                          return [];
+                        }
+                        return messagePart.data.map((skill) =>
+                          skill.slug.toLowerCase(),
+                        );
+                      }),
+                    );
+
+                    return (
+                      <Card
+                        className="w-full rounded-tl-3xl rounded-tr rounded-br-3xl rounded-bl-3xl bg-sidebar text-sidebar-foreground shadow-none"
+                        key={key}
+                      >
+                        <CardContent className="px-2 py-1">
+                          <MessageContent
+                            className="wrap-break-word text-left"
+                            data-testid="message-content"
+                          >
+                            <UserMessageTextWithSkillBadges
+                              invokedSlugs={invokedSlugs}
+                              text={part.text}
+                            />
+                          </MessageContent>
+                        </CardContent>
+                      </Card>
+                    );
+                  }
+                  return (
+                    <div key={key}>
+                      <MessageContent
+                        className={cn({
+                          "bg-transparent px-0 py-0 text-left":
+                            message.role === "assistant",
+                        })}
+                        data-testid="message-content"
+                      >
+                        <Response>{sanitizeText(part.text)}</Response>
+                      </MessageContent>
                     </div>
-                  </div>
+                  );
+                }
+
+                if (mode === "edit") {
+                  return (
+                    <div
+                      className="flex w-full flex-row items-start gap-3"
+                      key={key}
+                    >
+                      <div className="size-8" />
+                      <div className="min-w-0 flex-1">
+                        <MessageEditor
+                          key={message.id}
+                          message={message}
+                          regenerate={regenerate}
+                          setMessages={setMessages}
+                          setMode={setMode}
+                        />
+                      </div>
+                    </div>
+                  );
+                }
+              }
+
+              if (
+                type === "tool-searchNetsuiteDocs" ||
+                (typeof type === "string" && type.startsWith("tool-searchWeb_"))
+              ) {
+                const toolPart = part as {
+                  type: string;
+                  toolCallId: string;
+                  state:
+                    | "input-streaming"
+                    | "input-available"
+                    | "output-available"
+                    | "output-error";
+                  input: { query: string; maxResults?: number };
+                  output?: WebSearchToolResult | { error: string };
+                };
+                const { toolCallId, state } = toolPart;
+
+                const hasError =
+                  toolPart.output &&
+                  typeof toolPart.output === "object" &&
+                  toolPart.output !== null &&
+                  "error" in toolPart.output;
+
+                return (
+                  <MessageTool
+                    errorText={
+                      hasError
+                        ? String(
+                            (toolPart.output as unknown as { error: unknown })
+                              .error,
+                          )
+                        : undefined
+                    }
+                    input={toolPart.input}
+                    key={toolCallId}
+                    output={
+                      !hasError &&
+                      toolPart.output &&
+                      typeof toolPart.output === "object" ? (
+                        <WebSearchToolOutput
+                          result={toolPart.output as WebSearchToolResult}
+                        />
+                      ) : null
+                    }
+                    state={state}
+                    toolCallId={toolCallId}
+                    type={type as `tool-${string}`}
+                  />
                 );
               }
-            }
 
-            if (
-              type === "tool-searchNetsuiteDocs" ||
-              (typeof type === "string" && type.startsWith("tool-searchWeb_"))
-            ) {
-              const toolPart = part as {
-                type: string;
-                toolCallId: string;
-                state:
-                  | "input-streaming"
-                  | "input-available"
-                  | "output-available"
-                  | "output-error";
-                input: { query: string; maxResults?: number };
-                output?: WebSearchToolResult | { error: string };
-              };
-              const { toolCallId, state } = toolPart;
-
-              const hasError =
-                toolPart.output &&
-                typeof toolPart.output === "object" &&
-                toolPart.output !== null &&
-                "error" in toolPart.output;
-
-              return (
-                <MessageTool
-                  errorText={
-                    hasError
-                      ? String(
-                          (toolPart.output as unknown as { error: unknown })
-                            .error,
-                        )
-                      : undefined
-                  }
-                  input={toolPart.input}
-                  key={toolCallId}
-                  output={
-                    !hasError &&
-                    toolPart.output &&
-                    typeof toolPart.output === "object" ? (
-                      <WebSearchToolOutput
-                        result={toolPart.output as WebSearchToolResult}
-                      />
-                    ) : null
-                  }
-                  state={state}
-                  toolCallId={toolCallId}
-                  type={type as `tool-${string}`}
-                />
-              );
-            }
-
-            if (type === "tool-readWebpage") {
-              const toolPart = part as {
-                type: string;
-                toolCallId: string;
-                state:
-                  | "input-streaming"
-                  | "input-available"
-                  | "output-available"
-                  | "output-error";
-                input: { url: string };
-                output?: ReadWebpageToolResult | { error: string };
-              };
-              const { toolCallId, state } = toolPart;
-
-              const hasError =
-                toolPart.output &&
-                typeof toolPart.output === "object" &&
-                toolPart.output !== null &&
-                "error" in toolPart.output;
-
-              return (
-                <MessageTool
-                  errorText={
-                    hasError
-                      ? String(
-                          (toolPart.output as unknown as { error: unknown })
-                            .error,
-                        )
-                      : undefined
-                  }
-                  input={toolPart.input}
-                  key={toolCallId}
-                  output={
-                    !hasError &&
-                    toolPart.output &&
-                    typeof toolPart.output === "object" ? (
-                      <ReadWebpageToolOutput
-                        result={toolPart.output as ReadWebpageToolResult}
-                      />
-                    ) : null
-                  }
-                  state={state}
-                  toolCallId={toolCallId}
-                  type="tool-readWebpage"
-                />
-              );
-            }
-
-            if (type === "tool-getCurrentConfig") {
-              const toolPart = part as {
-                type: string;
-                toolCallId: string;
-                state:
-                  | "input-streaming"
-                  | "input-available"
-                  | "output-available"
-                  | "output-error";
-                input: Record<string, never>;
-                output?: GetCurrentConfigToolResult | { error: string };
-              };
-              const { toolCallId, state } = toolPart;
-
-              const hasError =
-                toolPart.output &&
-                typeof toolPart.output === "object" &&
-                toolPart.output !== null &&
-                "error" in toolPart.output;
-
-              return (
-                <MessageTool
-                  errorText={
-                    hasError
-                      ? String(
-                          (toolPart.output as unknown as { error: unknown })
-                            .error,
-                        )
-                      : undefined
-                  }
-                  input={toolPart.input}
-                  key={toolCallId}
-                  output={
-                    !hasError &&
-                    toolPart.output &&
-                    typeof toolPart.output === "object" ? (
-                      <GetCurrentConfigToolOutput
-                        result={toolPart.output as GetCurrentConfigToolResult}
-                      />
-                    ) : null
-                  }
-                  state={state}
-                  toolCallId={toolCallId}
-                  type="tool-getCurrentConfig"
-                />
-              );
-            }
-
-            if (type === "tool-proposeCustomPersona") {
-              const toolPart = part as {
-                type: string;
-                toolCallId: string;
-                state:
-                  | "input-streaming"
-                  | "input-available"
-                  | "output-available"
-                  | "output-error";
-                input: Record<string, unknown>;
-                output?: ProposeCustomPersonaResult;
-              };
-              const { toolCallId, state } = toolPart;
-              return (
-                <MessageTool
-                  input={toolPart.input}
-                  key={toolCallId}
-                  output={
-                    toolPart.output ? (
-                      <ProposeCustomPersonaToolOutput
-                        chatId={chatId}
-                        onRevise={(feedback) => {
-                          onMcpAppUserMessage?.(feedback);
-                        }}
-                        onSaved={(payload) => {
-                          // Soft convert without full reload (avoids Streamdown hydration flash)
-                          if (typeof window !== "undefined") {
-                            window.dispatchEvent(
-                              new CustomEvent("persona-saved", {
-                                detail: payload,
-                              }),
-                            );
-                          }
-                        }}
-                        result={toolPart.output}
-                      />
-                    ) : null
-                  }
-                  state={state}
-                  toolCallId={toolCallId}
-                  type="tool-proposeCustomPersona"
-                />
-              );
-            }
-
-            if (type === "tool-updatePersonaInterview") {
-              const toolPart = part as {
-                type: string;
-                toolCallId: string;
-                state:
-                  | "input-streaming"
-                  | "input-available"
-                  | "output-available"
-                  | "output-error";
-                input: Record<string, unknown>;
-                output?: {
-                  ok?: boolean;
-                  covered?: string[];
-                  missing?: string[];
-                  complete?: boolean;
+              if (type === "tool-readWebpage") {
+                const toolPart = part as {
+                  type: string;
+                  toolCallId: string;
+                  state:
+                    | "input-streaming"
+                    | "input-available"
+                    | "output-available"
+                    | "output-error";
+                  input: { url: string };
+                  output?: ReadWebpageToolResult | { error: string };
                 };
-              };
-              const { toolCallId, state } = toolPart;
-              const covered = toolPart.output?.covered?.length ?? 0;
-              return (
-                <MessageTool
-                  input={toolPart.input}
-                  key={toolCallId}
-                  output={
-                    toolPart.output ? (
-                      <div className="rounded-md border p-2 text-muted-foreground text-xs">
-                        Interview progress: {covered}/7
-                        {toolPart.output.complete
-                          ? " — ready to propose"
-                          : toolPart.output.missing?.length
-                            ? ` · still need ${toolPart.output.missing.join(", ")}`
-                            : ""}
-                      </div>
-                    ) : null
-                  }
-                  state={state}
-                  toolCallId={toolCallId}
-                  type="tool-updatePersonaInterview"
-                />
-              );
-            }
+                const { toolCallId, state } = toolPart;
 
-            // Handle NetSuite MCP tools (tools starting with "tool-ns_")
-            if (type.startsWith("tool-ns_")) {
-              // Type assertion for dynamic NetSuite tools
-              const toolPart = part as {
-                type: string;
-                toolCallId: string;
-                state: "input-available" | "output-available";
-                input?: unknown;
-                output?: unknown;
-              };
-              const appLaunch = extractMcpAppLaunch(toolPart.output);
+                const hasError =
+                  toolPart.output &&
+                  typeof toolPart.output === "object" &&
+                  toolPart.output !== null &&
+                  "error" in toolPart.output;
 
-              return (
-                <MessageTool
-                  errorText={
-                    toolPart.output &&
-                    typeof toolPart.output === "object" &&
-                    toolPart.output !== null &&
-                    "error" in toolPart.output
-                      ? String(toolPart.output.error)
-                      : undefined
-                  }
-                  input={toolPart.input}
-                  key={toolPart.toolCallId}
-                  output={
-                    toolPart.output &&
-                    typeof toolPart.output === "object" &&
-                    toolPart.output !== null &&
-                    "error" in toolPart.output ? (
-                      <div className="rounded border p-2 text-red-500">
-                        Error: {String(toolPart.output.error)}
-                      </div>
-                    ) : (
+                return (
+                  <MessageTool
+                    errorText={
+                      hasError
+                        ? String(
+                            (toolPart.output as unknown as { error: unknown })
+                              .error,
+                          )
+                        : undefined
+                    }
+                    input={toolPart.input}
+                    key={toolCallId}
+                    output={
+                      !hasError &&
+                      toolPart.output &&
+                      typeof toolPart.output === "object" ? (
+                        <ReadWebpageToolOutput
+                          result={toolPart.output as ReadWebpageToolResult}
+                        />
+                      ) : null
+                    }
+                    state={state}
+                    toolCallId={toolCallId}
+                    type="tool-readWebpage"
+                  />
+                );
+              }
+
+              if (type === "tool-getCurrentConfig") {
+                const toolPart = part as {
+                  type: string;
+                  toolCallId: string;
+                  state:
+                    | "input-streaming"
+                    | "input-available"
+                    | "output-available"
+                    | "output-error";
+                  input: Record<string, never>;
+                  output?: GetCurrentConfigToolResult | { error: string };
+                };
+                const { toolCallId, state } = toolPart;
+
+                const hasError =
+                  toolPart.output &&
+                  typeof toolPart.output === "object" &&
+                  toolPart.output !== null &&
+                  "error" in toolPart.output;
+
+                return (
+                  <MessageTool
+                    errorText={
+                      hasError
+                        ? String(
+                            (toolPart.output as unknown as { error: unknown })
+                              .error,
+                          )
+                        : undefined
+                    }
+                    input={toolPart.input}
+                    key={toolCallId}
+                    output={
+                      !hasError &&
+                      toolPart.output &&
+                      typeof toolPart.output === "object" ? (
+                        <GetCurrentConfigToolOutput
+                          result={toolPart.output as GetCurrentConfigToolResult}
+                        />
+                      ) : null
+                    }
+                    state={state}
+                    toolCallId={toolCallId}
+                    type="tool-getCurrentConfig"
+                  />
+                );
+              }
+
+              if (type === "tool-proposeCustomPersona") {
+                const toolPart = part as {
+                  type: string;
+                  toolCallId: string;
+                  state:
+                    | "input-streaming"
+                    | "input-available"
+                    | "output-available"
+                    | "output-error";
+                  input: Record<string, unknown>;
+                  output?: ProposeCustomPersonaResult;
+                };
+                const { toolCallId, state } = toolPart;
+                return (
+                  <MessageTool
+                    input={toolPart.input}
+                    key={toolCallId}
+                    output={
+                      toolPart.output ? (
+                        <ProposeCustomPersonaToolOutput
+                          chatId={chatId}
+                          onRevise={(feedback) => {
+                            onMcpAppUserMessage?.(feedback);
+                          }}
+                          onSaved={(payload) => {
+                            // Soft convert without full reload (avoids Streamdown hydration flash)
+                            if (typeof window !== "undefined") {
+                              window.dispatchEvent(
+                                new CustomEvent("persona-saved", {
+                                  detail: payload,
+                                }),
+                              );
+                            }
+                          }}
+                          result={toolPart.output}
+                        />
+                      ) : null
+                    }
+                    state={state}
+                    toolCallId={toolCallId}
+                    type="tool-proposeCustomPersona"
+                  />
+                );
+              }
+
+              if (type === "tool-updatePersonaInterview") {
+                const toolPart = part as {
+                  type: string;
+                  toolCallId: string;
+                  state:
+                    | "input-streaming"
+                    | "input-available"
+                    | "output-available"
+                    | "output-error";
+                  input: Record<string, unknown>;
+                  output?: {
+                    ok?: boolean;
+                    covered?: string[];
+                    missing?: string[];
+                    complete?: boolean;
+                  };
+                };
+                const { toolCallId, state } = toolPart;
+                const covered = toolPart.output?.covered?.length ?? 0;
+                return (
+                  <MessageTool
+                    input={toolPart.input}
+                    key={toolCallId}
+                    output={
+                      toolPart.output ? (
+                        <div className="rounded-md border p-2 text-muted-foreground text-xs">
+                          Interview progress: {covered}/7
+                          {toolPart.output.complete
+                            ? " — ready to propose"
+                            : toolPart.output.missing?.length
+                              ? ` · still need ${toolPart.output.missing.join(", ")}`
+                              : ""}
+                        </div>
+                      ) : null
+                    }
+                    state={state}
+                    toolCallId={toolCallId}
+                    type="tool-updatePersonaInterview"
+                  />
+                );
+              }
+
+              // Handle NetSuite MCP tools (tools starting with "tool-ns_")
+              if (type.startsWith("tool-ns_")) {
+                // Type assertion for dynamic NetSuite tools
+                const toolPart = part as {
+                  type: string;
+                  toolCallId: string;
+                  state: "input-available" | "output-available";
+                  input?: unknown;
+                  args?: unknown;
+                  arguments?: unknown;
+                  output?: unknown;
+                };
+                const appLaunch = extractMcpAppLaunch(toolPart.output);
+                const callArguments = resolveToolCallArguments(toolPart);
+                const payloadError = getMcpToolError(toolPart.output);
+                const emptyResult =
+                  !payloadError &&
+                  toolPart.state === "output-available" &&
+                  isMcpToolEmptyResult(toolPart.output);
+
+                return (
+                  <MessageTool
+                    emptyResult={emptyResult}
+                    errorText={payloadError}
+                    input={callArguments}
+                    key={toolPart.toolCallId}
+                    output={
                       <div className="space-y-2">
-                        {appLaunch ? (
+                        {appLaunch && !payloadError ? (
                           <div className="flex items-center justify-between gap-2 rounded-md border bg-muted/40 px-3 py-2">
                             <p className="text-muted-foreground text-xs">
                               Interactive NetSuite app ready
@@ -604,43 +626,61 @@ const PurePreviewMessage = ({
                             </Button>
                           </div>
                         ) : null}
-                        {toolPart.output &&
-                        typeof toolPart.output === "object" &&
-                        toolPart.output !== null &&
-                        "success" in toolPart.output &&
-                        "result" in toolPart.output ? (
-                          <pre className="wrap-break-word overflow-x-auto whitespace-pre-wrap text-xs">
-                            {JSON.stringify(
-                              (toolPart.output as { result: unknown }).result,
-                              null,
-                              2,
-                            )}
-                          </pre>
-                        ) : toolPart.output ? (
-                          <pre className="wrap-break-word overflow-x-auto whitespace-pre-wrap text-xs">
-                            {JSON.stringify(toolPart.output, null, 2)}
-                          </pre>
-                        ) : null}
+                        {toolPart.output === undefined ||
+                        toolPart.output === null ? null : (
+                          <McpToolOutput output={toolPart.output} />
+                        )}
                       </div>
-                    )
+                    }
+                    state={toolPart.state}
+                    toolCallId={toolPart.toolCallId}
+                    type={toolPart.type as `tool-${string}`}
+                  />
+                );
+              }
+
+              return null;
+            };
+
+            const groupedParts = groupMessageParts(message.parts);
+            const toolItems = collectToolParts(message.parts);
+            const toolOutcomes = countMcpToolOutcomes(
+              toolItems.map((item) => item.part),
+            );
+
+            return (
+              <>
+                {groupedParts.map((group) => {
+                  if (group.kind === "tools") {
+                    return null;
                   }
-                  state={toolPart.state}
-                  toolCallId={toolPart.toolCallId}
-                  type={toolPart.type as `tool-${string}`}
-                />
-              );
-            }
+                  return renderPart(group.part, group.index);
+                })}
+                {message.role === "assistant" ? (
+                  <MessageTurnUsage
+                    emptyToolCount={toolOutcomes.empty}
+                    failedToolCount={toolOutcomes.failed}
+                    skills={turnSkills}
+                    succeededToolCount={toolOutcomes.succeeded}
+                    toolCount={toolOutcomes.total}
+                  >
+                    {toolItems.map((item) => renderPart(item.part, item.index))}
+                  </MessageTurnUsage>
+                ) : null}
+              </>
+            );
+          })()}
 
-            return null;
-          })}
-
-          {!isReadonly && (
+          {(message.role === "assistant" || !isReadonly) && (
             <MessageActions
               chatId={chatId}
               isLoading={isLoading}
+              isReadonly={isReadonly}
               key={`action-${message.id}`}
               message={message}
               setMode={setMode}
+              turnStartedAt={turnStartedAt}
+              turnUsage={turnUsage}
               vote={vote}
             />
           )}
@@ -670,6 +710,12 @@ export const PreviewMessage = memo(
     if (prevProps.isLoading !== nextProps.isLoading) {
       return false;
     }
+    if (prevProps.isReadonly !== nextProps.isReadonly) {
+      return false;
+    }
+    if (prevProps.showThinking !== nextProps.showThinking) {
+      return false;
+    }
     if (prevProps.message.id !== nextProps.message.id) {
       return false;
     }
@@ -679,45 +725,38 @@ export const PreviewMessage = memo(
     if (!equal(prevProps.vote, nextProps.vote)) {
       return false;
     }
+    if (!equal(prevProps.activeSkills, nextProps.activeSkills)) {
+      return false;
+    }
+    if (!equal(prevProps.turnUsage, nextProps.turnUsage)) {
+      return false;
+    }
+    if (prevProps.turnStartedAt !== nextProps.turnStartedAt) {
+      return false;
+    }
+    if (!equal(prevProps.turnSkills, nextProps.turnSkills)) {
+      return false;
+    }
+    if (
+      prevProps.message.metadata?.createdAt !==
+      nextProps.message.metadata?.createdAt
+    ) {
+      return false;
+    }
 
-    return false;
+    return true;
   },
 );
 
-export const ThinkingMessage = () => {
-  const { state: sidebarState, isMobile } = useSidebar();
-  const isSidebarOpen = sidebarState === "expanded" && !isMobile;
-
-  return (
-    <div
-      className="pointer-events-none fixed top-1/2 right-0 left-0 z-50 transition-[left] duration-200 ease-linear"
-      data-testid="message-assistant-loading"
-      style={{
-        left: isSidebarOpen ? "var(--sidebar-width, 20rem)" : "0",
-      }}
-    >
-      <div className="mx-auto flex max-w-chat justify-center px-2 md:px-4">
-        <div className="-translate-y-1/2 flex items-center gap-2">
-          <span
-            className="size-3 animate-smooth-bounce rounded-full bg-blue-500"
-            style={{
-              animationDelay: "0ms",
-            }}
-          />
-          <span
-            className="size-3 animate-smooth-bounce rounded-full bg-orange-600"
-            style={{
-              animationDelay: "200ms",
-            }}
-          />
-          <span
-            className="size-3 animate-smooth-bounce rounded-full bg-black dark:bg-white"
-            style={{
-              animationDelay: "400ms",
-            }}
-          />
-        </div>
+export const ThinkingMessage = ({ skills = [] }: { skills?: SkillChip[] }) => (
+  <div
+    className="group/message w-full"
+    data-testid="message-assistant-loading-shell"
+  >
+    <div className="flex w-full min-w-0 items-start justify-start gap-2 md:gap-3">
+      <div className="mt-0 flex min-w-0 w-full flex-col gap-2">
+        <ThinkingIndicator skills={skills} />
       </div>
     </div>
-  );
-};
+  </div>
+);
