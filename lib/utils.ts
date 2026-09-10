@@ -114,7 +114,7 @@ export function prepareMessagesForModel(
   return messages.map((message, index) => ({
     ...message,
     parts: message.parts
-      .filter((part) => part.type !== "data-invokedConnectedSkills")
+      .filter((part) => !part.type.startsWith("data-"))
       .map((part) => {
         if (
           part.type !== "text" ||

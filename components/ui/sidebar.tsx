@@ -13,6 +13,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { Button } from "@/components/ui/button";
@@ -37,12 +38,55 @@ import { cn } from "@/lib/utils";
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state";
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
-// Desktop expanded width: room for chat titles + persona labels.
-const SIDEBAR_WIDTH = "16rem";
+// Desktop expanded width matches Claude's chat sidebar.
+const SIDEBAR_WIDTH = "388px";
 // Mobile sheet still needs room for the inline chat history list.
-const SIDEBAR_WIDTH_MOBILE = "16rem";
+const SIDEBAR_WIDTH_MOBILE = "20rem";
 const SIDEBAR_WIDTH_ICON = "3rem";
 const SIDEBAR_KEYBOARD_SHORTCUT = "b";
+const PEEK_CLOSE_DELAY_MS = 250;
+/** Persistent expand width animation (`duration-200`). Peek uses the same duration with ease-out. */
+const SIDEBAR_EXPAND_MS = 200;
+
+function isSidebarPeekUi(target: EventTarget | null) {
+  const element =
+    target instanceof Element
+      ? target
+      : target instanceof Text
+        ? target.parentElement
+        : null;
+  if (!element) {
+    return false;
+  }
+  return Boolean(
+    element.closest("[data-sidebar-peek]") ||
+      element.closest("[data-sidebar='sidebar']") ||
+      element.closest("[data-testid='user-nav-menu']") ||
+      element.closest("[data-radix-popper-content-wrapper]") ||
+      element.closest("[data-radix-menu-content]") ||
+      element.closest("[data-radix-dropdown-menu-content]") ||
+      element.closest("[data-radix-dialog-content]") ||
+      element.closest("[role='menu']") ||
+      element.closest("[role='dialog']")
+  );
+}
+
+function isPointerOverPeekUi(clientX: number, clientY: number) {
+  return document
+    .elementsFromPoint(clientX, clientY)
+    .some((element) => isSidebarPeekUi(element));
+}
+
+function isPeekLayerOpen() {
+  return Boolean(
+    document.querySelector("[role='menu']") ||
+      document.querySelector("[role='dialog']") ||
+      document.querySelector("[data-radix-popper-content-wrapper]") ||
+      document.querySelector("[data-radix-menu-content]") ||
+      document.querySelector("[data-radix-dropdown-menu-content]") ||
+      document.querySelector("[data-radix-dialog-content]")
+  );
+}
 
 type SidebarContextProps = {
   state: "expanded" | "collapsed";
@@ -52,6 +96,13 @@ type SidebarContextProps = {
   setOpenMobile: (open: boolean) => void;
   isMobile: boolean;
   toggleSidebar: () => void;
+  /** Temporary overlay after hovering the collapse control. Does not persist. */
+  peek: boolean;
+  setPeek: (peek: boolean) => void;
+  /** Close peek after a short delay unless `setPeek(true)` runs first. */
+  closePeekSoon: () => void;
+  /** False while a pinned expand is still animating in. Peek reveals immediately. */
+  revealText: boolean;
 };
 
 const SidebarContext = createContext<SidebarContextProps | null>(null);
@@ -87,11 +138,52 @@ const SidebarProvider = forwardRef<
   ) => {
     const isMobile = useIsMobile();
     const [openMobile, setOpenMobile] = useState(false);
+    const [peek, setPeekState] = useState(false);
+    const [revealText, setRevealText] = useState(openProp ?? defaultOpen);
+    const peekCloseTimerRef = useRef<number | null>(null);
 
     // This is the internal state of the sidebar.
     // We use openProp and setOpenProp for control from outside the component.
     const [_open, _setOpen] = useState(defaultOpen);
     const open = openProp ?? _open;
+
+    const clearPeekCloseTimer = useCallback(() => {
+      if (peekCloseTimerRef.current !== null) {
+        window.clearTimeout(peekCloseTimerRef.current);
+        peekCloseTimerRef.current = null;
+      }
+    }, []);
+
+    const setPeek = useCallback(
+      (nextPeek: boolean) => {
+        if (isMobile) {
+          return;
+        }
+        clearPeekCloseTimer();
+        setPeekState(nextPeek);
+      },
+      [clearPeekCloseTimer, isMobile]
+    );
+
+    const closePeekSoon = useCallback(() => {
+      if (isMobile) {
+        return;
+      }
+      clearPeekCloseTimer();
+      peekCloseTimerRef.current = window.setTimeout(() => {
+        setPeekState(false);
+        peekCloseTimerRef.current = null;
+      }, PEEK_CLOSE_DELAY_MS);
+    }, [clearPeekCloseTimer, isMobile]);
+
+    useEffect(() => {
+      return () => {
+        if (peekCloseTimerRef.current !== null) {
+          window.clearTimeout(peekCloseTimerRef.current);
+        }
+      };
+    }, []);
+
     const setOpen = useCallback(
       (newValue: boolean | ((prev: boolean) => boolean)) => {
         const openState =
@@ -101,12 +193,16 @@ const SidebarProvider = forwardRef<
         } else {
           _setOpen(openState);
         }
+        if (openState) {
+          clearPeekCloseTimer();
+          setPeekState(false);
+        }
 
         // This sets the cookie to keep the sidebar state.
         // biome-ignore lint/suspicious/noDocumentCookie: Required for sidebar state persistence
         document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`;
       },
-      [setOpenProp, open]
+      [clearPeekCloseTimer, setOpenProp, open]
     );
 
     // Helper to toggle the sidebar.
@@ -136,6 +232,45 @@ const SidebarProvider = forwardRef<
     // This makes it easier to style the sidebar with Tailwind classes.
     const state = open ? "expanded" : "collapsed";
 
+    useEffect(() => {
+      if (isMobile || peek || !open) {
+        setRevealText(true);
+        return;
+      }
+      const timeoutId = window.setTimeout(() => {
+        setRevealText(true);
+      }, SIDEBAR_EXPAND_MS);
+      return () => window.clearTimeout(timeoutId);
+    }, [isMobile, open, peek]);
+
+    useEffect(() => {
+      if (!peek || isMobile) {
+        return;
+      }
+
+      const handlePointerOver = (event: PointerEvent) => {
+        if (
+          isSidebarPeekUi(event.target) ||
+          isPointerOverPeekUi(event.clientX, event.clientY) ||
+          isPeekLayerOpen()
+        ) {
+          clearPeekCloseTimer();
+          return;
+        }
+        if (peekCloseTimerRef.current !== null) {
+          return;
+        }
+        peekCloseTimerRef.current = window.setTimeout(() => {
+          setPeekState(false);
+          peekCloseTimerRef.current = null;
+        }, PEEK_CLOSE_DELAY_MS);
+      };
+
+      document.addEventListener("pointerover", handlePointerOver);
+      return () =>
+        document.removeEventListener("pointerover", handlePointerOver);
+    }, [clearPeekCloseTimer, isMobile, peek]);
+
     const contextValue = useMemo<SidebarContextProps>(
       () => ({
         state,
@@ -145,8 +280,23 @@ const SidebarProvider = forwardRef<
         openMobile,
         setOpenMobile,
         toggleSidebar,
+        peek,
+        setPeek,
+        closePeekSoon,
+        revealText,
       }),
-      [state, open, setOpen, isMobile, openMobile, toggleSidebar]
+      [
+        state,
+        open,
+        setOpen,
+        isMobile,
+        openMobile,
+        toggleSidebar,
+        peek,
+        setPeek,
+        closePeekSoon,
+        revealText,
+      ]
     );
 
     return (
@@ -195,7 +345,8 @@ const Sidebar = forwardRef<
     },
     ref
   ) => {
-    const { isMobile, state, openMobile, setOpenMobile } = useSidebar();
+    const { isMobile, state, openMobile, setOpenMobile, peek } = useSidebar();
+    const visuallyExpanded = state === "expanded" || peek;
 
     if (collapsible === "none") {
       return (
@@ -249,7 +400,9 @@ const Sidebar = forwardRef<
     return (
       <div
         className="group peer hidden text-sidebar-foreground md:block"
-        data-collapsible={state === "collapsed" ? collapsible : ""}
+        data-collapsible={
+          state === "collapsed" && !visuallyExpanded ? collapsible : ""
+        }
         data-side={side}
         data-state={state}
         data-variant={variant}
@@ -258,30 +411,49 @@ const Sidebar = forwardRef<
         {/* This is what handles the sidebar gap on desktop */}
         <div
           className={cn(
-            "relative w-(--sidebar-width) bg-transparent transition-[width] duration-200 ease-linear",
-            "group-data-[collapsible=offcanvas]:w-0",
-            "group-data-[side=right]:rotate-180",
-            variant === "floating" || variant === "inset"
-              ? "group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4)))]"
-              : "group-data-[collapsible=icon]:w-(--sidebar-width-icon)"
+            "relative bg-transparent transition-[width]",
+            state === "collapsed" && collapsible === "offcanvas"
+              ? "w-0 duration-0"
+              : state === "collapsed"
+                ? "w-(--sidebar-width-icon) duration-0"
+                : "w-(--sidebar-width) duration-200 ease-linear",
+            "group-data-[side=right]:rotate-180"
           )}
         />
         <div
           className={cn(
-            "fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear md:flex",
+            "fixed inset-y-0 z-10 hidden h-svh overflow-hidden md:flex",
+            "transition-[width,box-shadow] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]",
+            visuallyExpanded
+              ? "w-(--sidebar-width)"
+              : "w-(--sidebar-width-icon)",
+            peek && state === "collapsed" && "z-50",
             side === "left"
               ? "left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]"
               : "right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]",
-            // Adjust the padding for floating and inset variants.
             variant === "floating" || variant === "inset"
-              ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]"
-              : "group-data-[collapsible=icon]:w-(--sidebar-width-icon) group-data-[side=left]:border-r group-data-[side=right]:border-l",
+              ? cn(
+                  "p-2",
+                  visuallyExpanded
+                    ? "w-(--sidebar-width)"
+                    : "w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]"
+                )
+              : "group-data-[side=left]:border-r group-data-[side=right]:border-l",
+            peek &&
+              state === "collapsed" &&
+              "border-r border-sidebar-border shadow-lg",
             className
           )}
+          data-sidebar-peek={peek ? "true" : undefined}
           {...props}
         >
           <div
-            className="flex h-full w-full flex-col bg-sidebar group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:border group-data-[variant=floating]:border-sidebar-border group-data-[variant=floating]:shadow [&::-webkit-scrollbar]:hidden"
+            className={cn(
+              "flex h-full flex-col bg-sidebar group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:border group-data-[variant=floating]:border-sidebar-border group-data-[variant=floating]:shadow [&::-webkit-scrollbar]:hidden",
+              visuallyExpanded
+                ? "w-(--sidebar-width) min-w-(--sidebar-width)"
+                : "w-full"
+            )}
             data-sidebar="sidebar"
             style={{
               scrollbarWidth: "none",
@@ -769,6 +941,8 @@ const SidebarMenuSubButton = forwardRef<
 SidebarMenuSubButton.displayName = "SidebarMenuSubButton";
 
 export {
+  isPeekLayerOpen,
+  isSidebarPeekUi,
   Sidebar,
   SidebarContent,
   SidebarFooter,

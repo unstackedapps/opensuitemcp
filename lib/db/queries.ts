@@ -724,6 +724,7 @@ export async function upsertUserSettings({
   maxIterations,
   customInstructions,
   enabledSkillIds,
+  skillModes,
   customSkills,
   connectedSkillSources,
   disabledOrgConnectedSkillSourceIds,
@@ -754,6 +755,7 @@ export async function upsertUserSettings({
   maxIterations?: string | null;
   customInstructions?: string | null;
   enabledSkillIds?: string[] | null;
+  skillModes?: Record<string, "auto" | "slash" | "off"> | null;
   customSkills?: CustomSkill[] | null;
   connectedSkillSources?: ConnectedSkillSource[] | null;
   disabledOrgConnectedSkillSourceIds?: string[] | null;
@@ -825,6 +827,10 @@ export async function upsertUserSettings({
             enabledSkillIds !== undefined
               ? (enabledSkillIds ?? [])
               : (existing.enabledSkillIds ?? []),
+          skillModes:
+            skillModes !== undefined
+              ? (skillModes ?? {})
+              : (existing.skillModes ?? {}),
           customSkills:
             customSkills !== undefined
               ? (customSkills ?? [])
@@ -890,6 +896,7 @@ export async function upsertUserSettings({
         maxIterations: maxIterations ?? "10",
         customInstructions: customInstructions ?? null,
         enabledSkillIds: enabledSkillIds ?? [],
+        skillModes: skillModes ?? {},
         customSkills: customSkills ?? [],
         connectedSkillSources: connectedSkillSources ?? [],
         disabledOrgConnectedSkillSourceIds:

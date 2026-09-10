@@ -205,8 +205,8 @@ export function AppPortal({ user }: { user: User | undefined }) {
                       </button>
                     ) : null}
                   </div>
-                  <div className="min-h-0 flex-1 overflow-y-auto">
-                    <SidebarHistory user={user} />
+                  <div className="min-h-0 flex-1 overflow-y-auto [--color-sidebar:var(--background)] [--color-sidebar-accent:var(--accent)] [--color-sidebar-accent-foreground:var(--accent-foreground)] [--sidebar-accent:var(--accent)] [--sidebar-accent-foreground:var(--accent-foreground)] [--sidebar-background:var(--background)]">
+                    <SidebarHistory user={user} variant="panel" />
                   </div>
                 </div>
               ) : null}

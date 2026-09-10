@@ -23,6 +23,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { Skeleton } from "@/components/ui/skeleton";
 import { guestRegex } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { LoaderIcon, SignInIcon } from "./icons";
@@ -39,12 +40,12 @@ export function SidebarUserNav({
   const searchParams = useSearchParams();
   const { data, status } = useSession();
   const { openPortal } = useAppPortal();
-  const { state, isMobile } = useSidebar();
+  const { state, isMobile, peek, revealText } = useSidebar();
   const { setTheme, resolvedTheme } = useTheme();
-  const iconOnly = state === "collapsed" && !isMobile;
+  const iconOnly = state === "collapsed" && !isMobile && !peek;
   const isDark = resolvedTheme === "dark";
-
   const isGuest = guestRegex.test(data?.user?.email ?? "");
+  const accountLabel = isGuest ? "Guest" : "Account";
 
   // Handle NetSuite connection success/error messages from URL params
   useEffect(() => {
@@ -91,7 +92,7 @@ export function SidebarUserNav({
   return (
     <SidebarMenu>
       <SidebarMenuItem>
-        <DropdownMenu>
+        <DropdownMenu modal={false}>
           <DropdownMenuTrigger asChild>
             {status === "loading" ? (
               <SidebarMenuButton
@@ -105,18 +106,30 @@ export function SidebarUserNav({
                 ) : (
                   <>
                     <div className="size-6 shrink-0 animate-pulse rounded-full bg-zinc-500/30" />
-                    <span className="animate-pulse rounded-md bg-zinc-500/30 text-transparent">
-                      Loading
-                    </span>
-                    <div className="ml-auto animate-spin text-zinc-500">
-                      <LoaderIcon />
-                    </div>
+                    {revealText ? (
+                      <>
+                        <span className="animate-pulse rounded-md bg-zinc-500/30 text-transparent">
+                          Loading
+                        </span>
+                        <div className="ml-auto animate-spin text-zinc-500">
+                          <LoaderIcon />
+                        </div>
+                      </>
+                    ) : (
+                      <Skeleton
+                        aria-hidden
+                        className="h-3 w-14 bg-sidebar-accent-foreground/10"
+                      />
+                    )}
                   </>
                 )}
               </SidebarMenuButton>
             ) : (
               <SidebarMenuButton
-                className="h-10 bg-background data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                className={cn(
+                  "bg-background data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground",
+                  iconOnly ? "justify-center" : "h-10",
+                )}
                 data-testid="user-nav-button"
               >
                 <Image
@@ -126,13 +139,25 @@ export function SidebarUserNav({
                   src={`https://avatar.vercel.sh/${user.email}`}
                   width={24}
                 />
-                <span
-                  className="truncate group-data-[collapsible=icon]:hidden"
-                  data-testid="user-account-label"
-                >
-                  {isGuest ? "Guest" : "Account"}
-                </span>
-                <ChevronUp className="ml-auto group-data-[collapsible=icon]:hidden" />
+                {iconOnly ? (
+                  <span className="sr-only" data-testid="user-account-label">
+                    {accountLabel}
+                  </span>
+                ) : (
+                  <>
+                    <span className="truncate" data-testid="user-account-label">
+                      {revealText ? (
+                        accountLabel
+                      ) : (
+                        <Skeleton
+                          aria-hidden
+                          className="h-3 w-14 bg-sidebar-accent-foreground/10"
+                        />
+                      )}
+                    </span>
+                    {revealText ? <ChevronUp className="ml-auto" /> : null}
+                  </>
+                )}
               </SidebarMenuButton>
             )}
           </DropdownMenuTrigger>

@@ -17,6 +17,12 @@ import { getUsage } from "tokenlens/helpers";
 import { auth, type UserType } from "@/app/(auth)/auth";
 import { refineChatTitle } from "@/app/(chat)/actions";
 import type { VisibilityType } from "@/components/visibility-selector";
+import {
+  estimateContextBreakdown,
+  serializeConversationForBreakdown,
+  serializeToolsForBreakdown,
+} from "@/lib/ai/context-breakdown";
+import type { ContextBreakdownPartsInput } from "@/lib/ai/context-breakdown-types";
 import { entitlementsByUserType } from "@/lib/ai/entitlements";
 import type { ChatModel } from "@/lib/ai/models";
 import { buildPersonaBuilderPrompt } from "@/lib/ai/personas/builder-prompt";
@@ -35,7 +41,7 @@ import {
   normalizePersonaInterviewState,
   type PersonaInterviewState,
 } from "@/lib/ai/personas/interview";
-import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
+import { buildSystemPromptParts, type RequestHints } from "@/lib/ai/prompts";
 import type { AiProviderType } from "@/lib/ai/provider-entries";
 import { getUserProvider } from "@/lib/ai/providers";
 import {
@@ -46,8 +52,12 @@ import {
 } from "@/lib/ai/search-resources";
 import {
   buildSkillsPromptSection,
+  listCommunityCatalogSkills,
   listConnectedCatalogSkills,
   listEnabledSkillNames,
+  listOracleCatalogSkills,
+  listSlashableComposerSkills,
+  listTurnSkills,
   normalizeUserSkillSettings,
 } from "@/lib/ai/skills/catalog";
 import { createGetCurrentConfigTool } from "@/lib/ai/tools/get-current-config";
@@ -57,6 +67,7 @@ import {
 } from "@/lib/ai/tools/persona-interview";
 import { createReadWebpageTool } from "@/lib/ai/tools/read-webpage";
 import { createSearchResourceTool } from "@/lib/ai/tools/search-web-resource";
+import { fallbackChatTitle } from "@/lib/chat/chat-title";
 import { isProductionEnvironment, isTestEnvironment } from "@/lib/constants";
 import {
   createStreamId,
@@ -102,8 +113,7 @@ export const maxDuration = 60;
 type AiProvider = AiProviderType;
 
 function placeholderChatTitle(message: ChatMessage): string {
-  const text = getTextFromMessage(message).trim();
-  return text.slice(0, 50) || "New Chat";
+  return fallbackChatTitle(getTextFromMessage(message));
 }
 
 const getTokenlensCatalog = cache(
@@ -372,6 +382,7 @@ export async function POST(request: Request) {
       country,
     };
 
+    const turnStartedAt = Date.now();
     await saveMessages({
       messages: [
         {
@@ -379,7 +390,7 @@ export async function POST(request: Request) {
           id: message.id,
           role: "user",
           parts: message.parts,
-          createdAt: new Date(),
+          createdAt: new Date(turnStartedAt),
         },
       ],
     });
@@ -389,9 +400,35 @@ export async function POST(request: Request) {
 
     let finalMergedUsage: AppUsage | undefined;
     let hasErrorOccurred: boolean = false;
+    let contextBreakdownParts: ContextBreakdownPartsInput = {
+      system: "",
+      persona: "",
+      skills: "",
+      knowledge: "",
+      tools: "",
+      conversation: "",
+    };
 
     const stream = createUIMessageStream({
       execute: async ({ writer: dataStream }) => {
+        const emitTurnUsage = (usage: AppUsage) => {
+          const merged: AppUsage = {
+            ...usage,
+            breakdown: estimateContextBreakdown({
+              inputTokens: usage.inputTokens ?? 0,
+              parts: contextBreakdownParts,
+            }),
+          };
+          finalMergedUsage = merged;
+          dataStream.write({
+            type: "data-usage",
+            data: merged,
+          });
+          dataStream.write({
+            type: "data-turnDuration",
+            data: { durationMs: Math.max(0, Date.now() - turnStartedAt) },
+          });
+        };
         try {
           // Get user settings (API key, provider, timezone, and maxIterations)
           let userApiKey: string | null = null;
@@ -403,6 +440,7 @@ export async function POST(request: Request) {
           let enabledSkillNames: string[] = [
             "AI Connector Instructions (always on)",
           ];
+          let turnSkillChips: Array<{ id: string; name: string }> = [];
           let customBaseUrl: string | undefined;
           let customSpeedModelId: string | undefined;
           let customReasoningModelId: string | undefined;
@@ -486,11 +524,12 @@ export async function POST(request: Request) {
                     enabledSkillIds: settings.enabledSkillIds ?? [],
                     customSkills: settings.customSkills ?? [],
                     connectedSkillSources: settings.connectedSkillSources ?? [],
+                    skillModes: settings.skillModes ?? {},
                   },
                   settings.customInstructions,
                 );
-                const skillSettingsForChat =
-                  isOrgInstallMode() && session.user.orgId
+                const skillSettingsForChat = {
+                  ...(isOrgInstallMode() && session.user.orgId
                     ? await buildOrgAwareSkillSettings({
                         orgId: session.user.orgId,
                         enabledSkillIds: skillSettings.enabledSkillIds,
@@ -502,37 +541,49 @@ export async function POST(request: Request) {
                             settings.disabledOrgConnectedSkillSourceIds,
                           ),
                       })
-                    : skillSettings;
-                const invokedConnectedSkillIds = (
-                  requestInvokedConnectedSkillIds ?? []
-                ).filter(
-                  (skillId) =>
-                    typeof skillId === "string" &&
-                    skillId.startsWith("connected:") &&
-                    skillSettingsForChat.connectedSkillSources.some((source) =>
-                      skillId.startsWith(`connected:${source.id}:`),
-                    ),
-                );
+                    : skillSettings),
+                  skillModes: skillSettings.skillModes,
+                };
                 const connectedScopeId = resolveConnectedSkillsScopeId(
                   session.user.id,
                   session.user.orgId,
                 );
-                const invokedConnectedSkills = listConnectedCatalogSkills(
+                const connectedSkills = listConnectedCatalogSkills(
                   connectedScopeId,
                   skillSettingsForChat.connectedSkillSources,
-                ).filter((skill) =>
+                );
+                const slashableSkills = listSlashableComposerSkills(
+                  skillSettingsForChat,
+                  {
+                    oracle: listOracleCatalogSkills(),
+                    community: listCommunityCatalogSkills(),
+                    connected: connectedSkills,
+                    disabledConnectedSourceIds:
+                      normalizeDisabledOrgConnectedSkillSourceIds(
+                        settings.disabledOrgConnectedSkillSourceIds,
+                      ),
+                  },
+                );
+                const slashableIds = new Set(
+                  slashableSkills.map((skill) => skill.id),
+                );
+                const invokedConnectedSkillIds = (
+                  requestInvokedConnectedSkillIds ?? []
+                ).filter(
+                  (skillId) =>
+                    typeof skillId === "string" && slashableIds.has(skillId),
+                );
+                const invokedSkills = slashableSkills.filter((skill) =>
                   invokedConnectedSkillIds.includes(skill.id),
                 );
                 invokedConnectedSkillSlugs = new Set(
-                  invokedConnectedSkills
-                    .map((skill) => skill.slug?.toLowerCase() ?? "")
-                    .filter(Boolean),
+                  invokedSkills.map((skill) => skill.slug.toLowerCase()),
                 );
-                if (invokedConnectedSkills.length > 0) {
-                  const fallbackNames = invokedConnectedSkills
+                if (invokedSkills.length > 0) {
+                  const fallbackNames = invokedSkills
                     .map((skill) => skill.name)
                     .join(", ");
-                  invokedSkillFallbackText = `Use the ${fallbackNames} skill${invokedConnectedSkills.length === 1 ? "" : "s"}.`;
+                  invokedSkillFallbackText = `Use the ${fallbackNames} skill${invokedSkills.length === 1 ? "" : "s"}.`;
                 }
                 skillsPromptSection = buildSkillsPromptSection(
                   skillSettingsForChat,
@@ -548,6 +599,10 @@ export async function POST(request: Request) {
                     userId: connectedScopeId,
                   },
                 );
+                turnSkillChips = listTurnSkills(skillSettingsForChat, {
+                  invokedConnectedSkillIds,
+                  userId: connectedScopeId,
+                });
                 console.log("[Skills] Session skills:", {
                   enabledIds: skillSettingsForChat.enabledSkillIds,
                   enabledNames: enabledSkillNames,
@@ -713,11 +768,9 @@ export async function POST(request: Request) {
             ...netsuiteToolNames,
           ];
 
-          const systemPromptText = isBuilderSession
-            ? buildPersonaBuilderPrompt({
-                refiningPersona: refiningPersona ?? null,
-              })
-            : `${systemPrompt({
+          const promptParts = isBuilderSession
+            ? null
+            : buildSystemPromptParts({
                 selectedChatModel,
                 requestHints,
                 netsuiteTools: netsuiteToolNames,
@@ -731,7 +784,31 @@ export async function POST(request: Request) {
                   instructions: activePersona.instructions,
                   confirmBeforeSuiteQL: activePersona.confirmBeforeSuiteQL,
                 },
-              })}${skillsPromptSection}`;
+              });
+          const systemPromptText = isBuilderSession
+            ? buildPersonaBuilderPrompt({
+                refiningPersona: refiningPersona ?? null,
+              })
+            : `${promptParts?.text ?? ""}${skillsPromptSection}`;
+          if (isBuilderSession) {
+            contextBreakdownParts = {
+              system: "",
+              persona: systemPromptText,
+              skills: "",
+              knowledge: "",
+              tools: "",
+              conversation: "",
+            };
+          } else {
+            contextBreakdownParts = {
+              system: promptParts?.system ?? "",
+              persona: promptParts?.persona ?? "",
+              skills: skillsPromptSection,
+              knowledge: promptParts?.knowledge ?? "",
+              tools: "",
+              conversation: "",
+            };
+          }
           console.log(
             isBuilderSession
               ? `[PersonaBuilder] Interview session; refine=${stampedRefiningPersonaId ?? "create"}`
@@ -741,6 +818,13 @@ export async function POST(request: Request) {
                     : "") +
                   ` + persona ${activePersona.id}`,
           );
+
+          if (turnSkillChips.length > 0) {
+            dataStream.write({
+              type: "data-turnSkills",
+              data: turnSkillChips,
+            });
+          }
 
           // Both providers use the same model keys (chat-model, chat-model-reasoning, title-model)
           const modelId = selectedChatModel;
@@ -777,6 +861,20 @@ export async function POST(request: Request) {
                   : undefined,
             }),
           } as ToolSet;
+
+          contextBreakdownParts = {
+            ...contextBreakdownParts,
+            tools: serializeToolsForBreakdown(
+              allToolsWithConfig as Record<
+                string,
+                {
+                  description?: string;
+                  parameters?: unknown;
+                  inputSchema?: unknown;
+                }
+              >,
+            ),
+          };
 
           // Verify the model exists before calling streamText
           let languageModel: LanguageModel;
@@ -824,6 +922,10 @@ export async function POST(request: Request) {
                 fallbackText: invokedSkillFallbackText,
               }),
             );
+            contextBreakdownParts = {
+              ...contextBreakdownParts,
+              conversation: serializeConversationForBreakdown(modelMessages),
+            };
             result = streamText({
               model: languageModel,
               system: systemPromptText,
@@ -900,20 +1002,12 @@ export async function POST(request: Request) {
                   const resolvedModelId =
                     userProvider.languageModel(modelId).modelId;
                   if (!resolvedModelId) {
-                    finalMergedUsage = usage;
-                    dataStream.write({
-                      type: "data-usage",
-                      data: finalMergedUsage,
-                    });
+                    emitTurnUsage(usage);
                     return;
                   }
 
                   if (!providers) {
-                    finalMergedUsage = usage;
-                    dataStream.write({
-                      type: "data-usage",
-                      data: finalMergedUsage,
-                    });
+                    emitTurnUsage(usage);
                     return;
                   }
 
@@ -922,22 +1016,14 @@ export async function POST(request: Request) {
                     usage,
                     providers,
                   });
-                  finalMergedUsage = {
+                  emitTurnUsage({
                     ...usage,
                     ...summary,
                     modelId: resolvedModelId,
-                  } as AppUsage;
-                  dataStream.write({
-                    type: "data-usage",
-                    data: finalMergedUsage,
-                  });
+                  } as AppUsage);
                 } catch (err) {
                   console.warn("TokenLens enrichment failed", err);
-                  finalMergedUsage = usage;
-                  dataStream.write({
-                    type: "data-usage",
-                    data: finalMergedUsage,
-                  });
+                  emitTurnUsage(usage);
                 }
               },
             });

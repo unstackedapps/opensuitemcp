@@ -21,6 +21,7 @@ import type {
 import type { AiProviderConfig } from "../ai/provider-entries";
 import type { SearchResourceEntry } from "../ai/search-resources";
 import type { ConnectedSkillSource, CustomSkill } from "../ai/skills/catalog";
+import type { SkillModesMap } from "../ai/skills/modes";
 import type { NetsuiteMcpToolSettings } from "../netsuite/mcp-tool-settings";
 import type { AppUsage } from "../usage";
 
@@ -48,7 +49,7 @@ export const chat = pgTable("Chat", {
   id: uuid("id").primaryKey().notNull().defaultRandom(),
   createdAt: timestamp("createdAt").notNull(),
   title: text("title").notNull(),
-  summary: text("summary"), // Longer summary for tooltip (20-30 words)
+  summary: text("summary"),
   userId: uuid("userId")
     .notNull()
     .references(() => user.id),
@@ -194,6 +195,11 @@ export const userSettings = pgTable("UserSettings", {
     .$type<string[]>()
     .notNull()
     .default(sql`'[]'::jsonb`),
+  /** Per-skill invocation: auto (inject), slash (composer /), or off */
+  skillModes: jsonb("skillModes")
+    .$type<SkillModesMap>()
+    .notNull()
+    .default(sql`'{}'::jsonb`),
   customSkills: jsonb("customSkills")
     .$type<CustomSkill[]>()
     .notNull()

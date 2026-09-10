@@ -166,9 +166,9 @@ export function ConnectedSkillSlashMenu({
     return (
       <div className="absolute bottom-full left-0 z-20 mb-2 w-full max-w-md rounded-xl border border-border bg-background p-3 shadow-lg">
         <p className="text-muted-foreground text-xs">
-          No connected skills match{" "}
-          <code className="rounded bg-muted px-1">/{query || "…"}</code>.
-          Connect a pack in Skills → Connected.
+          No skills match{" "}
+          <code className="rounded bg-muted px-1">/{query || "…"}</code>. Set a
+          skill to Auto or Slash command in Skills.
         </p>
       </div>
     );

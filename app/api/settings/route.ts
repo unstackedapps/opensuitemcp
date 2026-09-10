@@ -26,6 +26,7 @@ import {
   type SearchResourceEntry,
 } from "@/lib/ai/search-resources";
 import { normalizeUserSkillSettings } from "@/lib/ai/skills/catalog";
+import { normalizeSkillModes } from "@/lib/ai/skills/modes";
 import { getUserSettings, upsertUserSettings } from "@/lib/db/queries";
 import { decrypt, encrypt } from "@/lib/encryption";
 import {
@@ -107,6 +108,7 @@ const customSkillSchema = z.object({
   content: z.string().max(32_000),
   updatedAt: z.string().optional(),
   enabled: z.boolean().optional(),
+  slug: z.string().max(64).optional(),
 });
 
 const customPersonaSchema = z.object({
@@ -157,6 +159,10 @@ const settingsSchema = z.object({
     .nullable(),
   customInstructions: z.string().max(32_000).optional().nullable(),
   enabledSkillIds: z.array(z.string().max(128)).max(128).optional().nullable(),
+  skillModes: z
+    .record(z.enum(["auto", "slash", "off"]))
+    .optional()
+    .nullable(),
   customSkills: z.array(customSkillSchema).max(32).optional().nullable(),
   disabledOrgConnectedSkillSourceIds: z
     .array(z.string().max(64))
@@ -188,6 +194,7 @@ function resolveSkillSettings(
           enabledSkillIds: settings.enabledSkillIds ?? [],
           customSkills: settings.customSkills ?? [],
           connectedSkillSources: settings.connectedSkillSources ?? [],
+          skillModes: settings.skillModes ?? {},
         }
       : null,
     settings?.customInstructions,
@@ -641,6 +648,7 @@ export async function GET() {
       maxIterations: settings.maxIterations ?? "10",
       customInstructions: settings.customInstructions ?? null,
       enabledSkillIds: enabledSkillIdsForClient,
+      skillModes: skillSettings.skillModes,
       customSkills: skillSettings.customSkills,
       connectedSkillSources: skillSettings.connectedSkillSources,
       aiProviders: aiProvidersForClient,
@@ -832,7 +840,13 @@ export async function POST(request: Request) {
         ? normalizeUserSkillSettings({
             enabledSkillIds: validated.enabledSkillIds ?? [],
             customSkills: nextCustomSkills ?? existing?.customSkills ?? [],
+            skillModes: validated.skillModes ?? existing?.skillModes ?? {},
           }).enabledSkillIds
+        : undefined;
+
+    const nextSkillModes =
+      validated.skillModes !== undefined
+        ? normalizeSkillModes(validated.skillModes)
         : undefined;
 
     let nextDisabledOrgConnectedSkillSourceIds =
@@ -1160,6 +1174,7 @@ export async function POST(request: Request) {
       maxIterations: nextMaxIterations,
       customInstructions: validated.customInstructions,
       enabledSkillIds: nextEnabledSkillIds,
+      skillModes: nextSkillModes,
       customSkills: nextCustomSkills,
       disabledOrgConnectedSkillSourceIds:
         nextDisabledOrgConnectedSkillSourceIds,
