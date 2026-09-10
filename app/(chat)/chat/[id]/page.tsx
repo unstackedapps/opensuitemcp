@@ -127,8 +127,16 @@ export default async function Page(props: { params: Promise<{ id: string }> }) {
   };
 
   if (!chatModelFromCookie) {
-    return <Chat {...chatProps} initialChatModel={DEFAULT_CHAT_MODEL} />;
+    return (
+      <Chat {...chatProps} initialChatModel={DEFAULT_CHAT_MODEL} key={id} />
+    );
   }
 
-  return <Chat {...chatProps} initialChatModel={chatModelFromCookie.value} />;
+  return (
+    <Chat
+      {...chatProps}
+      initialChatModel={chatModelFromCookie.value}
+      key={id}
+    />
+  );
 }

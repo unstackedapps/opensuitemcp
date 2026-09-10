@@ -42,7 +42,6 @@ import {
 } from "./message-elements/prompt-input";
 import { toast } from "./toast";
 import { Button } from "./ui/button";
-import { Spinner } from "./ui/spinner";
 import {
   Tooltip,
   TooltipContent,
@@ -51,12 +50,13 @@ import {
 } from "./ui/tooltip";
 import type { VisibilityType } from "./visibility-selector";
 
-async function fetchConnectedSlashSkills(): Promise<SlashConnectedSkill[]> {
+async function fetchSlashableSkills(): Promise<SlashConnectedSkill[]> {
   const response = await fetch("/api/skills");
   if (!response.ok) {
     return [];
   }
   const payload = (await response.json()) as {
+    slashableSkills?: SlashConnectedSkill[];
     connectedSkills?: Array<{
       id: string;
       name: string;
@@ -67,6 +67,11 @@ async function fetchConnectedSlashSkills(): Promise<SlashConnectedSkill[]> {
     }>;
     disabledOrgConnectedSkillSourceIds?: string[];
   };
+  if (Array.isArray(payload.slashableSkills)) {
+    return payload.slashableSkills.filter(
+      (skill) => typeof skill.slug === "string" && skill.slug.length > 0,
+    );
+  }
   const disabledSourceIds = new Set(
     payload.disabledOrgConnectedSkillSourceIds ?? [],
   );
@@ -139,6 +144,7 @@ function ComposerSideTools({
             <Button
               aria-label="Skills"
               className="size-8 px-2 focus-visible:ring-0"
+              data-testid="composer-skills-button"
               onClick={() => openPortal("skills")}
               type="button"
               variant="ghost"
@@ -223,8 +229,8 @@ function PureMultimodalInput({
   const [slashActiveIndex, setSlashActiveIndex] = useState(0);
 
   const { data: connectedSkills = [] } = useSWR(
-    mounted && !disabled && !isPersonaBuilder ? "connected-slash-skills" : null,
-    fetchConnectedSlashSkills,
+    mounted && !disabled && !isPersonaBuilder ? "slashable-skills" : null,
+    fetchSlashableSkills,
     { revalidateOnFocus: true },
   );
 
@@ -560,9 +566,6 @@ function PureMultimodalInput({
             </PromptInputTools>
 
             <div className="flex items-center justify-end gap-2">
-              {(status === "submitted" || status === "streaming") && (
-                <Spinner className="text-muted-foreground" />
-              )}
               {status === "submitted" || status === "streaming" ? (
                 <StopButton setMessages={setMessages} stop={stop} />
               ) : (

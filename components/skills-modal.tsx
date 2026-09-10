@@ -19,12 +19,21 @@ import { ConfirmDestructiveDialog } from "@/components/confirm-destructive-dialo
 import { OnboardingPanelSkeleton } from "@/components/onboarding/onboarding-panel-skeleton";
 import { OnboardingStepProse } from "@/components/onboarding/onboarding-step-prose";
 import { useOptionalAppPortal } from "@/components/portal/context";
+import { SkillModeSelect } from "@/components/skill-mode-select";
 import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  applySkillModeChange,
+  resolveSkillMode,
+  type SkillInvocationMode,
+  type SkillKind,
+  type SkillModesMap,
+  slugifySkillName,
+} from "@/lib/ai/skills/modes";
 import { PUBLIC_DOCS_ORIGIN } from "@/lib/constants";
 import { skillsPackSyncEnabled } from "@/lib/product-features";
 import { cn } from "@/lib/utils";
@@ -62,6 +71,7 @@ type CustomSkill = {
   updatedAt: string;
   enabled?: boolean;
   managedByOrg?: boolean;
+  slug?: string;
 };
 
 type ConnectedSource = {
@@ -82,6 +92,7 @@ type ConnectedSource = {
 type SkillsResponse = {
   catalog: CatalogSkill[];
   enabledSkillIds: string[];
+  skillModes?: SkillModesMap;
   customSkills: CustomSkill[];
   connectedSources: ConnectedSource[];
   connectedSkills: CatalogSkill[];
@@ -130,7 +141,10 @@ async function persistSkillSettings(
   payload: Partial<
     Pick<
       SkillsResponse,
-      "enabledSkillIds" | "customSkills" | "disabledOrgConnectedSkillSourceIds"
+      | "enabledSkillIds"
+      | "customSkills"
+      | "skillModes"
+      | "disabledOrgConnectedSkillSourceIds"
     >
   >,
 ) {
@@ -174,15 +188,14 @@ type SkillRowProps = {
   updatedAt: string;
   author: string;
   description?: string;
-  checked: boolean;
+  mode: SkillInvocationMode;
   /** Non-toggleable (e.g. always-on); uses default cursor, not not-allowed */
   disabled?: boolean;
   /** Save in flight — blocks clicks without the disabled/not-allowed cursor */
   pending?: boolean;
-  onCheckedChange?: (checked: boolean) => void;
+  onModeChange?: (mode: SkillInvocationMode) => void;
   actions?: React.ReactNode;
-  /** Hide enable switch (Connected skills are slash-invoked) */
-  hideSwitch?: boolean;
+  hideMode?: boolean;
   /** When set, row can expand to preview SKILL.md / custom content */
   preview?:
     | { kind: "remote"; skillId: string }
@@ -195,12 +208,12 @@ function SkillRow({
   updatedAt,
   author,
   description,
-  checked,
+  mode,
   disabled,
   pending,
-  onCheckedChange,
+  onModeChange,
   actions,
-  hideSwitch,
+  hideMode,
   preview,
   variant = "list",
 }: SkillRowProps) {
@@ -251,7 +264,7 @@ function SkillRow({
           : "border-b border-border/60 py-3 last:border-b-0",
       )}
     >
-      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+      <div className="flex flex-col gap-2 sm:grid sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-3">
         <button
           className={cn(
             "min-w-0 text-left",
@@ -283,21 +296,15 @@ function SkillRow({
             {formatSkillDate(updatedAt)}
           </p>
         </button>
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="flex shrink-0 items-center justify-end gap-1">
           {actions}
-          {hideSwitch ? null : (
-            <Switch
-              aria-busy={pending}
-              aria-label={`Toggle ${name}`}
-              checked={checked}
-              className={cn(
-                pending && "opacity-60",
-                disabled && "disabled:cursor-default",
-              )}
+          {hideMode ? null : (
+            <SkillModeSelect
               disabled={disabled}
-              onCheckedChange={
-                disabled || pending ? undefined : onCheckedChange
-              }
+              name={name}
+              onChange={(next) => onModeChange?.(next)}
+              pending={pending}
+              value={mode}
             />
           )}
         </div>
@@ -490,6 +497,7 @@ export function SkillsPanel({
   );
 
   const [enabledSkillIds, setEnabledSkillIds] = useState<string[]>([]);
+  const [skillModes, setSkillModes] = useState<SkillModesMap>({});
   const [customSkills, setCustomSkills] = useState<CustomSkill[]>([]);
   const [connectedSources, setConnectedSources] = useState<ConnectedSource[]>(
     [],
@@ -539,6 +547,7 @@ export function SkillsPanel({
 
     if (data && !initializedRef.current) {
       setEnabledSkillIds(data.enabledSkillIds);
+      setSkillModes(data.skillModes ?? {});
       setCustomSkills(data.customSkills);
       setConnectedSources(data.connectedSources ?? []);
       setConnectedSkills(data.connectedSkills ?? []);
@@ -582,6 +591,7 @@ export function SkillsPanel({
           SkillsResponse,
           | "enabledSkillIds"
           | "customSkills"
+          | "skillModes"
           | "disabledOrgConnectedSkillSourceIds"
         >
       >,
@@ -599,6 +609,7 @@ export function SkillsPanel({
               ...current,
               enabledSkillIds:
                 payload.enabledSkillIds ?? current.enabledSkillIds,
+              skillModes: payload.skillModes ?? current.skillModes,
               customSkills: payload.customSkills ?? current.customSkills,
               disabledOrgConnectedSkillSourceIds:
                 payload.disabledOrgConnectedSkillSourceIds ??
@@ -660,7 +671,7 @@ export function SkillsPanel({
       },
     );
 
-    void globalMutate("connected-slash-skills");
+    void globalMutate("slashable-skills");
 
     setPendingToggles((current) => {
       const updated = new Set(current);
@@ -669,44 +680,46 @@ export function SkillsPanel({
     });
   };
 
-  const handleCatalogToggle = async (skillId: string, checked: boolean) => {
+  const handleSkillModeChange = async (
+    skillId: string,
+    kind: SkillKind,
+    mode: SkillInvocationMode,
+  ) => {
     if (pendingToggles.has(skillId)) {
       return;
     }
 
-    const previous = enabledSkillIds;
-    const next = checked
-      ? [...enabledSkillIds, skillId]
-      : enabledSkillIds.filter((id) => id !== skillId);
-
-    setPendingToggles((current) => new Set(current).add(skillId));
-    setEnabledSkillIds(next);
-
-    await runPersist({ enabledSkillIds: next }, () =>
-      setEnabledSkillIds(previous),
-    );
-
-    setPendingToggles((current) => {
-      const updated = new Set(current);
-      updated.delete(skillId);
-      return updated;
+    const previousModes = skillModes;
+    const previousEnabled = enabledSkillIds;
+    const previousCustom = customSkills;
+    const next = applySkillModeChange({
+      skillId,
+      kind,
+      mode,
+      skillModes,
+      enabledSkillIds,
+      customSkills,
     });
-  };
-
-  const handleCustomToggle = async (skillId: string, checked: boolean) => {
-    if (pendingToggles.has(skillId)) {
-      return;
-    }
-
-    const previous = customSkills;
-    const next = customSkills.map((item) =>
-      item.id === skillId ? { ...item, enabled: checked } : item,
-    );
 
     setPendingToggles((current) => new Set(current).add(skillId));
-    setCustomSkills(next);
+    setSkillModes(next.skillModes);
+    setEnabledSkillIds(next.enabledSkillIds);
+    setCustomSkills(next.customSkills);
 
-    await runPersist({ customSkills: next }, () => setCustomSkills(previous));
+    await runPersist(
+      {
+        skillModes: next.skillModes,
+        enabledSkillIds: next.enabledSkillIds,
+        ...(kind === "custom" ? { customSkills: next.customSkills } : {}),
+      },
+      () => {
+        setSkillModes(previousModes);
+        setEnabledSkillIds(previousEnabled);
+        setCustomSkills(previousCustom);
+      },
+    );
+
+    void globalMutate("slashable-skills");
 
     setPendingToggles((current) => {
       const updated = new Set(current);
@@ -724,6 +737,7 @@ export function SkillsPanel({
     const next = customSkills.filter((item) => item.id !== skillId);
     setCustomSkills(next);
     await runPersist({ customSkills: next }, () => setCustomSkills(previous));
+    void globalMutate("slashable-skills");
   };
 
   const handleSaveCustomSkill = async (name: string, content: string) => {
@@ -747,11 +761,13 @@ export function SkillsPanel({
             content,
             updatedAt: now,
             enabled: true,
+            slug: slugifySkillName(name),
           },
         ];
 
     setCustomSkills(next);
     await runPersist({ customSkills: next }, () => setCustomSkills(previous));
+    void globalMutate("slashable-skills");
     setEditingSkill(null);
     setEditorOpen(false);
   };
@@ -780,7 +796,7 @@ export function SkillsPanel({
       { revalidate: false },
     );
     // Keep chat composer slash menu in sync
-    void globalMutate("connected-slash-skills");
+    void globalMutate("slashable-skills");
     void onSettingsChange?.();
   };
 
@@ -1082,13 +1098,19 @@ export function SkillsPanel({
             {oracleCatalog.map((skill) => (
               <SkillRow
                 author={skill.author}
-                checked={skill.alwaysOn || enabledSkillIds.includes(skill.id)}
                 description={skill.description}
                 disabled={skill.alwaysOn}
                 key={skill.id}
+                mode={resolveSkillMode({
+                  skillId: skill.id,
+                  kind: "oracle",
+                  alwaysOn: skill.alwaysOn,
+                  skillModes,
+                  enabledSkillIds,
+                })}
                 name={skill.name}
-                onCheckedChange={(checked) =>
-                  void handleCatalogToggle(skill.id, checked)
+                onModeChange={(mode) =>
+                  void handleSkillModeChange(skill.id, "oracle", mode)
                 }
                 pending={pendingToggles.has(skill.id)}
                 preview={{ kind: "remote", skillId: skill.id }}
@@ -1109,12 +1131,17 @@ export function SkillsPanel({
             {communityCatalog.map((skill) => (
               <SkillRow
                 author={skill.author}
-                checked={enabledSkillIds.includes(skill.id)}
                 description={skill.description}
                 key={skill.id}
+                mode={resolveSkillMode({
+                  skillId: skill.id,
+                  kind: "community",
+                  skillModes,
+                  enabledSkillIds,
+                })}
                 name={skill.name}
-                onCheckedChange={(checked) =>
-                  void handleCatalogToggle(skill.id, checked)
+                onModeChange={(mode) =>
+                  void handleSkillModeChange(skill.id, "community", mode)
                 }
                 pending={pendingToggles.has(skill.id)}
                 preview={{ kind: "remote", skillId: skill.id }}
@@ -1186,11 +1213,17 @@ export function SkillsPanel({
                     )
                   }
                   author={skill.managedByOrg ? "Organization" : "You"}
-                  checked={skill.enabled !== false}
                   key={skill.id}
+                  mode={resolveSkillMode({
+                    skillId: skill.id,
+                    kind: "custom",
+                    skillModes,
+                    enabledSkillIds,
+                    customEnabled: skill.enabled !== false,
+                  })}
                   name={skill.name}
-                  onCheckedChange={(checked) =>
-                    void handleCustomToggle(skill.id, checked)
+                  onModeChange={(mode) =>
+                    void handleSkillModeChange(skill.id, "custom", mode)
                   }
                   pending={pendingToggles.has(skill.id)}
                   preview={{ kind: "inline", content: skill.content }}
@@ -1231,9 +1264,10 @@ export function SkillsPanel({
                   </Button>
                 </div>
                 <p className="text-muted-foreground text-xs">
-                  Public repos only. Invoke synced skills with{" "}
+                  Public repos only. Set a skill to Slash command (or Auto) then
+                  type{" "}
                   <code className="rounded bg-muted px-1">/skill-name</code> in
-                  chat (multiple allowed inline).
+                  chat.
                 </p>
               </div>
             ) : (
@@ -1378,15 +1412,27 @@ export function SkillsPanel({
                             {skillsForSource.map((skill) => (
                               <SkillRow
                                 author={source.label}
-                                checked={false}
                                 description={
                                   skill.slug
                                     ? `/${skill.slug} — ${skill.description}`
                                     : skill.description
                                 }
-                                hideSwitch
                                 key={skill.id}
+                                mode={resolveSkillMode({
+                                  skillId: skill.id,
+                                  kind: "connected",
+                                  skillModes,
+                                  enabledSkillIds,
+                                })}
                                 name={skill.name}
+                                onModeChange={(mode) =>
+                                  void handleSkillModeChange(
+                                    skill.id,
+                                    "connected",
+                                    mode,
+                                  )
+                                }
+                                pending={pendingToggles.has(skill.id)}
                                 preview={{
                                   kind: "remote",
                                   skillId: skill.id,

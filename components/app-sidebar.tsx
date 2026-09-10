@@ -1,26 +1,15 @@
 "use client";
 
-import {
-  Blocks,
-  BookOpen,
-  Cloud,
-  Globe,
-  MessagesSquare,
-  PanelLeft,
-  Plus,
-  Sparkles,
-  UserRound,
-} from "lucide-react";
+import { PanelLeft, Plus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { User } from "next-auth";
-import {
-  type PortalSectionId,
-  useAppPortal,
-} from "@/components/portal/context";
+import type { FocusEvent } from "react";
 import { SidebarHistory } from "@/components/sidebar-history";
 import { SidebarUserNav } from "@/components/sidebar-user-nav";
 import {
+  isPeekLayerOpen,
+  isSidebarPeekUi,
   Sidebar,
   SidebarContent,
   SidebarFooter,
@@ -30,112 +19,154 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { Skeleton } from "@/components/ui/skeleton";
 import { isOrgAdminRole } from "@/lib/org/types";
 
-const QUICK_ACTIONS: Array<{
-  id: PortalSectionId;
+function SidebarCollapseButton({
+  label,
+  onClick,
+  onPeekStart,
+}: {
   label: string;
-  icon: typeof Sparkles;
-  testId?: string;
-}> = [
-  { id: "personas", label: "Personas", icon: UserRound },
-  {
-    id: "skills",
-    label: "Skills",
-    icon: Blocks,
-    testId: "sidebar-skills-button",
-  },
-  { id: "prompts", label: "Prompts", icon: BookOpen },
-  { id: "provider", label: "AI Provider", icon: Sparkles },
-  { id: "netsuite", label: "NetSuite", icon: Cloud },
-  { id: "search", label: "Web Search", icon: Globe },
-];
+  onClick: () => void;
+  onPeekStart?: () => void;
+}) {
+  return (
+    <SidebarMenuButton
+      aria-label={label}
+      className="size-8"
+      data-testid="sidebar-collapse-button"
+      onClick={onClick}
+      onFocus={onPeekStart}
+      onMouseEnter={onPeekStart}
+      type="button"
+    >
+      <PanelLeft />
+    </SidebarMenuButton>
+  );
+}
 
 export function AppSidebar({ user }: { user: User | undefined }) {
   const router = useRouter();
-  const { setOpenMobile, isMobile, toggleSidebar, state } = useSidebar();
-  const { openPortal } = useAppPortal();
+  const {
+    setOpenMobile,
+    isMobile,
+    toggleSidebar,
+    state,
+    peek,
+    setPeek,
+    closePeekSoon,
+    revealText,
+  } = useSidebar();
   const sidebarCollapsed = state === "collapsed";
+  const showExpandedChrome = isMobile || !sidebarCollapsed || peek;
   const showAdminLink = isOrgAdminRole(user?.role);
 
+  const handlePeekStart = () => {
+    if (isMobile || !sidebarCollapsed) {
+      return;
+    }
+    setPeek(true);
+  };
+
+  const handleCollapseClick = () => {
+    setPeek(false);
+    toggleSidebar();
+  };
+
   return (
-    <Sidebar className="group-data-[side=left]:border-r-0" collapsible="icon">
+    <Sidebar
+      className="group-data-[side=left]:border-r-0"
+      collapsible="icon"
+      onBlur={(event: FocusEvent<HTMLDivElement>) => {
+        if (isMobile || !sidebarCollapsed) {
+          return;
+        }
+        if (event.currentTarget.contains(event.relatedTarget)) {
+          return;
+        }
+        if (isSidebarPeekUi(event.relatedTarget) || isPeekLayerOpen()) {
+          return;
+        }
+        closePeekSoon();
+      }}
+      onPointerEnter={() => {
+        if (isMobile || !sidebarCollapsed || !peek) {
+          return;
+        }
+        setPeek(true);
+      }}
+    >
       <SidebarHeader>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip="New Chat">
-              <Link
-                href="/"
-                onClick={(event) => {
-                  // Let the browser handle new-tab / modified clicks.
-                  if (
-                    event.button !== 0 ||
-                    event.metaKey ||
-                    event.ctrlKey ||
-                    event.shiftKey ||
-                    event.altKey
-                  ) {
-                    return;
-                  }
-                  setOpenMobile(false);
-                  router.refresh();
-                }}
-              >
-                <Plus />
-                <span>New Chat</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          {!isMobile && sidebarCollapsed ? (
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                onClick={() => openPortal("chats")}
-                tooltip="Chats"
-              >
-                <MessagesSquare />
-                <span>Chats</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          ) : null}
-          {QUICK_ACTIONS.map((action) => {
-            const Icon = action.icon;
-            return (
-              <SidebarMenuItem key={action.id}>
-                <SidebarMenuButton
-                  data-testid={action.testId}
-                  onClick={() => openPortal(action.id)}
-                  tooltip={action.label}
-                >
-                  <Icon />
-                  <span>{action.label}</span>
+        <div className="flex items-center gap-1">
+          {isMobile || !sidebarCollapsed ? null : (
+            <SidebarCollapseButton
+              label="Expand sidebar"
+              onClick={handleCollapseClick}
+              onPeekStart={handlePeekStart}
+            />
+          )}
+          {showExpandedChrome ? (
+            <SidebarMenu className="min-w-0 flex-1">
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <Link
+                    href="/"
+                    onClick={(event) => {
+                      // Let the browser handle new-tab / modified clicks.
+                      if (
+                        event.button !== 0 ||
+                        event.metaKey ||
+                        event.ctrlKey ||
+                        event.shiftKey ||
+                        event.altKey
+                      ) {
+                        return;
+                      }
+                      setOpenMobile(false);
+                      router.refresh();
+                    }}
+                  >
+                    <Plus />
+                    {revealText ? (
+                      <span>New Chat</span>
+                    ) : (
+                      <>
+                        <span className="sr-only">New Chat</span>
+                        <Skeleton
+                          aria-hidden
+                          className="h-3 w-16 bg-sidebar-accent-foreground/10"
+                        />
+                      </>
+                    )}
+                  </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
-            );
-          })}
-        </SidebarMenu>
+            </SidebarMenu>
+          ) : null}
+          {isMobile || sidebarCollapsed ? null : (
+            <SidebarCollapseButton
+              label="Collapse sidebar"
+              onClick={handleCollapseClick}
+            />
+          )}
+        </div>
       </SidebarHeader>
 
       {/* flex-1 spacer pins the user footer to the bottom (Claude-style) */}
       <SidebarContent className="gap-0">
-        {isMobile || !sidebarCollapsed ? <SidebarHistory user={user} /> : null}
+        <div
+          className={
+            showExpandedChrome
+              ? "flex min-h-0 flex-1 flex-col"
+              : "pointer-events-none invisible hidden"
+          }
+        >
+          <SidebarHistory user={user} />
+        </div>
       </SidebarContent>
 
       <SidebarFooter className="mt-auto">
-        {!isMobile ? (
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                onClick={toggleSidebar}
-                tooltip={
-                  sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
-                }
-              >
-                <PanelLeft />
-                <span>{sidebarCollapsed ? "Expand" : "Collapse"}</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        ) : null}
         {user ? (
           <SidebarUserNav showAdminLink={showAdminLink} user={user} />
         ) : null}

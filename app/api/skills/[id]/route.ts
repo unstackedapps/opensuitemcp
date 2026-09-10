@@ -55,6 +55,7 @@ export async function GET(
             enabledSkillIds: settings.enabledSkillIds ?? [],
             customSkills: settings.customSkills ?? [],
             connectedSkillSources: settings.connectedSkillSources ?? [],
+            skillModes: settings.skillModes ?? {},
           }
         : null,
       settings?.customInstructions,

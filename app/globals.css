@@ -44,7 +44,7 @@
   --sidebar-accent: hsl(0 0% 94%);
   --sidebar-accent-foreground: hsl(0 0% 10%);
   --sidebar-border: hsl(0 0% 88%);
-  --sidebar-ring: hsl(217.2 91.2% 59.8%);
+  --sidebar-ring: var(--ring);
   /* border radius unit */
   --radius: 0.5rem;
   --sidebar: hsl(0 0% 96%);
@@ -84,7 +84,7 @@
   --sidebar-accent: hsl(210 4% 22%);
   --sidebar-accent-foreground: hsl(40 6% 82%);
   --sidebar-border: hsl(240 2% 20%);
-  --sidebar-ring: hsl(217.2 91.2% 59.8%);
+  --sidebar-ring: var(--ring);
   --sidebar: hsl(210 4% 16%);
 }
 
@@ -95,6 +95,7 @@
 
   --breakpoint-toast-mobile: 600px;
   --max-width-chat: 56.25rem;
+  --max-width-composer: calc(var(--max-width-chat) + 2.5rem);
 
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
@@ -322,7 +323,10 @@
   scrollbar-width: none; /* Firefox */
 }
 
-/* smooth bounce animation for loading dots */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none; /* Chrome, Safari and Opera */
+}
+
 @keyframes smooth-bounce {
   0%,
   100% {
@@ -335,16 +339,53 @@
   }
 }
 
+/* Steady highlight wave; independent of the bounce cycle. */
+@keyframes thinking-shimmer {
+  from {
+    background-position: 100% center;
+  }
+  to {
+    background-position: -100% center;
+  }
+}
+
 @theme {
   --animate-smooth-bounce: smooth-bounce 1.4s infinite;
+  --animate-thinking-shimmer: thinking-shimmer 2.4s infinite;
 }
 
 .animate-smooth-bounce {
   animation: smooth-bounce 1.4s infinite;
 }
 
-.scrollbar-hide::-webkit-scrollbar {
-  display: none; /* Chrome, Safari and Opera */
+.animate-thinking-shimmer {
+  background-image: linear-gradient(
+    90deg,
+    var(--muted-foreground) 0%,
+    var(--muted-foreground) 35%,
+    var(--foreground) 50%,
+    var(--muted-foreground) 65%,
+    var(--muted-foreground) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: thinking-shimmer 2.4s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-smooth-bounce,
+  .animate-thinking-shimmer {
+    animation: none;
+  }
+
+  .animate-thinking-shimmer {
+    background-image: none;
+    color: var(--muted-foreground);
+    -webkit-text-fill-color: var(--muted-foreground);
+  }
 }
 
 @theme inline {
