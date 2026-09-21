@@ -107,3 +107,36 @@ export async function allowAuthAttempt(email: string): Promise<boolean> {
     return true;
   }
 }
+
+/**
+ * Fixed 60s window burst limit for MCP server tool calls, keyed per API key so
+ * one runaway agent cannot exhaust the budget of its owner's other keys.
+ * Disabled when MCP_CALL_LIMIT_PER_MINUTE is unset/0, or Redis is unavailable
+ * (fail-open so self-host without Redis still works).
+ */
+export async function allowMcpCallBurst(keyId: string): Promise<boolean> {
+  const limit = envPositiveInt("MCP_CALL_LIMIT_PER_MINUTE", 0);
+  if (limit <= 0) {
+    return true;
+  }
+
+  const client = await getClient();
+  if (!client) {
+    return true;
+  }
+
+  const key = `ratelimit:mcp:burst:${keyId}`;
+  try {
+    const count = await client.incr(key);
+    if (count === 1) {
+      await client.expire(key, 60);
+    }
+    return count <= limit;
+  } catch (error) {
+    console.warn(
+      "[RateLimit] mcp check failed:",
+      error instanceof Error ? error.message : String(error),
+    );
+    return true;
+  }
+}

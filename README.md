@@ -87,6 +87,24 @@ With AI Connector + MCP Standard Tools connected, chat can run SuiteQL, records,
 
 _NetSuite MCP tools in a conversation._
 
+## MCP server (act on behalf of a user)
+
+OpenSuiteMCP can also be an **MCP server**, so an external AI agent works
+inside a user's NetSuite workspace as that user — their connected account,
+their permissions, their tool policy.
+
+Off by default. Enable it with `OSMCP_MCP_SERVER_ENABLED=true`, then mint a key
+under **App Portal → API access**:
+
+```bash
+claude mcp add --transport http opensuitemcp https://your-install.example.com/api/mcp \
+  --header "Authorization: Bearer osmcp_..."
+```
+
+Keys are per user, scoped `read` or `read`+`write`, shown once, and revocable.
+The server URL derives from your install's public address, so self-hosted and
+hosted installs each have their own. Full guide: [MCP server](docs/mcp-server.md).
+
 ## Prerequisites
 
 - Node.js 22+ and [pnpm](https://pnpm.io)
@@ -192,6 +210,7 @@ Written by `pnpm setup:backend` (or set manually for production):
 | `OSMCP_NS_ACCOUNT_ID` | Optional | Optional | NetSuite account for OIDC app login |
 | `OSMCP_NS_OIDC_CLIENT_ID` | Optional | Optional | OIDC integration client ID for app login |
 | `OSMCP_ENABLE_GUEST` | — | — | Set `true` only for demo/e2e; guest auto-login is off by default |
+| `OSMCP_MCP_SERVER_ENABLED` | Optional | Optional | Set `true` to expose the [MCP server](docs/mcp-server.md) at `/api/mcp`; off by default |
 
 Upgrading an existing install with users already in the database: see [docs/org-admin-upgrade.md](docs/org-admin-upgrade.md).
 
@@ -220,6 +239,7 @@ Self-host defaults are generous. Override with env vars if needed:
 | `MAX_MESSAGES_PER_DAY_REGULAR` | `100` | Signed-in user messages / 24h |
 | `MAX_MESSAGES_PER_DAY_GUEST` | `20` | Guest messages / 24h (only if `OSMCP_ENABLE_GUEST=true`) |
 | `CHAT_BURST_LIMIT_PER_MINUTE` | unset / `0` (off) | Redis burst cap; fail-open if Redis is down |
+| `MCP_CALL_LIMIT_PER_MINUTE` | unset / `0` (off) | Per-API-key MCP tool calls / minute; fail-open if Redis is down |
 
 Guest auto-login is **disabled** unless `OSMCP_ENABLE_GUEST=true`. Normal self-host and org installs require sign-in.
 
