@@ -28,9 +28,42 @@ type AgentAccessUser = {
 type AgentAccessPanelProps = {
   state: AdminAgentAccessState;
   users: AgentAccessUser[];
+  /**
+   * Re-read the state after a change. The admin page is a server component, so
+   * it refreshes the route; the onboarding wizard holds the state client-side
+   * and revalidates its own fetch instead.
+   */
+  onChanged?: () => Promise<unknown> | undefined;
+  /** Onboarding renders the panel inside its own step frame. */
+  bare?: boolean;
 };
 
-export function AgentAccessPanel({ state, users }: AgentAccessPanelProps) {
+function makeFrame(bare: boolean) {
+  return function Frame({
+    title,
+    children,
+  }: {
+    title: string;
+    children: React.ReactNode;
+  }) {
+    if (!bare) {
+      return <AdminPanel title={title}>{children}</AdminPanel>;
+    }
+    return (
+      <section className="space-y-2">
+        <h3 className="font-medium text-sm">{title}</h3>
+        {children}
+      </section>
+    );
+  };
+}
+
+export function AgentAccessPanel({
+  state,
+  users,
+  onChanged,
+  bare = false,
+}: AgentAccessPanelProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [query, setQuery] = useState("");
@@ -38,6 +71,7 @@ export function AgentAccessPanel({ state, users }: AgentAccessPanelProps) {
     () => new Set(state.allowedUserIds),
   );
 
+  const Frame = useMemo(() => makeFrame(bare), [bare]);
   const selectedMode = state.memberAccess === "selected";
 
   const filtered = useMemo(() => {
@@ -60,7 +94,11 @@ export function AgentAccessPanel({ state, users }: AgentAccessPanelProps) {
       const result = await action();
       if (result.ok) {
         toast({ type: "success", description: success });
-        router.refresh();
+        if (onChanged) {
+          await onChanged();
+        } else {
+          router.refresh();
+        }
       } else {
         toast({
           type: "error",
@@ -86,7 +124,7 @@ export function AgentAccessPanel({ state, users }: AgentAccessPanelProps) {
 
   return (
     <div className="space-y-4">
-      <AdminPanel title="Agent access">
+      <Frame title="Agent access">
         <p className="text-muted-foreground text-xs leading-relaxed">
           Lets a member connect an external AI agent to their own NetSuite
           workspace over MCP. The agent acts as that member, with their
@@ -175,10 +213,10 @@ export function AgentAccessPanel({ state, users }: AgentAccessPanelProps) {
             />
           </div>
         </div>
-      </AdminPanel>
+      </Frame>
 
       {state.enabled && selectedMode ? (
-        <AdminPanel title="Members with agent access">
+        <Frame title="Members with agent access">
           <Input
             className={cn(ADMIN_CONTROL_CLASS, "mb-3")}
             onChange={(event) => setQuery(event.target.value)}
@@ -213,7 +251,7 @@ export function AgentAccessPanel({ state, users }: AgentAccessPanelProps) {
               </li>
             ) : null}
           </ul>
-        </AdminPanel>
+        </Frame>
       ) : null}
     </div>
   );
