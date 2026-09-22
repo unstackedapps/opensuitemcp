@@ -66,6 +66,7 @@ export const ORG_STEP_ORDER: OnboardingStepId[] = [
   "llm",
   "users",
   "gates",
+  "agent-access",
   "checklist",
 ];
 

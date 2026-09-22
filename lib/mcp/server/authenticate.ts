@@ -8,7 +8,7 @@ import {
   authenticateMcpApiKey,
   touchMcpApiKey,
 } from "./keys";
-import { resolveMcpPolicy } from "./policy";
+import { resolveMcpPolicyForUser } from "./policy";
 
 /**
  * The identity a tool call runs as. Deliberately mirrors `session.user` so the
@@ -81,7 +81,10 @@ export async function authenticateMcpRequest(
     return { ok: false, denial: INVALID_TOKEN };
   }
 
-  const policy = await resolveMcpPolicy(result.principal.orgId);
+  const policy = await resolveMcpPolicyForUser(
+    result.principal.orgId,
+    result.principal.userId,
+  );
   if (!policy.enabled) {
     return {
       ok: false,
@@ -90,6 +93,18 @@ export async function authenticateMcpRequest(
         error: "access_denied",
         description:
           "Agent access is disabled for this organization. Ask an administrator to enable it.",
+      },
+    };
+  }
+
+  if (!policy.memberAllowed) {
+    return {
+      ok: false,
+      denial: {
+        status: 403,
+        error: "access_denied",
+        description:
+          "Agent access is limited to selected members of this organization, and this account is not one of them. Ask an administrator.",
       },
     };
   }
