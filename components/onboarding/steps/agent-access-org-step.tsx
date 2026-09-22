@@ -30,7 +30,11 @@ async function fetchAgentAccess(): Promise<AgentAccessResponse> {
  * so an admin can set the policy without leaving the wizard. The step is
  * optional; skipping it leaves the feature off, which is the default.
  */
-export function OnboardingAgentAccessOrgStep() {
+export function OnboardingAgentAccessOrgStep({
+  onRefresh,
+}: {
+  onRefresh: () => Promise<void>;
+}) {
   const { data, isLoading, mutate } = useSWR(
     "onboarding-agent-access",
     fetchAgentAccess,
@@ -48,7 +52,10 @@ export function OnboardingAgentAccessOrgStep() {
       ) : (
         <AgentAccessPanel
           bare
-          onChanged={() => mutate()}
+          onChanged={async () => {
+            await mutate();
+            await onRefresh();
+          }}
           state={data.state}
           users={data.users}
         />
