@@ -26,6 +26,8 @@ type McpKeysResponse = {
   serverUrl: string;
   policy: {
     enabled: boolean;
+    memberAccess: "all" | "selected";
+    memberAllowed: boolean;
     maxKeysPerUser: number;
     managedByOrg: boolean;
   };
@@ -33,6 +35,16 @@ type McpKeysResponse = {
 };
 
 const ENDPOINT = "/api/settings/mcp-keys";
+
+function blockedReason(data: McpKeysResponse): string {
+  if (!data.serverEnabled) {
+    return "Agent access is not enabled on this install. An operator must set OSMCP_MCP_SERVER_ENABLED=true and restart.";
+  }
+  if (!data.policy.enabled) {
+    return "Agent access is turned off for your organization. Ask an administrator to enable it.";
+  }
+  return "Agent access is limited to selected members of your organization. Ask an administrator to add you.";
+}
 
 export function McpAccessPanel({ active }: { active: boolean }) {
   const { data, isLoading, mutate } = useSWR<McpKeysResponse>(
@@ -117,7 +129,11 @@ export function McpAccessPanel({ active }: { active: boolean }) {
 
   const activeKeys = data.keys.filter((key) => key.status === "active");
   const atLimit = activeKeys.length >= data.policy.maxKeysPerUser;
-  const blocked = !(data.serverEnabled && data.policy.enabled);
+  const blocked = !(
+    data.serverEnabled &&
+    data.policy.enabled &&
+    data.policy.memberAllowed
+  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
@@ -160,9 +176,7 @@ export function McpAccessPanel({ active }: { active: boolean }) {
 
         {blocked ? (
           <p className="rounded-md border border-border/60 bg-muted/40 p-3 text-muted-foreground text-xs leading-relaxed">
-            {data.serverEnabled
-              ? "MCP server access is turned off for your organization. Ask an administrator to enable it."
-              : "The MCP server is not enabled on this install. An operator must set OSMCP_MCP_SERVER_ENABLED=true and restart."}
+            {blockedReason(data)}
           </p>
         ) : null}
 

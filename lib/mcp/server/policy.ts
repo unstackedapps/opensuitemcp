@@ -1,8 +1,12 @@
 import "server-only";
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { type OrgMcpServerPolicy, orgMcpServerPolicy } from "@/lib/db/schema";
+import {
+  type OrgMcpServerPolicy,
+  orgMcpServerPolicy,
+  userAgentAccess,
+} from "@/lib/db/schema";
 import { ChatSDKError } from "@/lib/errors";
 import {
   DEFAULT_MAX_KEYS_PER_USER,
@@ -24,7 +28,7 @@ export async function getOrgMcpServerPolicy(
   } catch (_error) {
     throw new ChatSDKError(
       "bad_request:database",
-      "Failed to read the organization MCP server policy",
+      "Failed to read the organization Agent access policy",
     );
   }
 }
@@ -47,14 +51,72 @@ export async function resolveMcpPolicy(
 
   return {
     enabled: row.enabled,
+    memberAccess: row.memberAccess,
+    // No user in hand: report the org-wide answer and let the per-user
+    // resolver narrow it. Callers acting for a person must use that one.
+    memberAllowed: row.memberAccess === "all",
     maxKeysPerUser: row.maxKeysPerUser,
     managedByOrg: true,
   };
 }
 
+/**
+ * The policy one member is subject to.
+ *
+ * `resolveMcpPolicy` answers for the organization. When an org narrows Agent
+ * access to named members, only this can say whether a given person is one of
+ * them, so anything acting for a user — minting a key, authenticating one —
+ * must resolve through here.
+ */
+export async function resolveMcpPolicyForUser(
+  orgId: string | null | undefined,
+  userId: string,
+): Promise<EffectiveMcpPolicy> {
+  const policy = await resolveMcpPolicy(orgId);
+  if (!orgId || policy.memberAccess === "all") {
+    return policy;
+  }
+
+  const [row] = await db
+    .select({ id: userAgentAccess.id })
+    .from(userAgentAccess)
+    .where(
+      and(eq(userAgentAccess.orgId, orgId), eq(userAgentAccess.userId, userId)),
+    )
+    .limit(1);
+
+  return { ...policy, memberAllowed: Boolean(row) };
+}
+
+export async function listOrgAgentAccessUserIds(
+  orgId: string,
+): Promise<string[]> {
+  const rows = await db
+    .select({ userId: userAgentAccess.userId })
+    .from(userAgentAccess)
+    .where(eq(userAgentAccess.orgId, orgId));
+  return rows.map((row) => row.userId);
+}
+
+export async function setOrgAgentAccessUsers(params: {
+  orgId: string;
+  userIds: string[];
+}): Promise<void> {
+  const unique = [...new Set(params.userIds)];
+  await db
+    .delete(userAgentAccess)
+    .where(eq(userAgentAccess.orgId, params.orgId));
+  if (unique.length > 0) {
+    await db
+      .insert(userAgentAccess)
+      .values(unique.map((userId) => ({ orgId: params.orgId, userId })));
+  }
+}
+
 export async function upsertOrgMcpServerPolicy(params: {
   orgId: string;
   enabled?: boolean;
+  memberAccess?: "all" | "selected";
   maxKeysPerUser?: number;
 }): Promise<OrgMcpServerPolicy> {
   const now = new Date();
@@ -66,6 +128,7 @@ export async function upsertOrgMcpServerPolicy(params: {
         .values({
           orgId: params.orgId,
           enabled: params.enabled ?? false,
+          memberAccess: params.memberAccess ?? "all",
           maxKeysPerUser: params.maxKeysPerUser ?? DEFAULT_MAX_KEYS_PER_USER,
           createdAt: now,
           updatedAt: now,
@@ -78,6 +141,7 @@ export async function upsertOrgMcpServerPolicy(params: {
       .update(orgMcpServerPolicy)
       .set({
         enabled: params.enabled ?? existing.enabled,
+        memberAccess: params.memberAccess ?? existing.memberAccess,
         maxKeysPerUser: params.maxKeysPerUser ?? existing.maxKeysPerUser,
         updatedAt: now,
       })
@@ -90,7 +154,7 @@ export async function upsertOrgMcpServerPolicy(params: {
     }
     throw new ChatSDKError(
       "bad_request:database",
-      "Failed to save the organization MCP server policy",
+      "Failed to save the organization Agent access policy",
     );
   }
 }

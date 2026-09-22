@@ -190,6 +190,13 @@
       "when": 1790085766332,
       "tag": "0026_drop_mcp_key_scopes",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1790100320197,
+      "tag": "0027_agent_access_member_policy",
+      "breakpoints": true
     }
   ]
 }

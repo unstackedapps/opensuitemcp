@@ -8,6 +8,8 @@ import {
   parseAiProviderConfig,
 } from "@/lib/ai/provider-entries";
 import { getUserSettings } from "@/lib/db/queries";
+import { countActiveMcpApiKeys } from "@/lib/mcp/server/keys";
+import { resolveMcpPolicy } from "@/lib/mcp/server/policy";
 import { listConnectedNetSuiteAccountIds } from "@/lib/netsuite/tokens";
 import { listAdminOrgLlmProviders } from "@/lib/org/admin/llm-providers";
 import { listAdminOrgNetSuiteMcpAccounts } from "@/lib/org/admin/netsuite-mcp-accounts";
@@ -109,6 +111,13 @@ function stepMeta(
         required: false,
         optional: true,
       };
+    case "agent-access":
+      return {
+        label: "Agent access",
+        description: "Let an external AI agent work in this workspace",
+        required: false,
+        optional: true,
+      };
     case "timezone":
       return {
         label: "Timezone",
@@ -154,14 +163,17 @@ async function getSoloReadiness(userId: string): Promise<{
   customSkillsComplete: boolean;
   searchComplete: boolean;
   timezoneComplete: boolean;
+  agentAccessComplete: boolean;
   oidcAccountCount: number;
   connectedMcpCount: number;
 }> {
-  const [settings, connectedIds, oidcOptions] = await Promise.all([
-    getUserSettings({ userId }),
-    listConnectedNetSuiteAccountIds(userId),
-    listLoginOidcOptions(),
-  ]);
+  const [settings, connectedIds, oidcOptions, activeKeyCount] =
+    await Promise.all([
+      getUserSettings({ userId }),
+      listConnectedNetSuiteAccountIds(userId),
+      listLoginOidcOptions(),
+      countActiveMcpApiKeys(userId),
+    ]);
 
   const aiProviders = ensureSeededProviderConfig(
     parseAiProviderConfig(settings?.aiProviders),
@@ -184,6 +196,8 @@ async function getSoloReadiness(userId: string): Promise<{
     timezoneComplete: Boolean(
       settings?.timezone && settings.timezone !== "UTC",
     ),
+    // Optional: the step is done once the user has a key an agent can hold.
+    agentAccessComplete: activeKeyCount > 0,
     oidcAccountCount,
     connectedMcpCount: connectedIds.length,
   };
@@ -197,6 +211,7 @@ async function getOrgReadiness(
   mcpComplete: boolean;
   llmComplete: boolean;
   usersComplete: boolean;
+  agentAccessComplete: boolean;
   oidcAccountCount: number;
   connectedMcpCount: number;
   userCount: number;
@@ -245,6 +260,7 @@ async function getOrgReadiness(
       grantedProviderIds.includes(provider.id),
     );
   const usersComplete = users.length > 1;
+  const agentAccessPolicy = await resolveMcpPolicy(orgId);
 
   const checklist: OnboardingChecklistItem[] = [
     {
@@ -272,6 +288,16 @@ async function getOrgReadiness(
       complete: searchResources.some((resource) => resource.enabled),
     },
     {
+      id: "agent-access",
+      label: "Agent access",
+      description: agentAccessPolicy.enabled
+        ? "Members can connect an external AI agent"
+        : "Off — turn it on if members should connect AI agents",
+      complete: agentAccessPolicy.enabled,
+      optional: true,
+      href: "/admin/agent-access",
+    },
+    {
       id: "invite-team",
       label: "Invite teammates",
       description:
@@ -288,6 +314,8 @@ async function getOrgReadiness(
     mcpComplete,
     llmComplete,
     usersComplete,
+    // For an org the step is done once an admin has turned the feature on.
+    agentAccessComplete: agentAccessPolicy.enabled,
     oidcAccountCount: enabledOidc.length,
     connectedMcpCount: connectedIds.length,
     userCount: users.length,
@@ -307,6 +335,7 @@ function buildSteps(
     customSkillsComplete?: boolean;
     searchComplete?: boolean;
     timezoneComplete?: boolean;
+    agentAccessComplete?: boolean;
   },
   viewedSteps: OnboardingStepId[],
 ): OnboardingStepStatus[] {
@@ -347,6 +376,9 @@ function buildSteps(
         break;
       case "timezone":
         complete = Boolean(flags.timezoneComplete);
+        break;
+      case "agent-access":
+        complete = Boolean(flags.agentAccessComplete);
         break;
       case "users":
         complete = Boolean(flags.usersComplete);

@@ -7,7 +7,7 @@ import {
   createMcpApiKey,
   listMcpApiKeys,
 } from "@/lib/mcp/server/keys";
-import { resolveMcpPolicy } from "@/lib/mcp/server/policy";
+import { resolveMcpPolicyForUser } from "@/lib/mcp/server/policy";
 import { writeOrgAuditLog } from "@/lib/org/audit";
 
 const createSchema = z.object({
@@ -22,7 +22,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const policy = await resolveMcpPolicy(session.user.orgId);
+  const policy = await resolveMcpPolicyForUser(
+    session.user.orgId,
+    session.user.id,
+  );
   const keys = await listMcpApiKeys(session.user.id);
 
   return NextResponse.json({
@@ -43,18 +46,31 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          "The MCP server is not enabled on this install. Set OSMCP_MCP_SERVER_ENABLED=true and restart.",
+          "Agent access is not enabled on this install. Set OSMCP_MCP_SERVER_ENABLED=true and restart.",
       },
       { status: 409 },
     );
   }
 
-  const policy = await resolveMcpPolicy(session.user.orgId);
+  const policy = await resolveMcpPolicyForUser(
+    session.user.orgId,
+    session.user.id,
+  );
   if (!policy.enabled) {
     return NextResponse.json(
       {
         error:
-          "MCP server access is disabled for this organization. Ask an administrator to enable it.",
+          "Agent access is disabled for this organization. Ask an administrator to enable it.",
+      },
+      { status: 403 },
+    );
+  }
+
+  if (!policy.memberAllowed) {
+    return NextResponse.json(
+      {
+        error:
+          "Agent access is limited to selected members of this organization. Ask an administrator to add you.",
       },
       { status: 403 },
     );

@@ -703,6 +703,29 @@ export const mcpApiKey = pgTable(
 export type McpApiKey = InferSelectModel<typeof mcpApiKey>;
 
 /**
+ * Members allowed to use Agent access when the org narrows it to a list.
+ * Ignored while the org policy is "all".
+ */
+export const userAgentAccess = pgTable(
+  "UserAgentAccess",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    userId: uuid("userId")
+      .notNull()
+      .references(() => user.id),
+    orgId: uuid("orgId")
+      .notNull()
+      .references(() => org.id),
+  },
+  (table) => ({
+    userOrgUnique: uniqueIndex("UserAgentAccess_userId_orgId_unique").on(
+      table.userId,
+      table.orgId,
+    ),
+  }),
+);
+
+/**
  * Org-wide policy for the outbound MCP server. Absent row means the install
  * default applies (disabled until an owner or admin turns it on).
  */
@@ -715,6 +738,14 @@ export const orgMcpServerPolicy = pgTable(
       .references(() => org.id),
     /** Members may mint keys and external agents may connect. */
     enabled: boolean("enabled").notNull().default(false),
+    /**
+     * "all" lets every member use Agent access once `enabled`; "selected"
+     * narrows it to the members listed in UserAgentAccess.
+     */
+    memberAccess: varchar("memberAccess", { length: 16 })
+      .$type<"all" | "selected">()
+      .notNull()
+      .default("all"),
     maxKeysPerUser: integer("maxKeysPerUser").notNull().default(5),
     createdAt: timestamp("createdAt").notNull(),
     updatedAt: timestamp("updatedAt").notNull(),
