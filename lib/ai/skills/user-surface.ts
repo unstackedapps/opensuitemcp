@@ -1,6 +1,9 @@
 import "server-only";
 
 import {
+  getCommunitySkillContent,
+  getConnectedSkillContent,
+  getOracleSkillContent,
   listCommunityCatalogSkills,
   listConnectedCatalogSkills,
   listOracleCatalogSkills,
@@ -129,4 +132,50 @@ export async function resolveUserSkillSurface(params: {
   }
 
   return resolved;
+}
+
+/**
+ * The body of one skill, or null when the user has no such skill or has
+ * switched it off. Off is reported the same as missing on purpose: a caller
+ * should not be able to read a skill it cannot see in the listing.
+ */
+export async function readUserSkillContent(params: {
+  userId: string;
+  orgId: string | null;
+  settings: SettingsRow;
+  skillId: string;
+  disabledOrgConnectedSkillSourceIds?: unknown;
+}): Promise<{ skill: ResolvedUserSkill; content: string } | null> {
+  const surface = await resolveUserSkillSurface(params);
+  const skill = surface.find(
+    (entry) => entry.id === params.skillId && entry.mode !== "off",
+  );
+  if (!skill) {
+    return null;
+  }
+
+  let content: string | null = null;
+  switch (skill.source) {
+    case "oracle":
+      content = getOracleSkillContent(skill.id);
+      break;
+    case "community":
+      content = getCommunitySkillContent(skill.id);
+      break;
+    case "connected":
+      content = getConnectedSkillContent(
+        resolveConnectedSkillsScopeId(params.userId, params.orgId),
+        skill.id,
+      );
+      break;
+    case "custom": {
+      const custom = normalizeUserSkillSettings(params.settings).customSkills;
+      content = custom.find((entry) => entry.id === skill.id)?.content ?? null;
+      break;
+    }
+    default:
+      content = null;
+  }
+
+  return content === null ? null : { skill, content };
 }
