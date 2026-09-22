@@ -9,6 +9,7 @@ import {
 } from "@/lib/ai/provider-entries";
 import { getUserSettings } from "@/lib/db/queries";
 import { countActiveMcpApiKeys } from "@/lib/mcp/server/keys";
+import { resolveMcpPolicy } from "@/lib/mcp/server/policy";
 import { listConnectedNetSuiteAccountIds } from "@/lib/netsuite/tokens";
 import { listAdminOrgLlmProviders } from "@/lib/org/admin/llm-providers";
 import { listAdminOrgNetSuiteMcpAccounts } from "@/lib/org/admin/netsuite-mcp-accounts";
@@ -210,6 +211,7 @@ async function getOrgReadiness(
   mcpComplete: boolean;
   llmComplete: boolean;
   usersComplete: boolean;
+  agentAccessComplete: boolean;
   oidcAccountCount: number;
   connectedMcpCount: number;
   userCount: number;
@@ -258,6 +260,7 @@ async function getOrgReadiness(
       grantedProviderIds.includes(provider.id),
     );
   const usersComplete = users.length > 1;
+  const agentAccessPolicy = await resolveMcpPolicy(orgId);
 
   const checklist: OnboardingChecklistItem[] = [
     {
@@ -285,6 +288,16 @@ async function getOrgReadiness(
       complete: searchResources.some((resource) => resource.enabled),
     },
     {
+      id: "agent-access",
+      label: "Agent access",
+      description: agentAccessPolicy.enabled
+        ? "Members can connect an external AI agent"
+        : "Off — turn it on if members should connect AI agents",
+      complete: agentAccessPolicy.enabled,
+      optional: true,
+      href: "/admin/agent-access",
+    },
+    {
       id: "invite-team",
       label: "Invite teammates",
       description:
@@ -301,6 +314,8 @@ async function getOrgReadiness(
     mcpComplete,
     llmComplete,
     usersComplete,
+    // For an org the step is done once an admin has turned the feature on.
+    agentAccessComplete: agentAccessPolicy.enabled,
     oidcAccountCount: enabledOidc.length,
     connectedMcpCount: connectedIds.length,
     userCount: users.length,
