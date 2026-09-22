@@ -1,4 +1,3 @@
-import type { McpKeyScope } from "@/lib/db/schema";
 import type { McpPrincipal } from "../authenticate";
 
 /**
@@ -36,8 +35,6 @@ export type McpToolDefinition = {
   description: string;
   inputSchema: JsonSchemaObject;
   annotations: McpToolAnnotations;
-  /** Scope a key must carry for this tool to be listed or callable. */
-  requiredScope: McpKeyScope;
   execute: (
     args: Record<string, unknown>,
     principal: McpPrincipal,
