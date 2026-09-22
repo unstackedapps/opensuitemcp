@@ -43,7 +43,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          "The MCP server is not enabled on this install. Set OSMCP_MCP_SERVER_ENABLED=true and restart.",
+          "Agent access is not enabled on this install. Set OSMCP_MCP_SERVER_ENABLED=true and restart.",
       },
       { status: 409 },
     );
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          "MCP server access is disabled for this organization. Ask an administrator to enable it.",
+          "Agent access is disabled for this organization. Ask an administrator to enable it.",
       },
       { status: 403 },
     );
