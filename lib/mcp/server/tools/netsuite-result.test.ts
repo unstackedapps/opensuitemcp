@@ -60,4 +60,54 @@ describe("normalizeCallResult", () => {
     });
     assert.deepEqual(result.structuredContent, { rows: [{ id: 7 }] });
   });
+
+  it("flags a NetSuite permission refusal as an error", () => {
+    // Payload captured from ns_createRecord on a role lacking Lists -> Customers.
+    const result = normalizeCallResult({
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            success: false,
+            error: 'HTTP 403: {"o:errorCode":"INSUFFICIENT_PERMISSION"}',
+            message: "Failed to create customer record",
+          }),
+        },
+      ],
+      isError: false,
+    });
+
+    assert.equal(result.isError, true);
+  });
+
+  it("leaves a successful write reported as success", () => {
+    // Payload captured from a contact created through the MCP server.
+    const result = normalizeCallResult({
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            success: true,
+            recordId: "1769",
+            message: "Successfully created contact record",
+          }),
+        },
+      ],
+      isError: false,
+    });
+
+    assert.equal(result.isError, false);
+  });
+
+  it("flags a bare object carrying an error", () => {
+    const result = normalizeCallResult({ error: "Something broke." });
+    assert.equal(result.isError, true);
+  });
+
+  it("does not invent failure from a payload with no verdict", () => {
+    const result = normalizeCallResult({
+      content: [{ type: "text", text: '{"rows":[]}' }],
+    });
+    assert.equal(result.isError, false);
+  });
 });

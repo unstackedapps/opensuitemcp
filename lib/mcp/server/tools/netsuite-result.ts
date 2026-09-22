@@ -66,6 +66,25 @@ function structuredFromText(
 }
 
 /**
+ * NetSuite reports two different kinds of failure. A malformed request comes
+ * back as a CallToolResult with `isError`, but a refusal from NetSuite itself —
+ * a permission violation, a missing required field — comes back as an ordinary
+ * successful result whose payload carries `success: false` and an `error`.
+ *
+ * MCP clients branch on `isError` alone, so without this an agent reads
+ * "Permission Violation" as a record it just created.
+ */
+function payloadReportsFailure(payload: Record<string, unknown>): boolean {
+  if (payload.success === false) {
+    return true;
+  }
+  if (payload.success === true) {
+    return false;
+  }
+  return typeof payload.error === "string" && payload.error.trim().length > 0;
+}
+
+/**
  * NetSuite returns either a spec-shaped CallToolResult or a bare object.
  * Both are normalized so a caller always gets readable text and a structured
  * body, without discarding anything NetSuite sent.
@@ -97,12 +116,16 @@ export function normalizeCallResult(result: unknown): McpToolResult {
           ? content
           : [{ type: "text" as const, text: JSON.stringify(record) }],
       structuredContent: structured,
-      isError: record.isError === true,
+      isError: record.isError === true || payloadReportsFailure(structured),
     };
   }
 
   if (result && typeof result === "object") {
-    return toolResult(coerceStructured(result as Record<string, unknown>));
+    const structured = coerceStructured(result as Record<string, unknown>);
+    return {
+      ...toolResult(structured),
+      isError: payloadReportsFailure(structured),
+    };
   }
 
   return toolResult({ value: result ?? null }, String(result ?? ""));
