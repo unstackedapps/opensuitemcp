@@ -127,6 +127,9 @@ pointing at `/.well-known/oauth-protected-resource`, per RFC 9728.
 | `osmcp_get_chat` | One chat transcript |
 | `osmcp_list_skills` | Skills from all four sources (Oracle, Community, Connected, Custom) the user has switched on |
 | `osmcp_list_personas` | Available NetSuite specialist personas |
+| `osmcp_get_skill` | The full instructions of one skill |
+| `osmcp_get_persona` | The full instructions of one persona |
+| `osmcp_set_netsuite_account` | Switch the active NetSuite account |
 
 ### NetSuite tools
 
