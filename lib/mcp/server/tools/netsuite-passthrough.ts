@@ -110,7 +110,6 @@ function toDefinition(
       idempotentHint: readOnly,
       openWorldHint: true,
     },
-    requiredScope: readOnly ? "read" : "write",
     execute: async (args, principal) => {
       const accessToken = await getNetSuiteToken(principal.userId, accountId);
       if (!accessToken) {
