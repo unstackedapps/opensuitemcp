@@ -93,8 +93,7 @@ OpenSuiteMCP can also be an **MCP server**, so an external AI agent works
 inside a user's NetSuite workspace as that user — their connected account,
 their permissions, their tool policy.
 
-Off by default. Enable it with `OSMCP_MCP_SERVER_ENABLED=true`, then mint a key
-under **App Portal → Agent access**:
+Mint a key under **App Portal → Agent access**:
 
 ```bash
 claude mcp add --transport http opensuitemcp https://your-install.example.com/api/mcp \
@@ -211,7 +210,6 @@ Written by `pnpm setup:backend` (or set manually for production):
 | `OSMCP_NS_ACCOUNT_ID` | Optional | Optional | NetSuite account for OIDC app login |
 | `OSMCP_NS_OIDC_CLIENT_ID` | Optional | Optional | OIDC integration client ID for app login |
 | `OSMCP_ENABLE_GUEST` | — | — | Set `true` only for demo/e2e; guest auto-login is off by default |
-| `OSMCP_MCP_SERVER_ENABLED` | Optional | Optional | Set `true` to expose the [MCP server](docs/mcp-server.md) at `/api/mcp`; off by default |
 
 Upgrading an existing install with users already in the database: see [docs/org-admin-upgrade.md](docs/org-admin-upgrade.md).
 

@@ -13,27 +13,20 @@ because the server URL derives from the install's own public address.
 
 ---
 
-## Enabling it
+## What gates it
 
-The server is **off by default**, so upgrading never exposes a new network
-surface without an operator choosing to.
-
-```bash
-# .env.local (or your production environment)
-OSMCP_MCP_SERVER_ENABLED=true
-```
-
-Restart the app. While it is off, `/api/mcp` returns `404` and no API key
-works.
+There is nothing to switch on. `/api/mcp` refuses every request until someone
+mints a key, and a key only exists because a person made one — so the feature
+is dormant on an install nobody has used it on.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `OSMCP_MCP_SERVER_ENABLED` | unset (off) | Master switch for the whole feature |
 | `MCP_CALL_LIMIT_PER_MINUTE` | `0` (disabled) | Per-key tool-call budget in a fixed 60s window. Needs `REDIS_URL`; fails open without it |
 
-On **organization** installs there is a second gate: an owner or admin must
-turn MCP access on for the org before any member can mint a key. Solo installs
-have no second gate.
+On **organization** installs an owner or admin must turn Agent access on under
+**Admin → Agent access** before any member can mint a key, and may narrow it to
+named members. A solo install is one person who is their own administrator, so
+minting a key is the whole decision.
 
 ---
 
@@ -205,7 +198,6 @@ appear inside a tool result.
 
 | Symptom | Cause |
 | --- | --- |
-| `404` from `/api/mcp` | `OSMCP_MCP_SERVER_ENABLED` is not `true` |
 | `401` with a `WWW-Authenticate` header | Key missing, malformed, revoked, or expired |
 | `403 access_denied` | Org policy has MCP access disabled |
 | `400` with code `-32020` | Required headers missing or disagreeing with the body |

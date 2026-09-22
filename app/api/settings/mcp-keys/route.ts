@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
-import { getMcpServerUrl, isMcpServerEnabled } from "@/lib/mcp/server/config";
+import { getMcpServerUrl } from "@/lib/mcp/server/config";
 import {
   countActiveMcpApiKeys,
   createMcpApiKey,
@@ -29,7 +29,6 @@ export async function GET(request: Request) {
   const keys = await listMcpApiKeys(session.user.id);
 
   return NextResponse.json({
-    serverEnabled: isMcpServerEnabled(),
     serverUrl: getMcpServerUrl(request),
     policy,
     keys,
@@ -40,16 +39,6 @@ export async function POST(request: Request) {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  if (!isMcpServerEnabled()) {
-    return NextResponse.json(
-      {
-        error:
-          "Agent access is not enabled on this install. Set OSMCP_MCP_SERVER_ENABLED=true and restart.",
-      },
-      { status: 409 },
-    );
   }
 
   const policy = await resolveMcpPolicyForUser(

@@ -2,7 +2,7 @@ import "server-only";
 
 import type { OrgRole } from "@/lib/db/schema";
 import { readBearerToken } from "./api-key-format";
-import { getMcpProtectedResourceUrl, isMcpServerEnabled } from "./config";
+import { getMcpProtectedResourceUrl } from "./config";
 import {
   type AuthenticatedMcpKey,
   authenticateMcpApiKey,
@@ -60,17 +60,6 @@ export function mcpAuthChallengeHeader(request?: Request): string {
 export async function authenticateMcpRequest(
   request: Request,
 ): Promise<McpAuthOutcome> {
-  if (!isMcpServerEnabled()) {
-    return {
-      ok: false,
-      denial: {
-        status: 404,
-        error: "not_found",
-        description: "Agent access is not enabled on this install.",
-      },
-    };
-  }
-
   const token = readBearerToken(request.headers.get("authorization"));
   if (!token) {
     return { ok: false, denial: INVALID_TOKEN };
