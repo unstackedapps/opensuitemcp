@@ -63,10 +63,9 @@ const whoami: McpToolDefinition = {
   name: "osmcp_whoami",
   title: "Who am I",
   description:
-    "Identify the OpenSuiteMCP user this connection acts as, the scopes the API key carries, and the NetSuite account calls will run against. Call this first to confirm the acting identity before doing work.",
+    "Identify the OpenSuiteMCP user this connection acts as and the NetSuite account calls will run against. Call this first to confirm the acting identity before doing work.",
   inputSchema: EMPTY_INPUT_SCHEMA,
   annotations: { title: "Who am I", ...READ_ONLY },
-  requiredScope: "read",
   execute: async (_args, principal) => {
     const settings = await getUserSettings({ userId: principal.userId });
     const accounts = resolveNetSuiteAccounts(settings ?? {});
@@ -85,7 +84,6 @@ const whoami: McpToolDefinition = {
       },
       key: {
         name: principal.keyName,
-        scopes: principal.scopes,
         pinnedNetSuiteAccountId: principal.pinnedNetSuiteAccountId,
       },
       netsuite: {
@@ -94,7 +92,6 @@ const whoami: McpToolDefinition = {
         configuredAccountIds: accounts.map((entry) => entry.accountId),
       },
       policy: {
-        writeScopeAllowed: policy.allowWriteScope,
         managedByOrganization: policy.managedByOrg,
       },
       timezone: settings?.timezone ?? "UTC",
@@ -109,7 +106,6 @@ const connectionStatus: McpToolDefinition = {
     "Report whether the NetSuite connection is live and how many tools are available. Call this when a NetSuite tool fails unexpectedly: an expired refresh token requires a human to reconnect in the OpenSuiteMCP UI and cannot be repaired by retrying.",
   inputSchema: EMPTY_INPUT_SCHEMA,
   annotations: { title: "NetSuite connection status", ...READ_ONLY },
-  requiredScope: "read",
   execute: async (_args, principal) => {
     const settings = await getUserSettings({ userId: principal.userId });
     const accounts = resolveNetSuiteAccounts(settings ?? {});
@@ -164,7 +160,6 @@ const listNetSuiteAccounts: McpToolDefinition = {
     "List the NetSuite accounts this user has configured, which are authorized, and which one is active for tool calls.",
   inputSchema: EMPTY_INPUT_SCHEMA,
   annotations: { title: "List NetSuite accounts", ...READ_ONLY },
-  requiredScope: "read",
   execute: async (_args, principal) => {
     const settings = await getUserSettings({ userId: principal.userId });
     const accounts = resolveNetSuiteAccounts(settings ?? {});
@@ -212,7 +207,6 @@ const listChats: McpToolDefinition = {
     additionalProperties: false,
   },
   annotations: { title: "List chats", ...READ_ONLY },
-  requiredScope: "read",
   execute: async (args, principal) => {
     const requested =
       typeof args.limit === "number" ? Math.floor(args.limit) : 20;
@@ -257,7 +251,6 @@ const getChat: McpToolDefinition = {
     additionalProperties: false,
   },
   annotations: { title: "Get chat transcript", ...READ_ONLY },
-  requiredScope: "read",
   execute: async (args, principal) => {
     const chatId = typeof args.chatId === "string" ? args.chatId.trim() : "";
     if (!chatId) {
@@ -299,7 +292,6 @@ const listSkills: McpToolDefinition = {
     "List the Oracle and Community skill packs available to this user and which are enabled. Skills are instruction documents OpenSuiteMCP injects into its own chats; they describe NetSuite practice you may find useful as context.",
   inputSchema: EMPTY_INPUT_SCHEMA,
   annotations: { title: "List skills", ...READ_ONLY },
-  requiredScope: "read",
   execute: async (_args, principal) => {
     const settings = await getUserSettings({ userId: principal.userId });
     const normalized = normalizeUserSkillSettings(settings ?? {});
@@ -334,7 +326,6 @@ const listPersonas: McpToolDefinition = {
     "List the OpenSuiteMCP personas available to this user. A persona is a NetSuite specialist playbook; its instructions can inform how you approach a task.",
   inputSchema: EMPTY_INPUT_SCHEMA,
   annotations: { title: "List personas", ...READ_ONLY },
-  requiredScope: "read",
   execute: async (_args, principal) => {
     const settings = await getUserSettings({ userId: principal.userId });
     const rows = listPersonasForClient(settings?.customPersonas ?? []).map(

@@ -12,11 +12,13 @@ import { writeOrgAuditLog } from "@/lib/org/audit";
 
 const createSchema = z.object({
   name: z.string().trim().min(1).max(128),
+  // Retained for wire compatibility. Access is decided by the tool policy in
+  // the app, not by key scopes, so a key is never narrowed on this axis.
   scopes: z
     .array(z.enum(["read", "write"]))
     .min(1)
     .max(2)
-    .default(["read"]),
+    .default(["read", "write"]),
   netsuiteAccountId: z.string().trim().max(64).optional().nullable(),
   expiresInDays: z.number().int().min(1).max(3650).optional().nullable(),
 });

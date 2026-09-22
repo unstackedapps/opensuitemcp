@@ -8,8 +8,11 @@ import { workspaceTools } from "./workspace";
 /**
  * The tool surface for one principal.
  *
- * The list is authorization-dependent by design: a read-only key never sees a
- * mutating tool, so a caller cannot discover a capability it may not use.
+ * What a key may reach is decided in the OpenSuiteMCP UI and nowhere else: a
+ * NetSuite tool left enabled for the connection is listed and callable, and a
+ * tool disabled there is neither. The server adds no second gate of its own —
+ * read-vs-write is published as an advisory annotation so a client can prompt
+ * before a mutation, never as a filter that hides a tool the user enabled.
  */
 export async function buildToolSurface(
   principal: McpPrincipal,
@@ -17,12 +20,8 @@ export async function buildToolSurface(
   const netsuiteTools = await loadNetSuitePassthroughTools(principal);
   const all = [...workspaceTools, ...netsuiteTools];
 
-  const permitted = all.filter((tool) =>
-    principal.scopes.includes(tool.requiredScope),
-  );
-
   // Deterministic order keeps prompt caches warm for the calling agent.
-  return permitted.sort((left, right) => left.name.localeCompare(right.name));
+  return all.sort((left, right) => left.name.localeCompare(right.name));
 }
 
 export async function findTool(

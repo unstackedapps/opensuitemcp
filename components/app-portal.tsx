@@ -230,8 +230,8 @@ export function AppPortal({ user }: { user: User | undefined }) {
                 />
               ) : null}
 
-              {section === "api-access" ? (
-                <McpAccessPanel active={open && section === "api-access"} />
+              {section === "agent-access" ? (
+                <McpAccessPanel active={open && section === "agent-access"} />
               ) : null}
 
               {isSettingsSection(section) ? (

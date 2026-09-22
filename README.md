@@ -94,14 +94,15 @@ inside a user's NetSuite workspace as that user — their connected account,
 their permissions, their tool policy.
 
 Off by default. Enable it with `OSMCP_MCP_SERVER_ENABLED=true`, then mint a key
-under **App Portal → API access**:
+under **App Portal → Agent access**:
 
 ```bash
 claude mcp add --transport http opensuitemcp https://your-install.example.com/api/mcp \
   --header "Authorization: Bearer osmcp_..."
 ```
 
-Keys are per user, scoped `read` or `read`+`write`, shown once, and revocable.
+Keys are per user, shown once, and revocable. An agent reaches exactly what you
+have enabled in the app — the key adds no gate of its own.
 The server URL derives from your install's public address, so self-hosted and
 hosted installs each have their own. Full guide: [MCP server](docs/mcp-server.md).
 
