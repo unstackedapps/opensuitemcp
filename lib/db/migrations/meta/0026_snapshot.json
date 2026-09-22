@@ -65,12 +65,8 @@
           "name": "AuditLog_orgId_Org_id_fk",
           "tableFrom": "AuditLog",
           "tableTo": "Org",
-          "columnsFrom": [
-            "orgId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["orgId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -78,12 +74,8 @@
           "name": "AuditLog_actorUserId_User_id_fk",
           "tableFrom": "AuditLog",
           "tableTo": "User",
-          "columnsFrom": [
-            "actorUserId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["actorUserId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -177,12 +169,8 @@
           "name": "Chat_userId_User_id_fk",
           "tableFrom": "Chat",
           "tableTo": "User",
-          "columnsFrom": [
-            "userId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["userId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -299,12 +287,8 @@
           "name": "McpApiKey_userId_User_id_fk",
           "tableFrom": "McpApiKey",
           "tableTo": "User",
-          "columnsFrom": [
-            "userId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["userId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -312,12 +296,8 @@
           "name": "McpApiKey_orgId_Org_id_fk",
           "tableFrom": "McpApiKey",
           "tableTo": "Org",
-          "columnsFrom": [
-            "orgId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["orgId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -367,12 +347,8 @@
           "name": "Message_chatId_Chat_id_fk",
           "tableFrom": "Message",
           "tableTo": "Chat",
-          "columnsFrom": [
-            "chatId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["chatId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -440,12 +416,8 @@
           "name": "NetSuiteToken_userId_User_id_fk",
           "tableFrom": "NetSuiteToken",
           "tableTo": "User",
-          "columnsFrom": [
-            "userId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["userId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -581,12 +553,8 @@
           "name": "OrgConnectedSkillSource_orgId_Org_id_fk",
           "tableFrom": "OrgConnectedSkillSource",
           "tableTo": "Org",
-          "columnsFrom": [
-            "orgId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["orgId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -651,12 +619,8 @@
           "name": "OrgCustomSkill_orgId_Org_id_fk",
           "tableFrom": "OrgCustomSkill",
           "tableTo": "Org",
-          "columnsFrom": [
-            "orgId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["orgId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -721,12 +685,8 @@
           "name": "OrgLlmProvider_orgId_Org_id_fk",
           "tableFrom": "OrgLlmProvider",
           "tableTo": "Org",
-          "columnsFrom": [
-            "orgId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["orgId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -800,12 +760,8 @@
           "name": "OrgMcpServerPolicy_orgId_Org_id_fk",
           "tableFrom": "OrgMcpServerPolicy",
           "tableTo": "Org",
-          "columnsFrom": [
-            "orgId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["orgId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -903,12 +859,8 @@
           "name": "OrgNetSuiteAccount_orgId_Org_id_fk",
           "tableFrom": "OrgNetSuiteAccount",
           "tableTo": "Org",
-          "columnsFrom": [
-            "orgId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["orgId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1020,12 +972,8 @@
           "name": "OrgNetSuiteMcpAccount_orgId_Org_id_fk",
           "tableFrom": "OrgNetSuiteMcpAccount",
           "tableTo": "Org",
-          "columnsFrom": [
-            "orgId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["orgId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1092,12 +1040,8 @@
           "name": "OrgPersona_orgId_Org_id_fk",
           "tableFrom": "OrgPersona",
           "tableTo": "Org",
-          "columnsFrom": [
-            "orgId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["orgId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1190,12 +1134,8 @@
           "name": "OrgSearchResource_orgId_Org_id_fk",
           "tableFrom": "OrgSearchResource",
           "tableTo": "Org",
-          "columnsFrom": [
-            "orgId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["orgId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1269,12 +1209,8 @@
           "name": "OrgSkill_orgId_Org_id_fk",
           "tableFrom": "OrgSkill",
           "tableTo": "Org",
-          "columnsFrom": [
-            "orgId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["orgId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1347,12 +1283,8 @@
           "name": "OrgUserTag_orgId_Org_id_fk",
           "tableFrom": "OrgUserTag",
           "tableTo": "Org",
-          "columnsFrom": [
-            "orgId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["orgId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1390,12 +1322,8 @@
           "name": "Stream_chatId_Chat_id_fk",
           "tableFrom": "Stream",
           "tableTo": "Chat",
-          "columnsFrom": [
-            "chatId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["chatId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1403,9 +1331,7 @@
       "compositePrimaryKeys": {
         "Stream_id_pk": {
           "name": "Stream_id_pk",
-          "columns": [
-            "id"
-          ]
+          "columns": ["id"]
         }
       },
       "uniqueConstraints": {}
@@ -1543,12 +1469,8 @@
           "name": "UserLlmKey_userId_User_id_fk",
           "tableFrom": "UserLlmKey",
           "tableTo": "User",
-          "columnsFrom": [
-            "userId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["userId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1556,12 +1478,8 @@
           "name": "UserLlmKey_providerId_OrgLlmProvider_id_fk",
           "tableFrom": "UserLlmKey",
           "tableTo": "OrgLlmProvider",
-          "columnsFrom": [
-            "providerId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["providerId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1621,12 +1539,8 @@
           "name": "UserLlmProviderAccess_userId_User_id_fk",
           "tableFrom": "UserLlmProviderAccess",
           "tableTo": "User",
-          "columnsFrom": [
-            "userId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["userId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1634,12 +1548,8 @@
           "name": "UserLlmProviderAccess_providerId_OrgLlmProvider_id_fk",
           "tableFrom": "UserLlmProviderAccess",
           "tableTo": "OrgLlmProvider",
-          "columnsFrom": [
-            "providerId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["providerId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1699,12 +1609,8 @@
           "name": "UserNetSuiteAccess_userId_User_id_fk",
           "tableFrom": "UserNetSuiteAccess",
           "tableTo": "User",
-          "columnsFrom": [
-            "userId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["userId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1712,12 +1618,8 @@
           "name": "UserNetSuiteAccess_netsuiteAccountId_OrgNetSuiteAccount_id_fk",
           "tableFrom": "UserNetSuiteAccess",
           "tableTo": "OrgNetSuiteAccount",
-          "columnsFrom": [
-            "netsuiteAccountId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["netsuiteAccountId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1777,12 +1679,8 @@
           "name": "UserNetSuiteMcpAccess_userId_User_id_fk",
           "tableFrom": "UserNetSuiteMcpAccess",
           "tableTo": "User",
-          "columnsFrom": [
-            "userId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["userId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1790,12 +1688,8 @@
           "name": "UserNetSuiteMcpAccess_mcpAccountId_OrgNetSuiteMcpAccount_id_fk",
           "tableFrom": "UserNetSuiteMcpAccess",
           "tableTo": "OrgNetSuiteMcpAccount",
-          "columnsFrom": [
-            "netsuiteMcpAccountId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["netsuiteMcpAccountId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1868,12 +1762,8 @@
           "name": "UserOidcConnectionLink_userId_User_id_fk",
           "tableFrom": "UserOidcConnectionLink",
           "tableTo": "User",
-          "columnsFrom": [
-            "userId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["userId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1881,12 +1771,8 @@
           "name": "UserOidcConnectionLink_orgOidcAccountId_OrgNetSuiteAccount_id_fk",
           "tableFrom": "UserOidcConnectionLink",
           "tableTo": "OrgNetSuiteAccount",
-          "columnsFrom": [
-            "orgOidcAccountId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["orgOidcAccountId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1968,12 +1854,8 @@
           "name": "UserOidcLoginEmail_userId_User_id_fk",
           "tableFrom": "UserOidcLoginEmail",
           "tableTo": "User",
-          "columnsFrom": [
-            "userId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["userId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2004,12 +1886,8 @@
           "name": "UserOrgTag_userId_User_id_fk",
           "tableFrom": "UserOrgTag",
           "tableTo": "User",
-          "columnsFrom": [
-            "userId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["userId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2017,12 +1895,8 @@
           "name": "UserOrgTag_tagId_OrgUserTag_id_fk",
           "tableFrom": "UserOrgTag",
           "tableTo": "OrgUserTag",
-          "columnsFrom": [
-            "tagId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["tagId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2030,10 +1904,7 @@
       "compositePrimaryKeys": {
         "UserOrgTag_userId_tagId_pk": {
           "name": "UserOrgTag_userId_tagId_pk",
-          "columns": [
-            "userId",
-            "tagId"
-          ]
+          "columns": ["userId", "tagId"]
         }
       },
       "uniqueConstraints": {}
@@ -2090,12 +1961,8 @@
           "name": "UserPersonaAccess_userId_User_id_fk",
           "tableFrom": "UserPersonaAccess",
           "tableTo": "User",
-          "columnsFrom": [
-            "userId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["userId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2103,12 +1970,8 @@
           "name": "UserPersonaAccess_orgPersonaId_OrgPersona_id_fk",
           "tableFrom": "UserPersonaAccess",
           "tableTo": "OrgPersona",
-          "columnsFrom": [
-            "orgPersonaId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["orgPersonaId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2145,12 +2008,8 @@
           "name": "UserRole_userId_User_id_fk",
           "tableFrom": "UserRole",
           "tableTo": "User",
-          "columnsFrom": [
-            "userId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["userId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2158,12 +2017,8 @@
           "name": "UserRole_orgId_Org_id_fk",
           "tableFrom": "UserRole",
           "tableTo": "Org",
-          "columnsFrom": [
-            "orgId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["orgId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2171,10 +2026,7 @@
       "compositePrimaryKeys": {
         "UserRole_userId_orgId_pk": {
           "name": "UserRole_userId_orgId_pk",
-          "columns": [
-            "userId",
-            "orgId"
-          ]
+          "columns": ["userId", "orgId"]
         }
       },
       "uniqueConstraints": {}
@@ -2368,12 +2220,8 @@
           "name": "UserSettings_userId_User_id_fk",
           "tableFrom": "UserSettings",
           "tableTo": "User",
-          "columnsFrom": [
-            "userId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["userId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2383,9 +2231,7 @@
         "UserSettings_userId_unique": {
           "name": "UserSettings_userId_unique",
           "nullsNotDistinct": false,
-          "columns": [
-            "userId"
-          ]
+          "columns": ["userId"]
         }
       }
     },
@@ -2418,12 +2264,8 @@
           "name": "Vote_chatId_Chat_id_fk",
           "tableFrom": "Vote",
           "tableTo": "Chat",
-          "columnsFrom": [
-            "chatId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["chatId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2431,12 +2273,8 @@
           "name": "Vote_messageId_Message_id_fk",
           "tableFrom": "Vote",
           "tableTo": "Message",
-          "columnsFrom": [
-            "messageId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["messageId"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2444,10 +2282,7 @@
       "compositePrimaryKeys": {
         "Vote_chatId_messageId_pk": {
           "name": "Vote_chatId_messageId_pk",
-          "columns": [
-            "chatId",
-            "messageId"
-          ]
+          "columns": ["chatId", "messageId"]
         }
       },
       "uniqueConstraints": {}

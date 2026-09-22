@@ -31,7 +31,7 @@ describe("normalizeCallResult", () => {
 
   it("wraps a bare array so structuredContent stays an object", () => {
     const result = normalizeCallResult({
-      content: [{ type: "text", text: "[{\"id\":1}]" }],
+      content: [{ type: "text", text: '[{"id":1}]' }],
     });
     assert.deepEqual(result.structuredContent, { data: [{ id: 1 }] });
   });
