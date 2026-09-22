@@ -22,7 +22,6 @@ type McpKeySummary = {
 };
 
 type McpKeysResponse = {
-  serverEnabled: boolean;
   serverUrl: string;
   policy: {
     enabled: boolean;
@@ -37,9 +36,6 @@ type McpKeysResponse = {
 const ENDPOINT = "/api/settings/mcp-keys";
 
 function blockedReason(data: McpKeysResponse): string {
-  if (!data.serverEnabled) {
-    return "Agent access is not enabled on this install. An operator must set OSMCP_MCP_SERVER_ENABLED=true and restart.";
-  }
   if (!data.policy.enabled) {
     return "Agent access is turned off for your organization. Ask an administrator to enable it.";
   }
@@ -129,11 +125,7 @@ export function McpAccessPanel({ active }: { active: boolean }) {
 
   const activeKeys = data.keys.filter((key) => key.status === "active");
   const atLimit = activeKeys.length >= data.policy.maxKeysPerUser;
-  const blocked = !(
-    data.serverEnabled &&
-    data.policy.enabled &&
-    data.policy.memberAllowed
-  );
+  const blocked = !(data.policy.enabled && data.policy.memberAllowed);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
@@ -143,9 +135,8 @@ export function McpAccessPanel({ active }: { active: boolean }) {
           Agent access
         </p>
         <p className="text-muted-foreground text-xs leading-relaxed">
-          Let an external AI agent act as you over MCP — your NetSuite
-          connection, your permissions, your tool policy. What an agent can
-          reach is whatever you have enabled elsewhere in OpenSuiteMCP.
+          Let an external AI agent act as you over MCP. It reaches exactly what
+          you have enabled in OpenSuiteMCP — nothing more.
         </p>
       </div>
 

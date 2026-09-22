@@ -126,9 +126,8 @@ export function AgentAccessPanel({
     <div className="space-y-4">
       <Frame title="Agent access">
         <p className="text-muted-foreground text-xs leading-relaxed">
-          Lets a member connect an external AI agent to their own NetSuite
-          workspace over MCP. The agent acts as that member, with their
-          permissions and their tool policy — it never sees more than they do.
+          An agent acts as the member who holds the key, and never sees more
+          than they do.
         </p>
 
         <div className="mt-4 space-y-4">
@@ -151,8 +150,7 @@ export function AgentAccessPanel({
                 Enable for this organization
               </Label>
               <p className="text-muted-foreground text-xs leading-relaxed">
-                Off by default. While off, no member can mint a key and no
-                existing key can connect.
+                While off, no member can mint a key and no existing key works.
               </p>
             </div>
           </div>
@@ -179,7 +177,7 @@ export function AgentAccessPanel({
                 Limit to selected members
               </Label>
               <p className="text-muted-foreground text-xs leading-relaxed">
-                Off means every member of the organization may use it.
+                Off means every member may use it.
               </p>
             </div>
           </div>
