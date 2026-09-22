@@ -1,16 +1,19 @@
 import "server-only";
 
-import { listPersonasForClient } from "@/lib/ai/personas/catalog";
 import {
-  listCommunityCatalogSkills,
-  listOracleCatalogSkills,
-  normalizeUserSkillSettings,
-} from "@/lib/ai/skills/catalog";
+  getPersonaContent,
+  listPersonasForClient,
+} from "@/lib/ai/personas/catalog";
+import {
+  readUserSkillContent,
+  resolveUserSkillSurface,
+} from "@/lib/ai/skills/user-surface";
 import {
   getChatById,
   getChatsByUserId,
   getMessagesByChatId,
   getUserSettings,
+  upsertUserSettings,
 } from "@/lib/db/queries";
 import {
   normalizeNetSuiteAccountId,
@@ -63,10 +66,9 @@ const whoami: McpToolDefinition = {
   name: "osmcp_whoami",
   title: "Who am I",
   description:
-    "Identify the OpenSuiteMCP user this connection acts as, the scopes the API key carries, and the NetSuite account calls will run against. Call this first to confirm the acting identity before doing work.",
+    "Identify the OpenSuiteMCP user this connection acts as and the NetSuite account calls will run against. Call this first to confirm the acting identity before doing work.",
   inputSchema: EMPTY_INPUT_SCHEMA,
   annotations: { title: "Who am I", ...READ_ONLY },
-  requiredScope: "read",
   execute: async (_args, principal) => {
     const settings = await getUserSettings({ userId: principal.userId });
     const accounts = resolveNetSuiteAccounts(settings ?? {});
@@ -85,7 +87,6 @@ const whoami: McpToolDefinition = {
       },
       key: {
         name: principal.keyName,
-        scopes: principal.scopes,
         pinnedNetSuiteAccountId: principal.pinnedNetSuiteAccountId,
       },
       netsuite: {
@@ -94,7 +95,6 @@ const whoami: McpToolDefinition = {
         configuredAccountIds: accounts.map((entry) => entry.accountId),
       },
       policy: {
-        writeScopeAllowed: policy.allowWriteScope,
         managedByOrganization: policy.managedByOrg,
       },
       timezone: settings?.timezone ?? "UTC",
@@ -109,7 +109,6 @@ const connectionStatus: McpToolDefinition = {
     "Report whether the NetSuite connection is live and how many tools are available. Call this when a NetSuite tool fails unexpectedly: an expired refresh token requires a human to reconnect in the OpenSuiteMCP UI and cannot be repaired by retrying.",
   inputSchema: EMPTY_INPUT_SCHEMA,
   annotations: { title: "NetSuite connection status", ...READ_ONLY },
-  requiredScope: "read",
   execute: async (_args, principal) => {
     const settings = await getUserSettings({ userId: principal.userId });
     const accounts = resolveNetSuiteAccounts(settings ?? {});
@@ -164,7 +163,6 @@ const listNetSuiteAccounts: McpToolDefinition = {
     "List the NetSuite accounts this user has configured, which are authorized, and which one is active for tool calls.",
   inputSchema: EMPTY_INPUT_SCHEMA,
   annotations: { title: "List NetSuite accounts", ...READ_ONLY },
-  requiredScope: "read",
   execute: async (_args, principal) => {
     const settings = await getUserSettings({ userId: principal.userId });
     const accounts = resolveNetSuiteAccounts(settings ?? {});
@@ -212,7 +210,6 @@ const listChats: McpToolDefinition = {
     additionalProperties: false,
   },
   annotations: { title: "List chats", ...READ_ONLY },
-  requiredScope: "read",
   execute: async (args, principal) => {
     const requested =
       typeof args.limit === "number" ? Math.floor(args.limit) : 20;
@@ -257,7 +254,6 @@ const getChat: McpToolDefinition = {
     additionalProperties: false,
   },
   annotations: { title: "Get chat transcript", ...READ_ONLY },
-  requiredScope: "read",
   execute: async (args, principal) => {
     const chatId = typeof args.chatId === "string" ? args.chatId.trim() : "";
     if (!chatId) {
@@ -296,32 +292,33 @@ const listSkills: McpToolDefinition = {
   name: "osmcp_list_skills",
   title: "List skills",
   description:
-    "List the Oracle and Community skill packs available to this user and which are enabled. Skills are instruction documents OpenSuiteMCP injects into its own chats; they describe NetSuite practice you may find useful as context.",
+    "List the skill packs this user has available — Oracle, Community, Connected, and Custom. Skills are instruction documents describing NetSuite practice; a skill the user has switched off is not listed. `mode` is `auto` when the skill always applies, or `slash` when the user invokes it by name.",
   inputSchema: EMPTY_INPUT_SCHEMA,
   annotations: { title: "List skills", ...READ_ONLY },
-  requiredScope: "read",
   execute: async (_args, principal) => {
     const settings = await getUserSettings({ userId: principal.userId });
-    const normalized = normalizeUserSkillSettings(settings ?? {});
-    const enabled = new Set(normalized.enabledSkillIds);
+    const skills = await resolveUserSkillSurface({
+      userId: principal.userId,
+      orgId: principal.orgId,
+      settings: settings ?? {},
+      disabledOrgConnectedSkillSourceIds:
+        settings?.disabledOrgConnectedSkillSourceIds,
+    });
 
-    const rows = [
-      ...listOracleCatalogSkills().map((skill) => ({
+    // A skill switched off in the app is not available here either.
+    const rows = skills
+      .filter((skill) => skill.mode !== "off")
+      .map((skill) => ({
         id: skill.id,
         name: skill.name,
-        source: "oracle",
-        enabled: enabled.has(skill.id),
-      })),
-      ...listCommunityCatalogSkills().map((skill) => ({
-        id: skill.id,
-        name: skill.name,
-        source: "community",
-        enabled: enabled.has(skill.id),
-      })),
-    ];
+        description: skill.description,
+        source: skill.source,
+        mode: skill.mode,
+        slug: skill.slug,
+      }));
 
     return toolResult({
-      columns: ["id", "name", "source", "enabled"],
+      columns: ["id", "name", "description", "source", "mode", "slug"],
       rows,
     });
   },
@@ -334,7 +331,6 @@ const listPersonas: McpToolDefinition = {
     "List the OpenSuiteMCP personas available to this user. A persona is a NetSuite specialist playbook; its instructions can inform how you approach a task.",
   inputSchema: EMPTY_INPUT_SCHEMA,
   annotations: { title: "List personas", ...READ_ONLY },
-  requiredScope: "read",
   execute: async (_args, principal) => {
     const settings = await getUserSettings({ userId: principal.userId });
     const rows = listPersonasForClient(settings?.customPersonas ?? []).map(
@@ -372,12 +368,186 @@ function extractMessageText(parts: unknown): string {
   return chunks.join("\n\n");
 }
 
+const getSkill: McpToolDefinition = {
+  name: "osmcp_get_skill",
+  title: "Get skill",
+  description:
+    "Read the full instructions of one skill listed by osmcp_list_skills. A skill is NetSuite practice written for an assistant to follow; apply it to your own work on this workspace. A skill the user has switched off reads as not found.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      skillId: {
+        type: "string",
+        description: "The `id` from osmcp_list_skills.",
+      },
+    },
+    required: ["skillId"],
+    additionalProperties: false,
+  },
+  annotations: { title: "Get skill", ...READ_ONLY },
+  execute: async (args, principal) => {
+    const skillId = typeof args.skillId === "string" ? args.skillId.trim() : "";
+    if (!skillId) {
+      return toolError("Pass the `skillId` of a skill from osmcp_list_skills.");
+    }
+
+    const settings = await getUserSettings({ userId: principal.userId });
+    const found = await readUserSkillContent({
+      userId: principal.userId,
+      orgId: principal.orgId,
+      settings: settings ?? {},
+      skillId,
+      disabledOrgConnectedSkillSourceIds:
+        settings?.disabledOrgConnectedSkillSourceIds,
+    });
+
+    if (!found) {
+      return toolError(
+        `No skill \`${skillId}\` is available to this user. Call osmcp_list_skills for the ids that are.`,
+      );
+    }
+
+    return toolResult(
+      {
+        id: found.skill.id,
+        name: found.skill.name,
+        source: found.skill.source,
+        mode: found.skill.mode,
+        content: found.content,
+      },
+      found.content,
+    );
+  },
+};
+
+const getPersona: McpToolDefinition = {
+  name: "osmcp_get_persona",
+  title: "Get persona",
+  description:
+    "Read the full instructions of one persona listed by osmcp_list_personas. A persona is a NetSuite specialist playbook — how a controller, auditor, or administrator approaches work. Adopt it yourself for the task at hand; this does not change any setting in OpenSuiteMCP.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      personaId: {
+        type: "string",
+        description: "The `id` from osmcp_list_personas.",
+      },
+    },
+    required: ["personaId"],
+    additionalProperties: false,
+  },
+  annotations: { title: "Get persona", ...READ_ONLY },
+  execute: async (args, principal) => {
+    const personaId =
+      typeof args.personaId === "string" ? args.personaId.trim() : "";
+    if (!personaId) {
+      return toolError(
+        "Pass the `personaId` of a persona from osmcp_list_personas.",
+      );
+    }
+
+    const settings = await getUserSettings({ userId: principal.userId });
+    const persona = getPersonaContent(
+      personaId,
+      settings?.customPersonas ?? [],
+    );
+    if (!persona) {
+      return toolError(
+        `No persona \`${personaId}\` is available to this user. Call osmcp_list_personas for the ids that are.`,
+      );
+    }
+
+    return toolResult(
+      { id: persona.id, name: persona.name, content: persona.content },
+      persona.content,
+    );
+  },
+};
+
+const setNetSuiteAccount: McpToolDefinition = {
+  name: "osmcp_set_netsuite_account",
+  title: "Set active NetSuite account",
+  description:
+    "Switch which NetSuite account this workspace runs tool calls against. The change applies to the user's OpenSuiteMCP session too, not just this connection, so confirm with the user before calling it. Fails when the API key is pinned to one account.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      accountId: {
+        type: "string",
+        description: "An `accountId` from osmcp_list_netsuite_accounts.",
+      },
+    },
+    required: ["accountId"],
+    additionalProperties: false,
+  },
+  annotations: {
+    title: "Set active NetSuite account",
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  },
+  execute: async (args, principal) => {
+    if (principal.pinnedNetSuiteAccountId) {
+      return toolError(
+        `This API key is pinned to ${principal.pinnedNetSuiteAccountId} and cannot switch accounts. A person can mint an unpinned key in OpenSuiteMCP under App Portal -> Agent access.`,
+      );
+    }
+
+    const requested =
+      typeof args.accountId === "string" ? args.accountId.trim() : "";
+    if (!requested) {
+      return toolError(
+        "Pass the `accountId` of an account from osmcp_list_netsuite_accounts.",
+      );
+    }
+
+    const normalized = normalizeNetSuiteAccountId(requested);
+    const settings = await getUserSettings({ userId: principal.userId });
+    const accounts = resolveNetSuiteAccounts(settings ?? {});
+    const target = accounts.find(
+      (entry) => normalizeNetSuiteAccountId(entry.accountId) === normalized,
+    );
+    if (!target) {
+      return toolError(
+        `No NetSuite account \`${requested}\` is configured for this user. Call osmcp_list_netsuite_accounts for the ids that are.`,
+      );
+    }
+
+    const connectedAccountIds = await listConnectedNetSuiteAccountIds(
+      principal.userId,
+    );
+    if (!connectedAccountIds.includes(target.accountId)) {
+      return toolError(
+        `NetSuite account ${target.accountId} is configured but not authorized. A person must connect it in OpenSuiteMCP under Settings -> NetSuite; retrying will not help.`,
+      );
+    }
+
+    await upsertUserSettings({
+      userId: principal.userId,
+      netsuiteAccountId: target.accountId,
+      netsuiteClientId: target.clientId ?? null,
+    });
+
+    return toolResult(
+      {
+        activeAccountId: target.accountId,
+        label: target.label,
+      },
+      `Active NetSuite account is now ${target.accountId}.`,
+    );
+  },
+};
+
 export const workspaceTools: McpToolDefinition[] = [
   whoami,
   connectionStatus,
   listNetSuiteAccounts,
+  setNetSuiteAccount,
   listChats,
   getChat,
   listSkills,
+  getSkill,
   listPersonas,
+  getPersona,
 ];

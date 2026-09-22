@@ -2,12 +2,7 @@ import "server-only";
 
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import {
-  type McpApiKey,
-  type McpKeyScope,
-  mcpApiKey,
-  user,
-} from "@/lib/db/schema";
+import { type McpApiKey, mcpApiKey, user } from "@/lib/db/schema";
 import { ChatSDKError } from "@/lib/errors";
 import { normalizeNetSuiteAccountId } from "@/lib/netsuite/accounts";
 import {
@@ -23,7 +18,6 @@ export type McpApiKeySummary = {
   name: string;
   tokenId: string;
   maskedToken: string;
-  scopes: McpKeyScope[];
   netsuiteAccountId: string | null;
   lastUsedAt: Date | null;
   expiresAt: Date | null;
@@ -57,7 +51,6 @@ function toSummary(row: McpApiKey): McpApiKeySummary {
     name: row.name,
     tokenId: row.tokenId,
     maskedToken: maskMcpApiKey(row.tokenId),
-    scopes: row.scopes,
     netsuiteAccountId: row.netsuiteAccountId,
     lastUsedAt: row.lastUsedAt,
     expiresAt: row.expiresAt,
@@ -104,7 +97,6 @@ export async function createMcpApiKey(params: {
   userId: string;
   orgId: string | null;
   name: string;
-  scopes: McpKeyScope[];
   netsuiteAccountId?: string | null;
   expiresAt?: Date | null;
 }): Promise<MintedMcpApiKey> {
@@ -122,7 +114,6 @@ export async function createMcpApiKey(params: {
         name: params.name,
         tokenId: minted.tokenId,
         tokenHash: minted.tokenHash,
-        scopes: params.scopes,
         netsuiteAccountId: pinnedAccountId,
         expiresAt: params.expiresAt ?? null,
         createdAt: new Date(),
@@ -169,7 +160,6 @@ export type AuthenticatedMcpKey = {
   userId: string;
   orgId: string | null;
   email: string | null;
-  scopes: McpKeyScope[];
 };
 
 export type McpKeyAuthFailure =
@@ -238,7 +228,6 @@ export async function authenticateMcpApiKey(
       userId: row.userId,
       orgId: row.orgId,
       email: owner.email,
-      scopes: row.scopes,
     },
   };
 }

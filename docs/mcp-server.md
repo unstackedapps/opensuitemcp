@@ -39,13 +39,11 @@ have no second gate.
 
 ## Creating a key
 
-In the app, open the **App Portal → API access**.
+In the app, open the **App Portal → Agent access**.
 
 1. Copy the **Server URL** shown there.
-2. Name a key after the agent that will hold it (`34five Aura — AP review`).
-3. Leave **Allow writes** off unless the agent genuinely needs to change
-   NetSuite records.
-4. Create it, then **copy the key immediately** — it is shown once and is not
+2. Name a key after the agent that will hold it (`AP review agent`).
+3. Create it, then **copy the key immediately** — it is shown once and is not
    recoverable. Only a SHA-256 digest of its secret half is stored.
 
 Keys look like:
@@ -57,20 +55,15 @@ osmcp_<16 hex chars>_<43 url-safe chars>
 The leading hex is a public lookup id, also shown in the key list so you can
 match a row to a key you hold. The rest is the secret.
 
-### Scopes
+### What a key reaches
 
-| Scope | What it permits |
-| --- | --- |
-| `read` | Discovery and every non-mutating tool. Always present. |
-| `write` | Additionally, NetSuite tools that create, update, or delete records. |
+What a key can reach is decided by the app's own settings, not by the key. A
+NetSuite tool left enabled for the connection is listed and callable; one
+disabled there is neither, and the policy is re-read on **every call**, so a
+tool disabled mid-session stops working immediately.
 
-Scopes are enforced **on every request**, not just at mint time. If an
-administrator later revokes write access for the organization, keys already
-issued downgrade to read-only on their next call.
-
-A tool a key lacks scope for is not listed and, if called by name, reports as
-unknown rather than forbidden — so an error never confirms a capability the
-caller may not use.
+The server adds no second gate on top of that. A key does not carry a narrower
+view of the workspace than the person who minted it.
 
 ---
 
@@ -125,15 +118,18 @@ pointing at `/.well-known/oauth-protected-resource`, per RFC 9728.
 
 ### Workspace tools
 
-| Tool | Scope | What it does |
-| --- | --- | --- |
-| `osmcp_whoami` | `read` | The acting user, key scopes, and active NetSuite account |
-| `osmcp_connection_status` | `read` | Whether NetSuite is reachable, and what to do when it is not |
-| `osmcp_list_netsuite_accounts` | `read` | Configured accounts and which is active |
-| `osmcp_list_chats` | `read` | The user's chat threads |
-| `osmcp_get_chat` | `read` | One chat transcript |
-| `osmcp_list_skills` | `read` | Oracle and Community skill packs and which are enabled |
-| `osmcp_list_personas` | `read` | Available NetSuite specialist personas |
+| Tool | What it does |
+| --- | --- |
+| `osmcp_whoami` | The acting user and active NetSuite account |
+| `osmcp_connection_status` | Whether NetSuite is reachable, and what to do when it is not |
+| `osmcp_list_netsuite_accounts` | Configured accounts and which is active |
+| `osmcp_list_chats` | The user's chat threads |
+| `osmcp_get_chat` | One chat transcript |
+| `osmcp_list_skills` | Skills from all four sources (Oracle, Community, Connected, Custom) the user has switched on |
+| `osmcp_list_personas` | Available NetSuite specialist personas |
+| `osmcp_get_skill` | The full instructions of one skill |
+| `osmcp_get_persona` | The full instructions of one persona |
+| `osmcp_set_netsuite_account` | Switch the active NetSuite account |
 
 ### NetSuite tools
 
@@ -141,13 +137,14 @@ Every NetSuite MCP Standard Tool the user is allowed to run is re-exposed under
 its own name, with **NetSuite's input schema forwarded verbatim** — enums,
 formats, and nested shapes intact.
 
-Whether a NetSuite tool needs `write` is derived from its name, because
-NetSuite does not declare it. The classifier is **fail-closed**: a name that is
-not clearly a read requires `write`. A read-only key therefore never causes a
-record change, at the cost of occasionally hiding a harmless tool.
+NetSuite does not declare whether a tool mutates data, so read-vs-write is
+derived from the tool name and published as MCP annotations (`readOnlyHint`,
+`destructiveHint`). These are **advisory**: a client uses them to decide
+whether to confirm before running something, and the derivation is
+conservative, so an unrecognised name is announced as a write.
 
-Every tool carries MCP annotations (`readOnlyHint`, `destructiveHint`), so a
-client that filters by them sees an accurate picture.
+Nothing is hidden on that basis. Enabling a tool is done in the app, and the
+annotation only shapes how a client presents it.
 
 ### Result shape
 
@@ -170,7 +167,6 @@ On org installs, an owner or admin controls MCP access for everyone:
 | Setting | Default | Effect |
 | --- | --- | --- |
 | `enabled` | `false` | Members may mint keys and agents may connect |
-| `allowWriteScope` | `false` | Members may mint keys carrying `write` |
 | `maxKeysPerUser` | `5` | Active keys one member may hold |
 
 Key creation and revocation, and every policy change, are written to

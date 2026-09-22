@@ -14,12 +14,12 @@ import {
 import { getNetSuiteToken } from "@/lib/netsuite/tokens";
 import { resolveEffectiveNetsuiteMcpToolSettings } from "@/lib/org/mcp-tool-policy";
 import type { McpPrincipal } from "../authenticate";
+import { normalizeCallResult } from "./netsuite-result";
 import { netsuiteToolIsReadOnly } from "./netsuite-write-classifier";
 import {
   type JsonSchemaObject,
   type McpToolDefinition,
   toolError,
-  toolResult,
 } from "./types";
 import { resolveAccountForPrincipal } from "./workspace";
 
@@ -110,7 +110,6 @@ function toDefinition(
       idempotentHint: readOnly,
       openWorldHint: true,
     },
-    requiredScope: readOnly ? "read" : "write",
     execute: async (args, principal) => {
       const accessToken = await getNetSuiteToken(principal.userId, accountId);
       if (!accessToken) {
@@ -161,66 +160,4 @@ function normalizeInputSchema(
     type: "object",
     properties: schema.properties ?? {},
   };
-}
-
-/**
- * NetSuite returns either a spec-shaped CallToolResult or a bare object.
- * Both are normalized so a caller always gets readable text and a structured
- * body, without discarding anything NetSuite sent.
- */
-function normalizeCallResult(result: unknown) {
-  if (result && typeof result === "object" && "content" in result) {
-    const record = result as Record<string, unknown>;
-    const content = Array.isArray(record.content)
-      ? (record.content as { type: string; text?: string }[])
-          .filter(
-            (part) => part?.type === "text" && typeof part.text === "string",
-          )
-          .map((part) => ({ type: "text" as const, text: part.text as string }))
-      : [];
-
-    const structured =
-      record.structuredContent && typeof record.structuredContent === "object"
-        ? (record.structuredContent as Record<string, unknown>)
-        : coerceStructured(record);
-
-    return {
-      content:
-        content.length > 0
-          ? content
-          : [{ type: "text" as const, text: JSON.stringify(record) }],
-      structuredContent: structured,
-      isError: record.isError === true,
-    };
-  }
-
-  if (result && typeof result === "object") {
-    return toolResult(coerceStructured(result as Record<string, unknown>));
-  }
-
-  return toolResult({ value: result ?? null }, String(result ?? ""));
-}
-
-/**
- * Some NetSuite CustomTool responses stringify their arrays and objects.
- * Re-parsing them lets a caller read rows as data instead of as a JSON string.
- */
-function coerceStructured(
-  record: Record<string, unknown>,
-): Record<string, unknown> {
-  const structured: Record<string, unknown> = { ...record };
-  for (const key of Object.keys(structured)) {
-    const value = structured[key];
-    if (
-      typeof value === "string" &&
-      (value.startsWith("[") || value.startsWith("{"))
-    ) {
-      try {
-        structured[key] = JSON.parse(value);
-      } catch {
-        // Leave the original string when it only looks like JSON.
-      }
-    }
-  }
-  return structured;
 }

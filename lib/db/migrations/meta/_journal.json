@@ -183,6 +183,13 @@
       "when": 1790024191050,
       "tag": "0025_mcp_server",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1790085766332,
+      "tag": "0026_drop_mcp_key_scopes",
+      "breakpoints": true
     }
   ]
 }

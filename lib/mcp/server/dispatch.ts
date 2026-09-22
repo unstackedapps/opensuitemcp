@@ -26,7 +26,7 @@ const SERVER_INSTRUCTIONS = [
   "This server exposes one OpenSuiteMCP user's NetSuite workspace. Every call acts as that user, with their permissions and their connected NetSuite account.",
   "Call osmcp_whoami first to confirm the acting identity and the active NetSuite account.",
   "If a NetSuite tool fails, call osmcp_connection_status. A dead authorization needs a person to reconnect the account in the OpenSuiteMCP UI and will not recover on retry.",
-  "Tools marked readOnlyHint never change NetSuite data. Tools without it modify records and require an API key carrying the write scope.",
+  "Tools marked readOnlyHint never change NetSuite data. Tools without it may modify records, so confirm before calling one. The hint is derived from the tool name and is deliberately cautious: an unrecognised name is announced as a write.",
   "Tool results carry both readable text and structuredContent; prefer structuredContent for rows and columns.",
 ].join(" ");
 

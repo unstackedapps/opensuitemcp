@@ -47,7 +47,6 @@ export async function resolveMcpPolicy(
 
   return {
     enabled: row.enabled,
-    allowWriteScope: row.allowWriteScope,
     maxKeysPerUser: row.maxKeysPerUser,
     managedByOrg: true,
   };
@@ -56,7 +55,6 @@ export async function resolveMcpPolicy(
 export async function upsertOrgMcpServerPolicy(params: {
   orgId: string;
   enabled?: boolean;
-  allowWriteScope?: boolean;
   maxKeysPerUser?: number;
 }): Promise<OrgMcpServerPolicy> {
   const now = new Date();
@@ -68,7 +66,6 @@ export async function upsertOrgMcpServerPolicy(params: {
         .values({
           orgId: params.orgId,
           enabled: params.enabled ?? false,
-          allowWriteScope: params.allowWriteScope ?? false,
           maxKeysPerUser: params.maxKeysPerUser ?? DEFAULT_MAX_KEYS_PER_USER,
           createdAt: now,
           updatedAt: now,
@@ -81,7 +78,6 @@ export async function upsertOrgMcpServerPolicy(params: {
       .update(orgMcpServerPolicy)
       .set({
         enabled: params.enabled ?? existing.enabled,
-        allowWriteScope: params.allowWriteScope ?? existing.allowWriteScope,
         maxKeysPerUser: params.maxKeysPerUser ?? existing.maxKeysPerUser,
         updatedAt: now,
       })
@@ -99,8 +95,4 @@ export async function upsertOrgMcpServerPolicy(params: {
   }
 }
 
-export {
-  applyScopePolicy,
-  type EffectiveMcpPolicy,
-  soloMcpPolicy,
-} from "./scopes";
+export { type EffectiveMcpPolicy, soloMcpPolicy } from "./scopes";

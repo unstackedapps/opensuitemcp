@@ -7,7 +7,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { fetcher } from "@/lib/utils";
 import { toast } from "./toast";
 
@@ -15,7 +14,6 @@ type McpKeySummary = {
   id: string;
   name: string;
   maskedToken: string;
-  scopes: ("read" | "write")[];
   netsuiteAccountId: string | null;
   lastUsedAt: string | null;
   expiresAt: string | null;
@@ -28,7 +26,6 @@ type McpKeysResponse = {
   serverUrl: string;
   policy: {
     enabled: boolean;
-    allowWriteScope: boolean;
     maxKeysPerUser: number;
     managedByOrg: boolean;
   };
@@ -43,7 +40,6 @@ export function McpAccessPanel({ active }: { active: boolean }) {
     fetcher,
   );
   const [name, setName] = useState("");
-  const [allowWrite, setAllowWrite] = useState(false);
   const [creating, setCreating] = useState(false);
   const [issuedToken, setIssuedToken] = useState<string | null>(null);
 
@@ -76,10 +72,7 @@ export function McpAccessPanel({ active }: { active: boolean }) {
       const response = await fetch(ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: trimmed,
-          scopes: allowWrite ? ["read", "write"] : ["read"],
-        }),
+        body: JSON.stringify({ name: trimmed }),
       });
       const payload = await response.json();
       if (!response.ok) {
@@ -92,24 +85,14 @@ export function McpAccessPanel({ active }: { active: boolean }) {
 
       setIssuedToken(payload.token);
       setName("");
-      setAllowWrite(false);
       await mutate();
-
-      if (allowWrite && !payload.scopesGranted.includes("write")) {
-        toast({
-          type: "warning",
-          description:
-            "Created read-only: your organization does not allow write access.",
-        });
-      } else {
-        toast({ type: "success", description: "API key created." });
-      }
+      toast({ type: "success", description: "Agent key created." });
     } catch {
       toast({ type: "error", description: "Could not create the key." });
     } finally {
       setCreating(false);
     }
-  }, [allowWrite, mutate, name]);
+  }, [mutate, name]);
 
   const revokeKey = useCallback(
     async (keyId: string) => {
@@ -118,7 +101,7 @@ export function McpAccessPanel({ active }: { active: boolean }) {
       });
       if (response.ok) {
         await mutate();
-        toast({ type: "success", description: "API key revoked." });
+        toast({ type: "success", description: "Agent key revoked." });
       } else {
         toast({ type: "error", description: "Could not revoke the key." });
       }
@@ -141,11 +124,12 @@ export function McpAccessPanel({ active }: { active: boolean }) {
       <div className="shrink-0 space-y-1 border-border/60 border-b px-4 py-3 sm:px-5">
         <p className="flex items-center gap-1.5 font-medium text-sm">
           <KeyRound className="size-3.5 text-muted-foreground" />
-          API access
+          Agent access
         </p>
         <p className="text-muted-foreground text-xs leading-relaxed">
           Let an external AI agent act as you over MCP — your NetSuite
-          connection, your permissions, your tool policy.
+          connection, your permissions, your tool policy. What an agent can
+          reach is whatever you have enabled elsewhere in OpenSuiteMCP.
         </p>
       </div>
 
@@ -195,7 +179,7 @@ export function McpAccessPanel({ active }: { active: boolean }) {
                 value={issuedToken}
               />
               <Button
-                onClick={() => copy(issuedToken, "API key")}
+                onClick={() => copy(issuedToken, "Agent key")}
                 size="sm"
                 type="button"
               >
@@ -222,27 +206,9 @@ export function McpAccessPanel({ active }: { active: boolean }) {
             id="mcp-key-name"
             maxLength={128}
             onChange={(event) => setName(event.target.value)}
-            placeholder="e.g. 34five Aura — AP review"
+            placeholder="e.g. AP review agent"
             value={name}
           />
-          <div className="flex items-start gap-2">
-            <Switch
-              checked={allowWrite}
-              disabled={blocked || atLimit || !data.policy.allowWriteScope}
-              id="mcp-key-write"
-              onCheckedChange={setAllowWrite}
-            />
-            <div className="space-y-0.5">
-              <Label className="text-xs" htmlFor="mcp-key-write">
-                Allow writes
-              </Label>
-              <p className="text-muted-foreground text-xs leading-relaxed">
-                {data.policy.allowWriteScope
-                  ? "Lets the agent call NetSuite tools that create, update, or delete records. Leave off for reporting and analysis."
-                  : "Your organization restricts keys to read-only access."}
-              </p>
-            </div>
-          </div>
           <Button
             disabled={blocked || atLimit || creating}
             onClick={createKey}
@@ -277,11 +243,6 @@ export function McpAccessPanel({ active }: { active: boolean }) {
                       {key.maskedToken}
                     </p>
                     <div className="flex flex-wrap items-center gap-1.5">
-                      {key.scopes.map((scope) => (
-                        <Badge key={scope} variant="secondary">
-                          {scope}
-                        </Badge>
-                      ))}
                       {key.status !== "active" ? (
                         <Badge variant="outline">{key.status}</Badge>
                       ) : null}
