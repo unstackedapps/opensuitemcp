@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### ✨ Added
+
+- **MCP server** — OpenSuiteMCP can now act as an MCP server so an external AI agent works inside a user's NetSuite workspace as that user. Off by default; set `OSMCP_MCP_SERVER_ENABLED=true`. See [docs/mcp-server.md](docs/mcp-server.md)
+- **Per-user API keys** — App Portal → **API access** mints scoped keys (`read`, optional `write`), shown once and stored only as a SHA-256 digest. Keys can be pinned to one NetSuite account
+- **NetSuite tool passthrough** — every allowed NetSuite MCP Standard Tool is re-exposed with its JSON Schema forwarded verbatim, plus seven `osmcp_*` workspace tools (identity, connection health, accounts, chats, skills, personas)
+- **Organization MCP policy** — owners and admins gate access, the `write` scope, and keys per user; key creation, revocation, and policy changes are audited
+
+### Changed
+
+- Server URL derives from the install's public origin, so self-hosted, sandbox, and hosted installs each advertise their own address with no extra configuration
+- `middleware.ts` exempts `/api/mcp` and `/.well-known/oauth-protected-resource` from the cookie gate so bearer-authenticated clients reach their route handlers
+
+### 📦 Database
+
+- Migration `0025_mcp_server` — `McpApiKey` and `OrgMcpServerPolicy` tables (`pnpm db:migrate`)
+
+### 🧰 Technical
+
+- Streamable HTTP revision `2026-07-28` (stateless: no sessions, no GET stream, no `initialize`), with `2025-11-25` / `2025-06-18` / `2025-03-26` still accepted for clients that predate it
+- Transport implemented in-repo rather than via an adapter; every protocol detail lives in `lib/mcp/server/protocol.ts` with the revision pinned as a constant
+- Optional per-key rate limit via `MCP_CALL_LIMIT_PER_MINUTE` (fails open without Redis, matching the existing chat burst limiter)
+
 ---
 
 ## [5.2.0] - 2026-09-10

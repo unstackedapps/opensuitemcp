@@ -16,6 +16,20 @@ function isDocsPath(pathname: string): boolean {
   return pathname === "/docs" || pathname.startsWith("/docs/");
 }
 
+/**
+ * The MCP server authenticates with a bearer API key in its own route handler.
+ * It must bypass the cookie gate below, or a client handshake is answered with
+ * a redirect to /login instead of a protocol response.
+ */
+function isMcpServerPath(pathname: string): boolean {
+  return (
+    pathname === "/api/mcp" ||
+    pathname.startsWith("/api/mcp/") ||
+    pathname === "/.well-known/oauth-protected-resource" ||
+    pathname.startsWith("/.well-known/oauth-protected-resource/")
+  );
+}
+
 /** Next.js metadata routes must stay public so favicons load on /login and /setup. */
 function isAppMetadataPath(pathname: string): boolean {
   return (
@@ -45,6 +59,10 @@ export async function middleware(request: NextRequest) {
   }
 
   if (pathname.startsWith("/api/auth")) {
+    return NextResponse.next();
+  }
+
+  if (isMcpServerPath(pathname)) {
     return NextResponse.next();
   }
 
@@ -120,6 +138,7 @@ export const config = {
      * - _next/image (image optimization files)
      * - favicon.ico, sitemap.xml, robots.txt (metadata files)
      */
+    "/.well-known/:path*",
     "/((?!_next/static|_next/image|favicon.ico|icon.ico|icon.svg|icon|apple-icon|sitemap.xml|robots.txt).*)",
   ],
 };

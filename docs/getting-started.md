@@ -113,6 +113,7 @@ Resolve conflicts on `develop`, not on public `main`.
 These exist on `develop` only and should **not** appear in the public repo:
 
 - `docs/getting-started.md` (this file)
+- `docs/mcp-server-sandbox-handoff.md` (deploy/ops notes referencing the private overlay)
 - `.github/workflows/ci.yml`
 - `.github/workflows/e2e.yml.disabled`
 - WIP-specific changes in `.github/workflows/lint.yml` (if public differs)

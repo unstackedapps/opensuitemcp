@@ -6,6 +6,7 @@ import type { User } from "next-auth";
 import { useState } from "react";
 import { useSWRConfig } from "swr";
 import { unstable_serialize } from "swr/infinite";
+import { McpAccessPanel } from "@/components/mcp-access-settings";
 import { PersonasPanel } from "@/components/personas-panel";
 import {
   PORTAL_NAV,
@@ -227,6 +228,10 @@ export function AppPortal({ user }: { user: User | undefined }) {
                     onSelectPrompt?.(promptText, promptName);
                   }}
                 />
+              ) : null}
+
+              {section === "api-access" ? (
+                <McpAccessPanel active={open && section === "api-access"} />
               ) : null}
 
               {isSettingsSection(section) ? (

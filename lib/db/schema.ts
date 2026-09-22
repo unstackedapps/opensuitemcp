@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import {
   boolean,
   foreignKey,
+  index,
   integer,
   json,
   jsonb,
@@ -661,3 +662,73 @@ export const auditLog = pgTable("AuditLog", {
 });
 
 export type AuditLog = InferSelectModel<typeof auditLog>;
+
+/**
+ * Scopes carried by an MCP API key. `read` covers discovery and non-mutating
+ * tool calls; `write` additionally permits tools that change NetSuite data.
+ */
+export type McpKeyScope = "read" | "write";
+
+/**
+ * Per-user credential for the outbound MCP server. External agents present
+ * `Authorization: Bearer <token>` and act as the owning user.
+ *
+ * Only the SHA-256 digest of the key's secret half is stored; `tokenId` is the
+ * plaintext lookup half.
+ */
+export const mcpApiKey = pgTable(
+  "McpApiKey",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    userId: uuid("userId")
+      .notNull()
+      .references(() => user.id),
+    /** Org at mint time; null on solo installs. Used for audit and policy. */
+    orgId: uuid("orgId").references(() => org.id),
+    name: varchar("name", { length: 128 }).notNull(),
+    tokenId: varchar("tokenId", { length: 32 }).notNull(),
+    tokenHash: text("tokenHash").notNull(),
+    scopes: jsonb("scopes")
+      .$type<McpKeyScope[]>()
+      .notNull()
+      .default(sql`'["read"]'::jsonb`),
+    /** Pins the key to one NetSuite account; null follows the active account. */
+    netsuiteAccountId: varchar("netsuiteAccountId", { length: 64 }),
+    lastUsedAt: timestamp("lastUsedAt"),
+    expiresAt: timestamp("expiresAt"),
+    revokedAt: timestamp("revokedAt"),
+    createdAt: timestamp("createdAt").notNull(),
+  },
+  (table) => ({
+    tokenIdIdx: uniqueIndex("McpApiKey_tokenId_key").on(table.tokenId),
+    userIdIdx: index("McpApiKey_userId_idx").on(table.userId),
+  }),
+);
+
+export type McpApiKey = InferSelectModel<typeof mcpApiKey>;
+
+/**
+ * Org-wide policy for the outbound MCP server. Absent row means the install
+ * default applies (disabled until an owner or admin turns it on).
+ */
+export const orgMcpServerPolicy = pgTable(
+  "OrgMcpServerPolicy",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    orgId: uuid("orgId")
+      .notNull()
+      .references(() => org.id),
+    /** Members may mint keys and external agents may connect. */
+    enabled: boolean("enabled").notNull().default(false),
+    /** Members may mint keys carrying the `write` scope. */
+    allowWriteScope: boolean("allowWriteScope").notNull().default(false),
+    maxKeysPerUser: integer("maxKeysPerUser").notNull().default(5),
+    createdAt: timestamp("createdAt").notNull(),
+    updatedAt: timestamp("updatedAt").notNull(),
+  },
+  (table) => ({
+    orgIdx: uniqueIndex("OrgMcpServerPolicy_orgId_key").on(table.orgId),
+  }),
+);
+
+export type OrgMcpServerPolicy = InferSelectModel<typeof orgMcpServerPolicy>;
