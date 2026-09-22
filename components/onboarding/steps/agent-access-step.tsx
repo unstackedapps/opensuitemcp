@@ -17,7 +17,7 @@ export function OnboardingAgentAccessStep() {
     <div className="space-y-4">
       <OnboardingStepProse
         title="Agent access"
-        description="Let an external AI agent work in this NetSuite workspace as you — your connection, your permissions, your tool policy. Optional, and you can set it up later."
+        description="Let an external AI agent work in this workspace as you. It reaches exactly what you have enabled — nothing more. Optional."
       />
       <div className="overflow-hidden rounded-md border border-border/60">
         <McpAccessPanel active />

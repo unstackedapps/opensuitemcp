@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { isMcpServerEnabled } from "@/lib/mcp/server/config";
 import { getAdminActor } from "@/lib/org/admin/actor";
 import { getAdminAgentAccess } from "@/lib/org/admin/agent-access";
 import { listOrgUsers } from "@/lib/org/admin/users";
@@ -24,7 +23,6 @@ export async function GET() {
   ]);
 
   return NextResponse.json({
-    serverEnabled: isMcpServerEnabled(),
     state,
     users: users.map((user) => ({
       id: user.id,

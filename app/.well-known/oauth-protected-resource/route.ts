@@ -2,7 +2,6 @@ import { getPublicAppOrigin } from "@/lib/http/public-origin";
 import {
   getMcpResourceIdentifier,
   getMcpServerUrl,
-  isMcpServerEnabled,
 } from "@/lib/mcp/server/config";
 
 export const dynamic = "force-dynamic";
@@ -16,10 +15,6 @@ export const dynamic = "force-dynamic";
  * API-key flow discoverable rather than something a user has to be told about.
  */
 export function GET(request: Request) {
-  if (!isMcpServerEnabled()) {
-    return new Response(null, { status: 404 });
-  }
-
   const origin = getPublicAppOrigin(request);
 
   return Response.json(

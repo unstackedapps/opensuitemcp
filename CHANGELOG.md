@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ✨ Added
 
-- **MCP server** — OpenSuiteMCP can now act as an MCP server so an external AI agent works inside a user's NetSuite workspace as that user. Off by default; set `OSMCP_MCP_SERVER_ENABLED=true`. See [docs/mcp-server.md](docs/mcp-server.md)
+- **Agent access** — OpenSuiteMCP can now act as an MCP server so an external AI agent works inside a user's NetSuite workspace as that user. Nothing to switch on: the endpoint refuses every request until someone mints a key, and org installs gate it behind an admin. See [docs/mcp-server.md](docs/mcp-server.md)
 - **Per-user agent keys** — App Portal → **Agent access** mints keys, shown once and stored only as a SHA-256 digest. Keys can be pinned to one NetSuite account. Access follows the tool policy already configured in the app, so a key grants no more and no less than its owner has enabled
 - **NetSuite tool passthrough** — every allowed NetSuite MCP Standard Tool is re-exposed with its JSON Schema forwarded verbatim, plus seven `osmcp_*` workspace tools (identity, connection health, accounts, chats, skills, personas)
 - **Organization MCP policy** — owners and admins gate access and keys per user; key creation, revocation, and policy changes are audited
