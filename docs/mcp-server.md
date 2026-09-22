@@ -55,12 +55,7 @@ osmcp_<16 hex chars>_<43 url-safe chars>
 The leading hex is a public lookup id, also shown in the key list so you can
 match a row to a key you hold. The rest is the secret.
 
-### Scopes
-
-| Scope | What it permits |
-| --- | --- |
-| `read` | Discovery and every non-mutating tool. Always present. |
-| `write` | Additionally, NetSuite tools that create, update, or delete records. |
+### What a key reaches
 
 What a key can reach is decided by the app's own settings, not by the key. A
 NetSuite tool left enabled for the connection is listed and callable; one
@@ -169,7 +164,6 @@ On org installs, an owner or admin controls MCP access for everyone:
 | Setting | Default | Effect |
 | --- | --- | --- |
 | `enabled` | `false` | Members may mint keys and agents may connect |
-| `allowWriteScope` | `false` | Members may mint keys carrying `write` |
 | `maxKeysPerUser` | `5` | Active keys one member may hold |
 
 Key creation and revocation, and every policy change, are written to

@@ -10,7 +10,6 @@ import { writeOrgAuditLog } from "@/lib/org/audit";
 
 const patchSchema = z.object({
   enabled: z.boolean().optional(),
-  allowWriteScope: z.boolean().optional(),
   maxKeysPerUser: z.number().int().min(1).max(100).optional(),
 });
 
@@ -49,7 +48,6 @@ export async function POST(request: Request) {
     return NextResponse.json({
       policy: {
         enabled: saved.enabled,
-        allowWriteScope: saved.allowWriteScope,
         maxKeysPerUser: saved.maxKeysPerUser,
         managedByOrg: true,
       },

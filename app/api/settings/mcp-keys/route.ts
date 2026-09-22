@@ -7,18 +7,11 @@ import {
   createMcpApiKey,
   listMcpApiKeys,
 } from "@/lib/mcp/server/keys";
-import { applyScopePolicy, resolveMcpPolicy } from "@/lib/mcp/server/policy";
+import { resolveMcpPolicy } from "@/lib/mcp/server/policy";
 import { writeOrgAuditLog } from "@/lib/org/audit";
 
 const createSchema = z.object({
   name: z.string().trim().min(1).max(128),
-  // Retained for wire compatibility. Access is decided by the tool policy in
-  // the app, not by key scopes, so a key is never narrowed on this axis.
-  scopes: z
-    .array(z.enum(["read", "write"]))
-    .min(1)
-    .max(2)
-    .default(["read", "write"]),
   netsuiteAccountId: z.string().trim().max(64).optional().nullable(),
   expiresInDays: z.number().int().min(1).max(3650).optional().nullable(),
 });
@@ -82,13 +75,11 @@ export async function POST(request: Request) {
 
     // Scopes are narrowed rather than rejected so a policy change does not turn
     // a reasonable request into an error the caller cannot act on.
-    const scopes = applyScopePolicy(parsed.scopes, policy);
 
     const created = await createMcpApiKey({
       userId: session.user.id,
       orgId: session.user.orgId,
       name: parsed.name,
-      scopes,
       netsuiteAccountId: parsed.netsuiteAccountId ?? null,
       expiresAt: parsed.expiresInDays
         ? new Date(Date.now() + parsed.expiresInDays * 86_400_000)
@@ -102,7 +93,7 @@ export async function POST(request: Request) {
         action: "mcp_key.create",
         targetType: "McpApiKey",
         targetId: created.summary.id,
-        metadata: { name: created.summary.name, scopes },
+        metadata: { name: created.summary.name },
       });
     }
 
@@ -111,8 +102,6 @@ export async function POST(request: Request) {
       // The only time the full key is ever returned.
       token: created.token,
       serverUrl: getMcpServerUrl(request),
-      scopesGranted: scopes,
-      scopesRequested: parsed.scopes,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
