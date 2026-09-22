@@ -12,7 +12,11 @@ import { OnboardingStepProse } from "@/components/onboarding/onboarding-step-pro
  * either way: a self-hosted operator who has not set the flag still learns the
  * capability exists and what to turn on.
  */
-export function OnboardingAgentAccessStep() {
+export function OnboardingAgentAccessStep({
+  onRefresh,
+}: {
+  onRefresh: () => Promise<void>;
+}) {
   return (
     <div className="space-y-4">
       <OnboardingStepProse
@@ -20,7 +24,7 @@ export function OnboardingAgentAccessStep() {
         description="Let an external AI agent work in this workspace as you. It reaches exactly what you have enabled — nothing more. Optional."
       />
       <div className="overflow-hidden rounded-md border border-border/60">
-        <McpAccessPanel active />
+        <McpAccessPanel active onChanged={onRefresh} />
       </div>
     </div>
   );

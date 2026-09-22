@@ -271,10 +271,10 @@ export function OnboardingWizard({
             />
           ) : null}
           {currentStep === "agent-access" && readiness.mode === "solo" ? (
-            <OnboardingAgentAccessStep />
+            <OnboardingAgentAccessStep onRefresh={refreshReadiness} />
           ) : null}
           {currentStep === "agent-access" && readiness.mode === "org" ? (
-            <OnboardingAgentAccessOrgStep />
+            <OnboardingAgentAccessOrgStep onRefresh={refreshReadiness} />
           ) : null}
           {currentStep === "checklist" ? (
             <OnboardingChecklistStep
