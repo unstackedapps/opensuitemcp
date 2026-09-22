@@ -25,6 +25,7 @@ function normalizeViewedSteps(raw: unknown): OnboardingStepId[] {
     "timezone",
     "users",
     "gates",
+    "agent-access",
     "checklist",
   ]);
 

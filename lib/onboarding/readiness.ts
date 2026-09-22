@@ -8,6 +8,7 @@ import {
   parseAiProviderConfig,
 } from "@/lib/ai/provider-entries";
 import { getUserSettings } from "@/lib/db/queries";
+import { countActiveMcpApiKeys } from "@/lib/mcp/server/keys";
 import { listConnectedNetSuiteAccountIds } from "@/lib/netsuite/tokens";
 import { listAdminOrgLlmProviders } from "@/lib/org/admin/llm-providers";
 import { listAdminOrgNetSuiteMcpAccounts } from "@/lib/org/admin/netsuite-mcp-accounts";
@@ -109,6 +110,13 @@ function stepMeta(
         required: false,
         optional: true,
       };
+    case "agent-access":
+      return {
+        label: "Agent access",
+        description: "Let an external AI agent work in this workspace",
+        required: false,
+        optional: true,
+      };
     case "timezone":
       return {
         label: "Timezone",
@@ -154,14 +162,17 @@ async function getSoloReadiness(userId: string): Promise<{
   customSkillsComplete: boolean;
   searchComplete: boolean;
   timezoneComplete: boolean;
+  agentAccessComplete: boolean;
   oidcAccountCount: number;
   connectedMcpCount: number;
 }> {
-  const [settings, connectedIds, oidcOptions] = await Promise.all([
-    getUserSettings({ userId }),
-    listConnectedNetSuiteAccountIds(userId),
-    listLoginOidcOptions(),
-  ]);
+  const [settings, connectedIds, oidcOptions, activeKeyCount] =
+    await Promise.all([
+      getUserSettings({ userId }),
+      listConnectedNetSuiteAccountIds(userId),
+      listLoginOidcOptions(),
+      countActiveMcpApiKeys(userId),
+    ]);
 
   const aiProviders = ensureSeededProviderConfig(
     parseAiProviderConfig(settings?.aiProviders),
@@ -184,6 +195,8 @@ async function getSoloReadiness(userId: string): Promise<{
     timezoneComplete: Boolean(
       settings?.timezone && settings.timezone !== "UTC",
     ),
+    // Optional: the step is done once the user has a key an agent can hold.
+    agentAccessComplete: activeKeyCount > 0,
     oidcAccountCount,
     connectedMcpCount: connectedIds.length,
   };
@@ -307,6 +320,7 @@ function buildSteps(
     customSkillsComplete?: boolean;
     searchComplete?: boolean;
     timezoneComplete?: boolean;
+    agentAccessComplete?: boolean;
   },
   viewedSteps: OnboardingStepId[],
 ): OnboardingStepStatus[] {
@@ -347,6 +361,9 @@ function buildSteps(
         break;
       case "timezone":
         complete = Boolean(flags.timezoneComplete);
+        break;
+      case "agent-access":
+        complete = Boolean(flags.agentAccessComplete);
         break;
       case "users":
         complete = Boolean(flags.usersComplete);

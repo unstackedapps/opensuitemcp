@@ -31,6 +31,7 @@ import type { OrgNetSuiteMcpAccountRow } from "@/lib/org/netsuite-mcp-accounts";
 import type { OrgOidcAccountRow } from "@/lib/org/oidc-accounts";
 import type { OrgSearchResourceRow } from "@/lib/org/search-resources";
 import { OnboardingStepNav } from "./onboarding-step-nav";
+import { OnboardingAgentAccessStep } from "./steps/agent-access-step";
 import { OnboardingChecklistStep } from "./steps/checklist-step";
 import { OnboardingConnectedSkillsStep } from "./steps/connected-skills-step";
 import { OnboardingCustomSkillsStep } from "./steps/custom-skills-step";
@@ -267,6 +268,9 @@ export function OnboardingWizard({
               orgSkills={orgSkills}
               searchResources={searchResources}
             />
+          ) : null}
+          {currentStep === "agent-access" && readiness.mode === "solo" ? (
+            <OnboardingAgentAccessStep />
           ) : null}
           {currentStep === "checklist" ? (
             <OnboardingChecklistStep

@@ -161,8 +161,8 @@ export function McpAccessPanel({ active }: { active: boolean }) {
         {blocked ? (
           <p className="rounded-md border border-border/60 bg-muted/40 p-3 text-muted-foreground text-xs leading-relaxed">
             {data.serverEnabled
-              ? "MCP server access is turned off for your organization. Ask an administrator to enable it."
-              : "The MCP server is not enabled on this install. An operator must set OSMCP_MCP_SERVER_ENABLED=true and restart."}
+              ? "Agent access is turned off for your organization. Ask an administrator to enable it."
+              : "Agent access is not enabled on this install. An operator must set OSMCP_MCP_SERVER_ENABLED=true and restart."}
           </p>
         ) : null}
 
