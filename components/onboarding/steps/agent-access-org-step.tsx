@@ -1,25 +1,68 @@
 "use client";
 
-import Link from "next/link";
+import useSWR from "swr";
+import { AgentAccessPanel } from "@/components/admin/agent-access-panel";
 import { OnboardingStepProse } from "@/components/onboarding/onboarding-step-prose";
-import { Button } from "@/components/ui/button";
+import type { AdminAgentAccessState } from "@/lib/org/admin/agent-access";
+
+type AgentAccessResponse = {
+  serverEnabled: boolean;
+  state: AdminAgentAccessState;
+  users: {
+    id: string;
+    email: string;
+    name: string | null;
+    role: string | null;
+  }[];
+};
+
+async function fetchAgentAccess(): Promise<AgentAccessResponse> {
+  const response = await fetch("/api/admin/agent-access");
+  if (!response.ok) {
+    throw new Error("Failed to load Agent access settings.");
+  }
+  return response.json();
+}
 
 /**
  * Agent access during org onboarding.
  *
- * The admin is configuring the organization, not minting their own key, so
- * this points at the admin panel rather than embedding the member-facing one.
+ * The same controls as /admin/agent-access, rendered here rather than linked,
+ * so an admin can set the policy without leaving the wizard. The step is
+ * optional; skipping it leaves the feature off, which is the default.
  */
 export function OnboardingAgentAccessOrgStep() {
+  const { data, isLoading, mutate } = useSWR(
+    "onboarding-agent-access",
+    fetchAgentAccess,
+  );
+
   return (
     <div className="space-y-4">
       <OnboardingStepProse
         title="Agent access"
-        description="Members can connect an external AI agent to their own NetSuite workspace over MCP. The agent acts as that member, with their permissions and their tool policy. Off until you turn it on, and you can come back to this later."
+        description="Members can connect an external AI agent to their own NetSuite workspace over MCP. The agent acts as that member, with their permissions and their tool policy. Off until you turn it on, and you can change this later in the admin area."
       />
-      <Button asChild size="sm" variant="outline">
-        <Link href="/admin/agent-access">Open Agent access settings</Link>
-      </Button>
+
+      {isLoading || !data ? (
+        <p className="text-muted-foreground text-sm">Loading…</p>
+      ) : (
+        <>
+          {data.serverEnabled ? null : (
+            <p className="rounded-md border border-border/60 bg-muted/40 p-3 text-muted-foreground text-xs leading-relaxed">
+              This install does not have the MCP server switched on, so these
+              settings will not take effect until an operator sets
+              OSMCP_MCP_SERVER_ENABLED=true and restarts.
+            </p>
+          )}
+          <AgentAccessPanel
+            bare
+            onChanged={() => mutate()}
+            state={data.state}
+            users={data.users}
+          />
+        </>
+      )}
     </div>
   );
 }

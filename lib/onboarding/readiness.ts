@@ -295,7 +295,6 @@ async function getOrgReadiness(
         : "Off — turn it on if members should connect AI agents",
       complete: agentAccessPolicy.enabled,
       optional: true,
-      href: "/admin/agent-access",
     },
     {
       id: "invite-team",
