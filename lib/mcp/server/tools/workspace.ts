@@ -1,11 +1,7 @@
 import "server-only";
 
 import { listPersonasForClient } from "@/lib/ai/personas/catalog";
-import {
-  listCommunityCatalogSkills,
-  listOracleCatalogSkills,
-  normalizeUserSkillSettings,
-} from "@/lib/ai/skills/catalog";
+import { resolveUserSkillSurface } from "@/lib/ai/skills/user-surface";
 import {
   getChatById,
   getChatsByUserId,
@@ -289,31 +285,33 @@ const listSkills: McpToolDefinition = {
   name: "osmcp_list_skills",
   title: "List skills",
   description:
-    "List the Oracle and Community skill packs available to this user and which are enabled. Skills are instruction documents OpenSuiteMCP injects into its own chats; they describe NetSuite practice you may find useful as context.",
+    "List the skill packs this user has available — Oracle, Community, Connected, and Custom. Skills are instruction documents describing NetSuite practice; a skill the user has switched off is not listed. `mode` is `auto` when the skill always applies, or `slash` when the user invokes it by name.",
   inputSchema: EMPTY_INPUT_SCHEMA,
   annotations: { title: "List skills", ...READ_ONLY },
   execute: async (_args, principal) => {
     const settings = await getUserSettings({ userId: principal.userId });
-    const normalized = normalizeUserSkillSettings(settings ?? {});
-    const enabled = new Set(normalized.enabledSkillIds);
+    const skills = await resolveUserSkillSurface({
+      userId: principal.userId,
+      orgId: principal.orgId,
+      settings: settings ?? {},
+      disabledOrgConnectedSkillSourceIds:
+        settings?.disabledOrgConnectedSkillSourceIds,
+    });
 
-    const rows = [
-      ...listOracleCatalogSkills().map((skill) => ({
+    // A skill switched off in the app is not available here either.
+    const rows = skills
+      .filter((skill) => skill.mode !== "off")
+      .map((skill) => ({
         id: skill.id,
         name: skill.name,
-        source: "oracle",
-        enabled: enabled.has(skill.id),
-      })),
-      ...listCommunityCatalogSkills().map((skill) => ({
-        id: skill.id,
-        name: skill.name,
-        source: "community",
-        enabled: enabled.has(skill.id),
-      })),
-    ];
+        description: skill.description,
+        source: skill.source,
+        mode: skill.mode,
+        slug: skill.slug,
+      }));
 
     return toolResult({
-      columns: ["id", "name", "source", "enabled"],
+      columns: ["id", "name", "description", "source", "mode", "slug"],
       rows,
     });
   },
