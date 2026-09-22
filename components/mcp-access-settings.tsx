@@ -14,7 +14,6 @@ type McpKeySummary = {
   id: string;
   name: string;
   maskedToken: string;
-  scopes: ("read" | "write")[];
   netsuiteAccountId: string | null;
   lastUsedAt: string | null;
   expiresAt: string | null;
@@ -27,7 +26,6 @@ type McpKeysResponse = {
   serverUrl: string;
   policy: {
     enabled: boolean;
-    allowWriteScope: boolean;
     maxKeysPerUser: number;
     managedByOrg: boolean;
   };

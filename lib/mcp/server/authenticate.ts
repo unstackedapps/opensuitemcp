@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { McpKeyScope, OrgRole } from "@/lib/db/schema";
+import type { OrgRole } from "@/lib/db/schema";
 import { readBearerToken } from "./api-key-format";
 import { getMcpProtectedResourceUrl, isMcpServerEnabled } from "./config";
 import {
@@ -20,7 +20,6 @@ export type McpPrincipal = {
   orgId: string | null;
   role: OrgRole | null;
   email: string | null;
-  scopes: McpKeyScope[];
   keyId: string;
   keyName: string;
   /** Account this key is pinned to; null follows the user's active account. */
@@ -97,39 +96,20 @@ export async function authenticateMcpRequest(
 
   return {
     ok: true,
-    principal: toPrincipal(result.principal, policy.allowWriteScope),
+    principal: toPrincipal(result.principal),
   };
 }
 
-/**
- * Org policy is re-applied at request time, not just at mint time, so revoking
- * write access for an organization immediately downgrades keys already issued.
- */
-function toPrincipal(
-  authenticated: AuthenticatedMcpKey,
-  allowWriteScope: boolean,
-): McpPrincipal {
-  const scopes = allowWriteScope
-    ? authenticated.scopes
-    : authenticated.scopes.filter((scope) => scope !== "write");
-
+function toPrincipal(authenticated: AuthenticatedMcpKey): McpPrincipal {
   return {
     userId: authenticated.userId,
     orgId: authenticated.orgId,
     role: null,
     email: authenticated.email,
-    scopes: scopes.length > 0 ? scopes : ["read"],
     keyId: authenticated.key.id,
     keyName: authenticated.key.name,
     pinnedNetSuiteAccountId: authenticated.key.netsuiteAccountId,
   };
-}
-
-export function principalHasScope(
-  principal: McpPrincipal,
-  scope: McpKeyScope,
-): boolean {
-  return principal.scopes.includes(scope);
 }
 
 export function recordMcpKeyUse(principal: McpPrincipal): void {
