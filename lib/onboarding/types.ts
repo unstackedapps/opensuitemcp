@@ -13,6 +13,7 @@ export type OnboardingStepId =
   | "timezone"
   | "users"
   | "gates"
+  | "agent-access"
   | "checklist";
 
 export type OnboardingStepStatus = {
@@ -54,6 +55,7 @@ export const SOLO_STEP_ORDER: OnboardingStepId[] = [
   "custom-skills",
   "search",
   "timezone",
+  "agent-access",
   "checklist",
 ];
 

@@ -24,7 +24,7 @@ export async function getOrgMcpServerPolicy(
   } catch (_error) {
     throw new ChatSDKError(
       "bad_request:database",
-      "Failed to read the organization MCP server policy",
+      "Failed to read the organization Agent access policy",
     );
   }
 }
@@ -90,7 +90,7 @@ export async function upsertOrgMcpServerPolicy(params: {
     }
     throw new ChatSDKError(
       "bad_request:database",
-      "Failed to save the organization MCP server policy",
+      "Failed to save the organization Agent access policy",
     );
   }
 }

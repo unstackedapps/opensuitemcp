@@ -66,7 +66,7 @@ export async function authenticateMcpRequest(
       denial: {
         status: 404,
         error: "not_found",
-        description: "The MCP server is not enabled on this install.",
+        description: "Agent access is not enabled on this install.",
       },
     };
   }
@@ -89,7 +89,7 @@ export async function authenticateMcpRequest(
         status: 403,
         error: "access_denied",
         description:
-          "MCP server access is disabled for this organization. Ask an administrator to enable it.",
+          "Agent access is disabled for this organization. Ask an administrator to enable it.",
       },
     };
   }
