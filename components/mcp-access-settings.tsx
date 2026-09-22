@@ -42,7 +42,14 @@ function blockedReason(data: McpKeysResponse): string {
   return "Agent access is limited to selected members of your organization. Ask an administrator to add you.";
 }
 
-export function McpAccessPanel({ active }: { active: boolean }) {
+export function McpAccessPanel({
+  active,
+  onChanged,
+}: {
+  active: boolean;
+  /** Minting or revoking a key changes onboarding readiness; let the host know. */
+  onChanged?: () => Promise<unknown> | undefined;
+}) {
   const { data, isLoading, mutate } = useSWR<McpKeysResponse>(
     active ? ENDPOINT : null,
     fetcher,
@@ -94,13 +101,14 @@ export function McpAccessPanel({ active }: { active: boolean }) {
       setIssuedToken(payload.token);
       setName("");
       await mutate();
+      await onChanged?.();
       toast({ type: "success", description: "Agent key created." });
     } catch {
       toast({ type: "error", description: "Could not create the key." });
     } finally {
       setCreating(false);
     }
-  }, [mutate, name]);
+  }, [mutate, name, onChanged]);
 
   const revokeKey = useCallback(
     async (keyId: string) => {
@@ -109,12 +117,13 @@ export function McpAccessPanel({ active }: { active: boolean }) {
       });
       if (response.ok) {
         await mutate();
+        await onChanged?.();
         toast({ type: "success", description: "Agent key revoked." });
       } else {
         toast({ type: "error", description: "Could not revoke the key." });
       }
     },
-    [mutate],
+    [mutate, onChanged],
   );
 
   if (isLoading || !data) {
