@@ -368,7 +368,6 @@ function extractMessageText(parts: unknown): string {
   return chunks.join("\n\n");
 }
 
-
 const getSkill: McpToolDefinition = {
   name: "osmcp_get_skill",
   title: "Get skill",

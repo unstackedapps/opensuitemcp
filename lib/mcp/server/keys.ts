@@ -2,11 +2,7 @@ import "server-only";
 
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import {
-  type McpApiKey,
-  mcpApiKey,
-  user,
-} from "@/lib/db/schema";
+import { type McpApiKey, mcpApiKey, user } from "@/lib/db/schema";
 import { ChatSDKError } from "@/lib/errors";
 import { normalizeNetSuiteAccountId } from "@/lib/netsuite/accounts";
 import {

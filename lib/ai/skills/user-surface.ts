@@ -19,7 +19,7 @@ import {
   normalizeDisabledOrgConnectedSkillSourceIds,
 } from "@/lib/org/enforcement";
 import { isOrgInstallMode } from "@/lib/org/install-config";
-import { type SkillInvocationMode, resolveSkillMode } from "./modes";
+import { resolveSkillMode, type SkillInvocationMode } from "./modes";
 
 export type ResolvedUserSkill = {
   id: string;
@@ -56,9 +56,10 @@ export async function resolveUserSkillSurface(params: {
 
   let { enabledSkillIds, customSkills, connectedSkillSources } =
     userSkillSettings;
-  const disabledConnectedSourceIds = normalizeDisabledOrgConnectedSkillSourceIds(
-    params.disabledOrgConnectedSkillSourceIds,
-  );
+  const disabledConnectedSourceIds =
+    normalizeDisabledOrgConnectedSkillSourceIds(
+      params.disabledOrgConnectedSkillSourceIds,
+    );
 
   if (orgManaged && params.orgId) {
     const merged = await buildOrgAwareSkillSettings({
