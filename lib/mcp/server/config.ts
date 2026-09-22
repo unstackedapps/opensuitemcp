@@ -13,14 +13,6 @@ export const MCP_PROTECTED_RESOURCE_PATH =
 export const MCP_SERVER_NAME = "opensuitemcp";
 
 /**
- * Install-level switch. Off by default so an upgrade never exposes a new
- * network surface without an operator opting in.
- */
-export function isMcpServerEnabled(): boolean {
-  return process.env.OSMCP_MCP_SERVER_ENABLED?.trim() === "true";
-}
-
-/**
  * The URL an external agent is configured with. Derived from the install's
  * public origin rather than stored, so self-hosted, sandbox, and cloud
  * installs each advertise their own address with no extra configuration.
