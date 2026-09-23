@@ -35,11 +35,11 @@ export function OnboardingChecklistStep({
               (step) => !step.required && !step.complete && step.id !== "gates",
             )
             .map((step) => step.label),
-          ...(mode === "org"
-            ? checklist
-                .filter((item) => !item.complete && item.id !== "invite-team")
-                .map((item) => item.label)
-            : []),
+          // Both modes read the checklist: solo names what moved out of the
+          // wizard into the app, org names its own org-level items.
+          ...checklist
+            .filter((item) => !item.complete && item.id !== "invite-team")
+            .map((item) => item.label),
         ]),
       ]
     : [];
