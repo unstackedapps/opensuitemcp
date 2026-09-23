@@ -177,12 +177,26 @@ function ok(id: string | number, result: unknown): DispatchOutcome {
   return { response: jsonRpcResult(id, result), status: 200 };
 }
 
+/**
+ * Every method this server answers. Returned with a method-not-found so an
+ * agent probing the endpoint learns the surface from the error instead of
+ * guessing at names, the way the unsupported-version error already names the
+ * versions it accepts.
+ */
+const SUPPORTED_METHODS = [
+  "initialize",
+  "ping",
+  "tools/list",
+  "tools/call",
+] as const;
+
 function notFound(id: string | number, method: string): DispatchOutcome {
   return {
     response: jsonRpcError(
       id,
       JSON_RPC_METHOD_NOT_FOUND,
       `Method not found: ${method}`,
+      { supported: [...SUPPORTED_METHODS] },
     ),
     status: 404,
   };
