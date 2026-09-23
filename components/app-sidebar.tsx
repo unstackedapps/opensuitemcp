@@ -123,7 +123,14 @@ export function AppSidebar({ user }: { user: User | undefined }) {
                       ) {
                         return;
                       }
+                      event.preventDefault();
                       setOpenMobile(false);
+                      // The chat page rewrites the URL with
+                      // history.replaceState once a chat exists, so the
+                      // router still believes it is on "/" and this link
+                      // navigates nowhere. Put the URL back and re-render:
+                      // the page mints a new chat id, which re-keys Chat.
+                      window.history.replaceState({}, "", "/");
                       router.refresh();
                     }}
                   >

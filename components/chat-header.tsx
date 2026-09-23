@@ -122,6 +122,10 @@ function PureChatHeader({
                 ) {
                   return;
                 }
+                event.preventDefault();
+                // See the sidebar control: history.replaceState leaves the
+                // router on "/", so this link would navigate nowhere.
+                window.history.replaceState({}, "", "/");
                 router.refresh();
               }}
             >
