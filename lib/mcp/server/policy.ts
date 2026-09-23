@@ -8,6 +8,7 @@ import {
   userAgentAccess,
 } from "@/lib/db/schema";
 import { ChatSDKError } from "@/lib/errors";
+import { isOrgInstallMode } from "@/lib/org/install-config";
 import {
   DEFAULT_MAX_KEYS_PER_USER,
   type EffectiveMcpPolicy,
@@ -36,12 +37,24 @@ export async function getOrgMcpServerPolicy(
 /**
  * Resolve the policy a user is subject to. Org installs default to disabled so
  * an admin has to opt the organization in before members can mint keys.
+ *
+ * Org-ness is the install's, not the row's. A user can carry an orgId on an
+ * install that is not in org mode — anyone who signed up before the mode was
+ * settled, or while it was — and that install has no admin area, so nothing
+ * could ever create the policy row their orgId would need. Branching on the
+ * orgId alone locked those users out of Agent access with no way back.
  */
 export async function resolveMcpPolicy(
   orgId: string | null | undefined,
 ): Promise<EffectiveMcpPolicy> {
-  if (!orgId) {
+  if (!isOrgInstallMode()) {
     return soloMcpPolicy();
+  }
+
+  // Org install, no org on the user: closed. The permissive policy here would
+  // hand an unassigned member the access an admin had switched off.
+  if (!orgId) {
+    return unconfiguredOrgMcpPolicy();
   }
 
   const row = await getOrgMcpServerPolicy(orgId);

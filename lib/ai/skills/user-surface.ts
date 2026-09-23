@@ -44,13 +44,40 @@ type SettingsRow = Parameters<typeof normalizeUserSkillSettings>[0];
  * step, because a caller that hand-rolls the assembly silently misses whichever
  * source it forgot.
  */
-export async function resolveUserSkillSurface(params: {
+export type UserSkillContext = {
+  /** Normalized user settings, before any org overlay. */
+  userSkillSettings: ReturnType<typeof normalizeUserSkillSettings>;
+  /** Org overlay applied where the install is in org mode. */
+  enabledSkillIds: string[];
+  customSkills: ReturnType<typeof normalizeUserSkillSettings>["customSkills"];
+  connectedSkillSources: ReturnType<
+    typeof normalizeUserSkillSettings
+  >["connectedSkillSources"];
+  disabledConnectedSourceIds: string[];
+  /** Oracle + Community, org-filtered on an org install. */
+  catalog: ReturnType<typeof listOracleCatalogSkills>;
+  connectedSkills: ReturnType<typeof listConnectedCatalogSkills>;
+  scopeId: string;
+  orgManaged: boolean;
+};
+
+/**
+ * Assemble everything a user's skills depend on: their settings, the org
+ * overlay where one applies, the catalog they are allowed to see, and the
+ * connected packs on disk.
+ *
+ * One assembly, two shapes. The settings UI needs the pieces to build its own
+ * payload; MCP needs a flat list. Both read from here, because a caller that
+ * hand-rolls this silently misses whichever source it forgot — which is
+ * exactly how Connected and Custom skills went missing over MCP.
+ */
+export async function buildUserSkillContext(params: {
   userId: string;
   orgId: string | null;
   settings: SettingsRow;
   /** Org-managed connected sources the user turned off for themselves. */
   disabledOrgConnectedSkillSourceIds?: unknown;
-}): Promise<ResolvedUserSkill[]> {
+}): Promise<UserSkillContext> {
   const userSkillSettings = normalizeUserSkillSettings(params.settings);
   const orgManaged = isOrgInstallMode() && Boolean(params.orgId);
 
@@ -81,11 +108,45 @@ export async function resolveUserSkillSurface(params: {
       ? await getOrgFilteredSkillCatalog(params.orgId)
       : [...listOracleCatalogSkills(), ...listCommunityCatalogSkills()];
 
+  // Every source, disabled ones included. The settings UI shows them switched
+  // off; MCP drops them below. Filtering here would deny the UI the rows.
   const connectedSkills = listConnectedCatalogSkills(
     resolveConnectedSkillsScopeId(params.userId, params.orgId),
-    connectedSkillSources.filter(
-      (source) => !disabledConnectedSourceIds.includes(source.id),
-    ),
+    connectedSkillSources,
+  );
+
+  return {
+    userSkillSettings,
+    enabledSkillIds,
+    customSkills,
+    connectedSkillSources,
+    disabledConnectedSourceIds,
+    catalog,
+    connectedSkills,
+    scopeId: resolveConnectedSkillsScopeId(params.userId, params.orgId),
+    orgManaged: orgManaged && Boolean(params.orgId),
+  };
+}
+
+export async function resolveUserSkillSurface(params: {
+  userId: string;
+  orgId: string | null;
+  settings: SettingsRow;
+  disabledOrgConnectedSkillSourceIds?: unknown;
+}): Promise<ResolvedUserSkill[]> {
+  const {
+    userSkillSettings,
+    enabledSkillIds,
+    customSkills,
+    catalog,
+    connectedSkills: allConnectedSkills,
+    disabledConnectedSourceIds,
+  } = await buildUserSkillContext(params);
+
+  // A source the user switched off contributes nothing over MCP.
+  const connectedSkills = allConnectedSkills.filter(
+    (skill) =>
+      !(skill.sourceId && disabledConnectedSourceIds.includes(skill.sourceId)),
   );
 
   const resolved: ResolvedUserSkill[] = [];

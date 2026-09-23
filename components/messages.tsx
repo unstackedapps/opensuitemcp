@@ -46,6 +46,23 @@ function assistantHasStartedTyping(message: ChatMessage | undefined): boolean {
   });
 }
 
+/**
+ * Answer text, as opposed to anything else a turn emits.
+ *
+ * Reasoning and tool parts arrive long before an answer does, and on a slow
+ * NetSuite call they can be all there is for a while. Treating them as the
+ * turn having started took the indicator away while the model was still
+ * working, leaving a motionless screen.
+ */
+function assistantHasAnswerText(message: ChatMessage | undefined): boolean {
+  if (!message || message.role !== "assistant") {
+    return false;
+  }
+  return (message.parts ?? []).some(
+    (part) => part.type === "text" && part.text.trim().length > 0,
+  );
+}
+
 function assistantHasVisibleContent(message: ChatMessage | undefined): boolean {
   if (!message || message.role !== "assistant") {
     return false;
@@ -108,11 +125,13 @@ function PureMessages({
   const lastAssistantId = messages.findLast(
     (message) => message.role === "assistant",
   )?.id;
+  const assistantStreaming =
+    status === "streaming" && lastMessage?.role === "assistant";
+
+  /** Nothing to render for this turn yet, so the message itself stays hidden. */
   const waitingForAssistant =
     (status === "submitted" && lastMessage?.role === "user") ||
-    (status === "streaming" &&
-      lastMessage?.role === "assistant" &&
-      !assistantHasVisibleContent(lastMessage));
+    (assistantStreaming && !assistantHasVisibleContent(lastMessage));
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: refs are stable
   useEffect(() => {
@@ -209,7 +228,7 @@ function PureMessages({
                     message.role === "assistant" &&
                     status === "streaming" &&
                     messages.length - 1 === index &&
-                    !assistantHasStartedTyping(message)
+                    !assistantHasAnswerText(message)
                   }
                   turnSkills={
                     message.role === "assistant"

@@ -13,7 +13,7 @@ export function OnboardingWelcomeStep({ mode }: OnboardingWelcomeStepProps) {
       description={
         isOrg
           ? "Connect NetSuite MCP and add an LLM provider to get your team chatting. Everything else in the step nav is optional — skip what you do not need yet."
-          : "Connect NetSuite MCP and add an LLM provider to start chatting. The other steps are optional — configure them now or come back later."
+          : "Two things and you can start chatting: a NetSuite MCP connection and an LLM provider. Everything else is configured in the app."
       }
       title={isOrg ? "Set up your organization" : "Welcome to OpenSuiteMCP"}
     />

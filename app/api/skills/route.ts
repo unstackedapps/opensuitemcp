@@ -1,24 +1,13 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/app/(auth)/auth";
 import {
+  type CatalogSkill,
   type ConnectedSkillSource,
-  listCommunityCatalogSkills,
-  listConnectedCatalogSkills,
-  listOracleCatalogSkills,
   listSlashableComposerSkills,
-  normalizeUserSkillSettings,
 } from "@/lib/ai/skills/catalog";
+import { buildUserSkillContext } from "@/lib/ai/skills/user-surface";
 import { getUserSettings } from "@/lib/db/queries";
-import {
-  listEnabledOrgConnectedSkillSources,
-  resolveConnectedSkillsScopeId,
-} from "@/lib/org/connected-skills";
-import {
-  buildOrgAwareSkillSettings,
-  getOrgFilteredSkillCatalog,
-  normalizeDisabledOrgConnectedSkillSourceIds,
-} from "@/lib/org/enforcement";
-import { isOrgInstallMode } from "@/lib/org/install-config";
+import { withLiveSkillCounts } from "@/lib/org/connected-skills";
 
 type ConnectedSourceForClient = ConnectedSkillSource & {
   userEnabled?: boolean;
@@ -33,61 +22,37 @@ export async function GET() {
 
   try {
     const settings = await getUserSettings({ userId: session.user.id });
-    const userSkillSettings = normalizeUserSkillSettings(
-      settings
-        ? {
-            enabledSkillIds: settings.enabledSkillIds ?? [],
-            customSkills: settings.customSkills ?? [],
-            connectedSkillSources: settings.connectedSkillSources ?? [],
-            skillModes: settings.skillModes ?? {},
-          }
-        : null,
-      settings?.customInstructions,
-    );
-
-    const orgManaged = isOrgInstallMode() && Boolean(session.user.orgId);
-
-    let enabledSkillIds = userSkillSettings.enabledSkillIds;
-    let customSkills = userSkillSettings.customSkills;
-    let connectedSources: ConnectedSourceForClient[] =
-      userSkillSettings.connectedSkillSources;
-    const disabledOrgConnectedSkillSourceIds =
-      normalizeDisabledOrgConnectedSkillSourceIds(
-        settings?.disabledOrgConnectedSkillSourceIds,
-      );
-
-    if (orgManaged && session.user.orgId) {
-      const orgConnected = await listEnabledOrgConnectedSkillSources(
-        session.user.orgId,
-      );
-      const merged = await buildOrgAwareSkillSettings({
-        orgId: session.user.orgId,
-        enabledSkillIds: userSkillSettings.enabledSkillIds,
-        customSkills: userSkillSettings.customSkills,
-        connectedSkillSources: userSkillSettings.connectedSkillSources,
-        disabledOrgConnectedSkillSourceIds,
-      });
-      enabledSkillIds = merged.enabledSkillIds;
-      customSkills = merged.customSkills;
-      connectedSources = orgConnected.map((source) => ({
-        ...source,
-        userEnabled: !disabledOrgConnectedSkillSourceIds.includes(source.id),
-      }));
-    }
-
-    const scopeId = resolveConnectedSkillsScopeId(
-      session.user.id,
-      session.user.orgId,
-    );
-    const connectedSkills = listConnectedCatalogSkills(
+    const {
+      userSkillSettings,
+      enabledSkillIds,
+      customSkills,
+      connectedSkillSources,
+      disabledConnectedSourceIds,
+      catalog,
+      connectedSkills,
       scopeId,
-      connectedSources,
-    );
+      orgManaged,
+    } = await buildUserSkillContext({
+      userId: session.user.id,
+      orgId: session.user.orgId ?? null,
+      settings: settings ?? {},
+      disabledOrgConnectedSkillSourceIds:
+        settings?.disabledOrgConnectedSkillSourceIds,
+    });
 
-    const catalog =
-      orgManaged && session.user.orgId
-        ? await getOrgFilteredSkillCatalog(session.user.orgId)
-        : [...listOracleCatalogSkills(), ...listCommunityCatalogSkills()];
+    // The UI needs to render an org source the user switched off, so it carries
+    // the flag rather than dropping the row.
+    const connectedSources: ConnectedSourceForClient[] = withLiveSkillCounts(
+      scopeId,
+      connectedSkillSources,
+    ).map((source) =>
+      orgManaged
+        ? {
+            ...source,
+            userEnabled: !disabledConnectedSourceIds.includes(source.id),
+          }
+        : source,
+    );
 
     const slashableSkills = listSlashableComposerSkills(
       {
@@ -97,10 +62,14 @@ export async function GET() {
         connectedSkillSources: connectedSources,
       },
       {
-        oracle: catalog.filter((skill) => skill.source === "oracle"),
-        community: catalog.filter((skill) => skill.source === "community"),
+        oracle: catalog.filter(
+          (skill: CatalogSkill) => skill.source === "oracle",
+        ),
+        community: catalog.filter(
+          (skill: CatalogSkill) => skill.source === "community",
+        ),
         connected: connectedSkills,
-        disabledConnectedSourceIds: disabledOrgConnectedSkillSourceIds,
+        disabledConnectedSourceIds,
       },
     );
 
@@ -113,7 +82,7 @@ export async function GET() {
       connectedSkills,
       slashableSkills,
       disabledOrgConnectedSkillSourceIds: orgManaged
-        ? disabledOrgConnectedSkillSourceIds
+        ? disabledConnectedSourceIds
         : undefined,
       orgSkillsPolicy: orgManaged ? { managedByOrg: true } : undefined,
     });
