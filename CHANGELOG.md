@@ -5,6 +5,22 @@ All notable changes to OpenSuiteMCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.3.1] - 2026-09-23
+
+### 🐛 Fixed
+
+- **Agent access was unreachable for users carrying an organization id on an install that is not in org mode** — anyone who signed up before the mode was settled, or while it was. The policy branched on the user's org rather than the install's, and such an install has no admin area, so nothing could create the policy row their org then required. They were told to ask an administrator who did not exist. Org-ness now comes from the install; an org install with no org on the user fails closed rather than open
+- **Connected skill counts survive the files going missing** — the stored count is what the last sync wrote, and the packs live outside the database. Both the skills modal and the org admin view now report what a source can actually serve, and the modal no longer falls back to the stored number in the one case that matters
+- **The thinking indicator stays up until an answer starts** — reasoning and tool calls retired it early, leaving a motionless screen mid-turn, and a second indicator could appear beside the first once a tool call made the message visible
+- **New Chat starts one without a page reload** — the chat page rewrites the URL with `history.replaceState`, which the router never sees, so a link to `/` navigated nowhere and left the open conversation in place
+
+### ♻️ Changed
+
+- **Solo onboarding asks for two things**, NetSuite and an LLM provider, matching the hosted flow. The eight optional steps moved to the finish slide, which names them with the completion state the steps reported
+- A user's skills are assembled in one place rather than separately by the settings route and the MCP surface
+
+---
+
 ## [5.3.0] - 2026-09-23
 
 ### ✨ Added
