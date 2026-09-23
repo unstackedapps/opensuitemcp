@@ -83,7 +83,7 @@ export async function dispatchMcpRequest(params: {
         return await callTool(id, request, principal);
 
       default:
-        return notFound(id, request.method);
+        return await notFoundMaybeTool(id, request.method, principal);
     }
   } catch (error) {
     console.error(
@@ -189,6 +189,42 @@ const SUPPORTED_METHODS = [
   "tools/list",
   "tools/call",
 ] as const;
+
+/**
+ * A tool name sent as the JSON-RPC method.
+ *
+ * An agent that reads tools/list and then calls `osmcp_whoami` as a method has
+ * made one specific mistake, and the server knows enough to name it: the tool
+ * exists, it is simply reached through tools/call. Saying so beats listing the
+ * four methods and leaving the agent to infer which one wraps a tool.
+ */
+async function notFoundMaybeTool(
+  id: string | number,
+  method: string,
+  principal: McpPrincipal,
+): Promise<DispatchOutcome> {
+  const tool = await findTool(principal, method);
+  if (!tool) {
+    return notFound(id, method);
+  }
+
+  return {
+    response: jsonRpcError(
+      id,
+      JSON_RPC_METHOD_NOT_FOUND,
+      `Method not found: ${method}. "${method}" is a tool, not a method — call it with the "tools/call" method and {"name": "${method}"} in params.`,
+      {
+        supported: [...SUPPORTED_METHODS],
+        tool: method,
+        example: {
+          method: "tools/call",
+          params: { name: method, arguments: {} },
+        },
+      },
+    ),
+    status: 404,
+  };
+}
 
 function notFound(id: string | number, method: string): DispatchOutcome {
   return {
