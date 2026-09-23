@@ -12,6 +12,7 @@ import { getUserSettings } from "@/lib/db/queries";
 import {
   listEnabledOrgConnectedSkillSources,
   resolveConnectedSkillsScopeId,
+  withLiveSkillCounts,
 } from "@/lib/org/connected-skills";
 import {
   buildOrgAwareSkillSettings,
@@ -83,6 +84,7 @@ export async function GET() {
       scopeId,
       connectedSources,
     );
+    connectedSources = withLiveSkillCounts(scopeId, connectedSources);
 
     const catalog =
       orgManaged && session.user.orgId

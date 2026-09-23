@@ -3,6 +3,7 @@ import "server-only";
 import { and, eq } from "drizzle-orm";
 import type { ConnectedSkillSource } from "@/lib/ai/skills/catalog";
 import {
+  listConnectedSkillSlugsOnDisk,
   removeConnectedSkillSource,
   syncConnectedSkillSource,
 } from "@/lib/ai/skills/sync-connected";
@@ -25,6 +26,32 @@ function rowToConnectedSource(
     skillCount: row.skillCount,
     lastError: row.lastError ?? null,
   };
+}
+
+/**
+ * The count a source can actually serve.
+ *
+ * `skillCount` on the row is what the last sync wrote. The files live outside
+ * the database and can go without it — a container rebuilt without the volume
+ * mounted, a cache cleared — leaving the row advertising skills nothing can
+ * read. Disk is the only honest answer.
+ */
+export function countConnectedSkillsOnDisk(
+  scopeId: string,
+  sourceId: string,
+): number {
+  return listConnectedSkillSlugsOnDisk(scopeId, sourceId).length;
+}
+
+/** Restate stored counts as what each source can serve right now. */
+export function withLiveSkillCounts(
+  scopeId: string,
+  sources: ConnectedSkillSource[],
+): ConnectedSkillSource[] {
+  return sources.map((source) => ({
+    ...source,
+    skillCount: countConnectedSkillsOnDisk(scopeId, source.id),
+  }));
 }
 
 /** Disk cache scope for connected skills (org id in org mode, user id in solo). */

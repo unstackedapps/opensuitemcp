@@ -1287,10 +1287,9 @@ export function SkillsPanel({
                 const skillsForSource = connectedSkills.filter(
                   (skill) => skill.sourceId === source.id,
                 );
-                const skillCount =
-                  skillsForSource.length > 0
-                    ? skillsForSource.length
-                    : source.skillCount;
+                // source.skillCount is restated from disk by the API, so an
+                // empty list here means empty, not unloaded.
+                const skillCount = skillsForSource.length;
                 const expanded = expandedConnectedIds.has(source.id);
                 return (
                   <div
