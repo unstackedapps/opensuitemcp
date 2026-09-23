@@ -7,6 +7,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { fetcher } from "@/lib/utils";
 import { toast } from "./toast";
 
@@ -15,6 +22,7 @@ type McpKeySummary = {
   name: string;
   maskedToken: string;
   netsuiteAccountId: string | null;
+  personaId: string | null;
   lastUsedAt: string | null;
   expiresAt: string | null;
   createdAt: string;
@@ -31,15 +39,43 @@ type McpKeysResponse = {
     managedByOrg: boolean;
   };
   keys: McpKeySummary[];
+  personas: PersonaOption[];
+};
+
+type PersonaOption = {
+  id: string;
+  name: string;
+  primaryRole: string;
+  authoredBy: "agent" | "user";
 };
 
 const ENDPOINT = "/api/settings/mcp-keys";
+/** Radix Select has no empty value, so "no persona" needs a sentinel. */
+const NO_PERSONA = "none";
 
 function blockedReason(data: McpKeysResponse): string {
   if (!data.policy.enabled) {
     return "Agent access is turned off for your organization. Ask an administrator to enable it.";
   }
   return "Agent access is limited to selected members of your organization. Ask an administrator to add you.";
+}
+
+/**
+ * What a key's row says about its persona.
+ *
+ * A key can outlive the persona it was minted with — an agent may delete one
+ * it wrote. The row says so rather than falling silent, because a key that
+ * looks roleless and one that lost its role need different fixes.
+ */
+function personaLabel(
+  personaId: string | null,
+  personas: PersonaOption[],
+): string | null {
+  if (!personaId) {
+    return null;
+  }
+  const match = personas.find((persona) => persona.id === personaId);
+  return match ? match.name : "Persona no longer exists";
 }
 
 export function McpAccessPanel({
@@ -55,6 +91,7 @@ export function McpAccessPanel({
     fetcher,
   );
   const [name, setName] = useState("");
+  const [personaId, setPersonaId] = useState<string>(NO_PERSONA);
   const [creating, setCreating] = useState(false);
   const [issuedToken, setIssuedToken] = useState<string | null>(null);
 
@@ -87,7 +124,10 @@ export function McpAccessPanel({
       const response = await fetch(ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: trimmed }),
+        body: JSON.stringify({
+          name: trimmed,
+          personaId: personaId === NO_PERSONA ? null : personaId,
+        }),
       });
       const payload = await response.json();
       if (!response.ok) {
@@ -100,6 +140,7 @@ export function McpAccessPanel({
 
       setIssuedToken(payload.token);
       setName("");
+      setPersonaId(NO_PERSONA);
       await mutate();
       await onChanged?.();
       toast({ type: "success", description: "Agent key created." });
@@ -108,7 +149,7 @@ export function McpAccessPanel({
     } finally {
       setCreating(false);
     }
-  }, [mutate, name, onChanged]);
+  }, [mutate, name, onChanged, personaId]);
 
   const revokeKey = useCallback(
     async (keyId: string) => {
@@ -132,6 +173,7 @@ export function McpAccessPanel({
     );
   }
 
+  const personas = data.personas ?? [];
   const activeKeys = data.keys.filter((key) => key.status === "active");
   const atLimit = activeKeys.length >= data.policy.maxKeysPerUser;
   const blocked = !(data.policy.enabled && data.policy.memberAllowed);
@@ -223,6 +265,40 @@ export function McpAccessPanel({
             placeholder="e.g. AP review agent"
             value={name}
           />
+          <div className="space-y-1.5">
+            <Label className="text-xs" htmlFor="mcp-key-persona">
+              Persona
+            </Label>
+            <Select
+              disabled={blocked || atLimit}
+              onValueChange={setPersonaId}
+              value={personaId}
+            >
+              <SelectTrigger
+                aria-label="Persona for this agent key"
+                className="h-9 w-full text-xs"
+                id="mcp-key-persona"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_PERSONA}>No persona</SelectItem>
+                {personas.map((persona) => (
+                  <SelectItem key={persona.id} value={persona.id}>
+                    {persona.name}
+                    {persona.authoredBy === "agent"
+                      ? " · written by an agent"
+                      : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-muted-foreground text-xs leading-relaxed">
+              The specialist this agent is meant to be. It reads the persona on
+              connect and works that way. The agent can change or shed it later,
+              and write new ones of its own.
+            </p>
+          </div>
           <Button
             disabled={blocked || atLimit || creating}
             onClick={createKey}
@@ -265,6 +341,11 @@ export function McpAccessPanel({
                           ? `Last used ${new Date(key.lastUsedAt).toLocaleDateString()}`
                           : "Never used"}
                       </span>
+                      {personaLabel(key.personaId, personas) ? (
+                        <Badge variant="secondary">
+                          {personaLabel(key.personaId, personas)}
+                        </Badge>
+                      ) : null}
                     </div>
                   </div>
                   {key.status === "active" ? (
