@@ -100,6 +100,8 @@ export async function createMcpApiKey(params: {
   orgId: string | null;
   name: string;
   netsuiteAccountId?: string | null;
+  /** Persona the agent is assigned from the start; null gives it no role. */
+  personaId?: string | null;
   expiresAt?: Date | null;
 }): Promise<MintedMcpApiKey> {
   const minted = generateMcpApiKey();
@@ -117,6 +119,7 @@ export async function createMcpApiKey(params: {
         tokenId: minted.tokenId,
         tokenHash: minted.tokenHash,
         netsuiteAccountId: pinnedAccountId,
+        personaId: params.personaId?.trim() || null,
         expiresAt: params.expiresAt ?? null,
         createdAt: new Date(),
       })
