@@ -213,14 +213,7 @@ async function notFoundMaybeTool(
       id,
       JSON_RPC_METHOD_NOT_FOUND,
       `Method not found: ${method}. "${method}" is a tool, not a method — call it with the "tools/call" method and {"name": "${method}"} in params.`,
-      {
-        supported: [...SUPPORTED_METHODS],
-        tool: method,
-        example: {
-          method: "tools/call",
-          params: { name: method, arguments: {} },
-        },
-      },
+      { supported: [...SUPPORTED_METHODS], tool: method },
     ),
     status: 404,
   };
