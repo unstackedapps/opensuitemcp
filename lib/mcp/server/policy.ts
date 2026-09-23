@@ -47,8 +47,14 @@ export async function getOrgMcpServerPolicy(
 export async function resolveMcpPolicy(
   orgId: string | null | undefined,
 ): Promise<EffectiveMcpPolicy> {
-  if (!isOrgInstallMode() || !orgId) {
+  if (!isOrgInstallMode()) {
     return soloMcpPolicy();
+  }
+
+  // Org install, no org on the user: closed. The permissive policy here would
+  // hand an unassigned member the access an admin had switched off.
+  if (!orgId) {
+    return unconfiguredOrgMcpPolicy();
   }
 
   const row = await getOrgMcpServerPolicy(orgId);
