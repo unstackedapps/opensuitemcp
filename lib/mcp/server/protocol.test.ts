@@ -9,6 +9,7 @@ import {
   MCP_HEADER_MISMATCH,
   MCP_LATEST_PROTOCOL_VERSION,
   MCP_UNSUPPORTED_PROTOCOL_VERSION,
+  negotiateInitializeVersion,
   parseJsonRpcRequest,
   validateMcpHeaders,
 } from "./protocol";
@@ -208,5 +209,48 @@ describe("jsonRpcError data", () => {
     const response = jsonRpcError(1, -32_601, "Method not found: listTools");
     assert.ok(response.error);
     assert.equal("data" in response.error, false);
+  });
+});
+
+describe("negotiateInitializeVersion", () => {
+  it("answers with the revision the body asked for", () => {
+    for (const asked of ["2025-11-25", "2025-06-18", "2025-03-26"]) {
+      assert.equal(
+        negotiateInitializeVersion(
+          request("initialize", { protocolVersion: asked }),
+          "2025-03-26",
+        ),
+        asked,
+      );
+    }
+  });
+
+  it("keeps the header answer when the body names no revision", () => {
+    assert.equal(
+      negotiateInitializeVersion(request("initialize"), "2025-06-18"),
+      "2025-06-18",
+    );
+  });
+
+  it("keeps the header answer when the body names an unsupported revision", () => {
+    assert.equal(
+      negotiateInitializeVersion(
+        request("initialize", { protocolVersion: "2099-01-01" }),
+        "2025-03-26",
+      ),
+      "2025-03-26",
+    );
+  });
+
+  it("passes the stateless revision through for the caller to map", () => {
+    assert.equal(
+      negotiateInitializeVersion(
+        request("initialize", {
+          protocolVersion: MCP_LATEST_PROTOCOL_VERSION,
+        }),
+        "2025-03-26",
+      ),
+      MCP_LATEST_PROTOCOL_VERSION,
+    );
   });
 });
