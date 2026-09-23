@@ -3,6 +3,7 @@ import "server-only";
 import {
   getPersonaContent,
   listPersonasForClient,
+  normalizeCustomPersonas,
 } from "@/lib/ai/personas/catalog";
 import {
   readUserSkillContent,
@@ -23,6 +24,8 @@ import {
   getNetSuiteToken,
   listConnectedNetSuiteAccountIds,
 } from "@/lib/netsuite/tokens";
+import { buildOrgAwarePersonaList } from "@/lib/org/enforcement";
+import { isOrgInstallMode } from "@/lib/org/install-config";
 import { resolveMcpPolicy } from "../policy";
 import {
   EMPTY_INPUT_SCHEMA,
@@ -62,11 +65,34 @@ export function resolveAccountForPrincipal(params: {
     : null;
 }
 
+/**
+ * What osmcp_whoami says about the persona this key is assigned.
+ *
+ * A deleted persona is reported rather than hidden: an agent told nothing
+ * would act roleless without knowing it had lost one.
+ */
+function describeAssignedPersona(
+  assignedId: string | null,
+  resolved: { id: string; name: string } | null,
+): Record<string, unknown> | null {
+  if (resolved) {
+    return { id: resolved.id, name: resolved.name };
+  }
+  if (!assignedId) {
+    return null;
+  }
+  return {
+    id: assignedId,
+    name: null,
+    note: "This key is assigned a persona that no longer exists. Call osmcp_set_agent_persona to pick another or shed it.",
+  };
+}
+
 const whoami: McpToolDefinition = {
   name: "osmcp_whoami",
   title: "Who am I",
   description:
-    "Identify the OpenSuiteMCP user this connection acts as and the NetSuite account calls will run against. Call this first to confirm the acting identity before doing work.",
+    "Identify the OpenSuiteMCP user this connection acts as, the NetSuite account calls will run against, and the persona this agent is assigned. Call this first to confirm the acting identity before doing work.",
   inputSchema: EMPTY_INPUT_SCHEMA,
   annotations: { title: "Who am I", ...READ_ONLY },
   execute: async (_args, principal) => {
@@ -78,6 +104,9 @@ const whoami: McpToolDefinition = {
       fallbackAccountId: accounts[0]?.accountId,
     });
     const policy = await resolveMcpPolicy(principal.orgId);
+    const persona = principal.personaId
+      ? getPersonaContent(principal.personaId, settings?.customPersonas ?? [])
+      : null;
 
     return toolResult({
       user: {
@@ -89,6 +118,7 @@ const whoami: McpToolDefinition = {
         name: principal.keyName,
         pinnedNetSuiteAccountId: principal.pinnedNetSuiteAccountId,
       },
+      persona: describeAssignedPersona(principal.personaId, persona),
       netsuite: {
         activeAccountId,
         accountPinnedToKey: Boolean(principal.pinnedNetSuiteAccountId),
@@ -328,24 +358,36 @@ const listPersonas: McpToolDefinition = {
   name: "osmcp_list_personas",
   title: "List personas",
   description:
-    "List the OpenSuiteMCP personas available to this user. A persona is a NetSuite specialist playbook; its instructions can inform how you approach a task.",
+    "List the OpenSuiteMCP personas available to this user. A persona is a NetSuite specialist playbook; its instructions can inform how you approach a task. `authoredBy` says whether a person or an agent wrote it, and `assignedPersonaId` is the one this API key is assigned.",
   inputSchema: EMPTY_INPUT_SCHEMA,
   annotations: { title: "List personas", ...READ_ONLY },
   execute: async (_args, principal) => {
     const settings = await getUserSettings({ userId: principal.userId });
-    const rows = listPersonasForClient(settings?.customPersonas ?? []).map(
-      (persona) => ({
-        id: persona.id,
-        name: persona.name,
-        primaryRole: persona.primaryRole,
-        source: persona.source,
-      }),
-    );
+    const customPersonas = settings?.customPersonas ?? [];
+    // An org that narrows which builtin personas its members may use narrows
+    // them here too: an agent acts as the member, so it sees the member's list.
+    const available =
+      isOrgInstallMode() && principal.orgId
+        ? await buildOrgAwarePersonaList(
+            principal.orgId,
+            principal.userId,
+            normalizeCustomPersonas(customPersonas),
+          )
+        : listPersonasForClient(customPersonas);
+
+    const rows = available.map((persona) => ({
+      id: persona.id,
+      name: persona.name,
+      primaryRole: persona.primaryRole,
+      source: persona.source,
+      authoredBy: persona.authoredBy ?? "user",
+    }));
 
     return toolResult({
-      columns: ["id", "name", "primaryRole", "source"],
+      columns: ["id", "name", "primaryRole", "source", "authoredBy"],
       rows,
       defaultPersonaId: settings?.defaultPersonaId ?? null,
+      assignedPersonaId: principal.personaId,
     });
   },
 };

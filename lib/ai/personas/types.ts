@@ -9,6 +9,13 @@ export type CustomPersona = {
   primaryRole?: string;
   content: string;
   updatedAt: string;
+  /**
+   * Stamped when a connected agent wrote this persona over MCP. Absent means a
+   * person wrote it. Agents and people share one library — an agent can adopt
+   * a persona you wrote, and you can pick one it wrote — so the picker needs a
+   * way to say which is which.
+   */
+  authoredBy?: "agent";
 };
 
 /** Dimensions the persona-builder interview must cover before propose. */

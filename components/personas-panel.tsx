@@ -40,6 +40,8 @@ type PersonaListItem = {
   shortName: string;
   primaryRole: string;
   source: "ava" | "builtin" | "custom";
+  /** Present when a connected agent wrote this persona over Agent access. */
+  authoredBy?: "agent";
 };
 
 type CustomPersona = {
@@ -49,6 +51,7 @@ type CustomPersona = {
   primaryRole?: string;
   content: string;
   updatedAt: string;
+  authoredBy?: "agent";
 };
 
 type SettingsPersonasPayload = {
@@ -143,6 +146,7 @@ function PersonaCard({
         <span className="text-muted-foreground text-xs">
           {persona.shortName}
           {selected ? " · default" : ""}
+          {persona.authoredBy === "agent" ? " · written by an agent" : ""}
         </span>
         <span className="text-muted-foreground text-xs leading-snug">
           {persona.primaryRole}
@@ -525,6 +529,10 @@ export function PersonasPanel({
           }
           const previous = customPersonas;
           const nextEntry: CustomPersona = {
+            // Spread first so fields the editor does not expose survive a save:
+            // primaryRole, and the authoredBy stamp that marks agent-written
+            // personas in the picker.
+            ...editing,
             id: editing.id,
             name: editName.trim(),
             shortName:

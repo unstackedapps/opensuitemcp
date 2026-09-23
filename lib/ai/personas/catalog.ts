@@ -179,6 +179,9 @@ export function normalizeCustomPersonas(value: unknown): CustomPersona[] {
         typeof record.updatedAt === "string"
           ? record.updatedAt
           : new Date().toISOString(),
+      ...(record.authoredBy === "agent"
+        ? { authoredBy: "agent" as const }
+        : {}),
     });
   }
   return out;
@@ -307,6 +310,7 @@ export function listPersonasForClient(
   shortName: string;
   primaryRole: string;
   source: PersonaSource;
+  authoredBy?: "agent";
 }> {
   const builtins = listBuiltinPersonas().map((p) => ({
     id: p.id,
@@ -321,6 +325,7 @@ export function listPersonasForClient(
     shortName: p.shortName,
     primaryRole: p.primaryRole ?? "Custom persona",
     source: "custom" as const,
+    ...(p.authoredBy === "agent" ? { authoredBy: "agent" as const } : {}),
   }));
   return [...builtins, ...customs];
 }
