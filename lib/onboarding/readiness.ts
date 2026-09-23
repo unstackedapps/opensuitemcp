@@ -401,10 +401,26 @@ function buildSteps(
   });
 }
 
+/**
+ * What a solo install can still set, after the two steps the wizard asks for.
+ *
+ * These were steps once. They are all reachable in the app, so the wizard now
+ * names them on the finish slide instead of walking a person through eight
+ * screens they can skip — but naming them matters: a setting nobody mentions
+ * is a setting nobody finds.
+ */
 function buildSoloChecklist(
   steps: OnboardingStepStatus[],
+  flags: {
+    personaComplete?: boolean;
+    connectedSkillsComplete?: boolean;
+    customSkillsComplete?: boolean;
+    searchComplete?: boolean;
+    timezoneComplete?: boolean;
+    agentAccessComplete?: boolean;
+  },
 ): OnboardingChecklistItem[] {
-  return steps
+  const fromSteps = steps
     .filter((step) => step.id !== "welcome" && step.id !== "checklist")
     .map((step) => ({
       id: step.id,
@@ -413,6 +429,50 @@ function buildSoloChecklist(
       complete: step.complete,
       optional: step.optional,
     }));
+
+  const inApp: OnboardingChecklistItem[] = [
+    {
+      id: "agent-access",
+      label: "Agent access",
+      description:
+        "Connect an external AI agent to this workspace — App Portal → Agent access",
+      complete: Boolean(flags.agentAccessComplete),
+      optional: true,
+    },
+    {
+      id: "persona",
+      label: "Personas",
+      description: "Pick a default specialist for new chats",
+      complete: Boolean(flags.personaComplete),
+      optional: true,
+    },
+    {
+      id: "skills",
+      label: "Skills",
+      description: "Connect a GitHub pack or add your own SKILL.md",
+      complete: Boolean(
+        flags.connectedSkillsComplete || flags.customSkillsComplete,
+      ),
+      optional: true,
+    },
+    {
+      id: "search",
+      label: "Web search",
+      description: "Add trusted domains for grounded answers",
+      complete: Boolean(flags.searchComplete),
+      optional: true,
+    },
+    {
+      id: "timezone",
+      label: "Timezone",
+      description: "Set your local timezone for timestamps",
+      complete: Boolean(flags.timezoneComplete),
+      optional: true,
+    },
+  ];
+
+  const named = new Set<string>(fromSteps.map((item) => item.id));
+  return [...fromSteps, ...inApp.filter((item) => !named.has(item.id))];
 }
 
 export async function getOnboardingReadiness(
@@ -457,7 +517,7 @@ export async function getOnboardingReadiness(
     mode,
     completed: false,
     steps,
-    checklist: buildSoloChecklist(steps),
+    checklist: buildSoloChecklist(steps, flags),
     canComplete: requiredComplete,
     envOidcConfigured: hasEnvOidcLoginConfig(),
   };

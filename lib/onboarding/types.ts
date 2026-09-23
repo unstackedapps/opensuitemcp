@@ -45,17 +45,16 @@ export type OnboardingReadiness = {
   envOidcConfigured: boolean;
 };
 
+/**
+ * NetSuite and an LLM, then chat. Everything else a solo install can set is
+ * reachable in the app and listed on the finish slide, so a wizard is a slower
+ * way to reach the same settings — and eight optional steps read as eight
+ * obligations.
+ */
 export const SOLO_STEP_ORDER: OnboardingStepId[] = [
   "welcome",
   "mcp",
-  "oidc-extra",
   "llm",
-  "persona",
-  "connected-skills",
-  "custom-skills",
-  "search",
-  "timezone",
-  "agent-access",
   "checklist",
 ];
 
