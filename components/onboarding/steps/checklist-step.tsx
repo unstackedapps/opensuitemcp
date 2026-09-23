@@ -62,7 +62,9 @@ export function OnboardingChecklistStep({
           {skippedOptional.length > 0 ? (
             <div className="space-y-2">
               <p className="text-sm">
-                You skipped these optional items — you can set them up anytime:
+                {mode === "org"
+                  ? "You skipped these optional items — you can set them up anytime:"
+                  : "Set these up in the app whenever you want them — none are required:"}
               </p>
               <ul className="list-disc space-y-1 pl-5 text-muted-foreground text-sm">
                 {skippedOptional.map((label) => (
@@ -71,11 +73,12 @@ export function OnboardingChecklistStep({
               </ul>
             </div>
           ) : null}
-          <p className="text-muted-foreground text-sm leading-relaxed">
-            {mode === "org"
-              ? "You can change org settings, users, and integrations anytime in the admin area."
-              : "You can change personas, skills, search, and other settings anytime in the app."}
-          </p>
+          {mode === "org" ? (
+            <p className="text-muted-foreground text-sm leading-relaxed">
+              You can change org settings, users, and integrations anytime in
+              the admin area.
+            </p>
+          ) : null}
         </>
       ) : (
         <div className="space-y-2">

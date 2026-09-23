@@ -159,6 +159,7 @@ async function getSoloReadiness(userId: string): Promise<{
   mcpComplete: boolean;
   llmComplete: boolean;
   personaComplete: boolean;
+  personaChosen: boolean;
   connectedSkillsComplete: boolean;
   customSkillsComplete: boolean;
   searchComplete: boolean;
@@ -190,6 +191,7 @@ async function getSoloReadiness(userId: string): Promise<{
     personaComplete: Boolean(
       settings?.defaultPersonaId?.trim() || AVA_PERSONA_ID,
     ),
+    personaChosen: Boolean(settings?.defaultPersonaId?.trim()),
     connectedSkillsComplete: (settings?.connectedSkillSources?.length ?? 0) > 0,
     customSkillsComplete: (settings?.customSkills?.length ?? 0) > 0,
     searchComplete: (settings?.searchResources?.length ?? 0) > 0,
@@ -413,6 +415,7 @@ function buildSoloChecklist(
   steps: OnboardingStepStatus[],
   flags: {
     personaComplete?: boolean;
+    personaChosen?: boolean;
     connectedSkillsComplete?: boolean;
     customSkillsComplete?: boolean;
     searchComplete?: boolean;
@@ -440,10 +443,12 @@ function buildSoloChecklist(
       optional: true,
     },
     {
+      // personaComplete falls back to Ava, so it is never false. What matters
+      // on this list is whether the user has chosen one of their own.
       id: "persona",
       label: "Personas",
       description: "Pick a default specialist for new chats",
-      complete: Boolean(flags.personaComplete),
+      complete: Boolean(flags.personaChosen),
       optional: true,
     },
     {
