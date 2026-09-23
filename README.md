@@ -10,11 +10,17 @@ Bring your own LLM keys (**Google Gemini**, **Anthropic Claude**, **OpenAI**, or
 
 **Star this repo** if it helps your NetSuite team — it makes the project discoverable.
 
-**Current release:** [v5.2.0](https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.2.0) · [Changelog](CHANGELOG.md)
+**Current release:** [v5.3.0](https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.3.0) · [Changelog](CHANGELOG.md)
 
 <img src="./docs/screenshot-chat.png" alt="OpenSuiteMCP chat UI" width="100%" />
 
 _Main chat UI._
+
+## What’s in 5.3
+
+- **Agent access** — hand an external AI agent a key and your install's URL and it works in your NetSuite workspace as you, with your permissions and your tool policy
+- **Agent-readable skills and personas** — an agent can list and read the instruction packs and specialist playbooks this workspace has enabled, and switch the active NetSuite account
+- **Org control** — **Admin → Agent access** turns it on for an organization and can narrow it to named members
 
 ## What’s in 5.2
 
