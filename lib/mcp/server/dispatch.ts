@@ -30,6 +30,7 @@ const SERVER_INSTRUCTIONS = [
   "If a NetSuite tool fails, call osmcp_connection_status. A dead authorization needs a person to reconnect the account in the OpenSuiteMCP UI and will not recover on retry.",
   "Tools marked readOnlyHint never change NetSuite data. Tools without it may modify records, so confirm before calling one. The hint is derived from the tool name and is deliberately cautious: an unrecognised name is announced as a write.",
   "Tool results carry both readable text and structuredContent; prefer structuredContent for rows and columns.",
+  "Work nobody watched is work nobody can check. For a task of any length, open a thread with osmcp_create_chat and record each step with osmcp_append_chat, so the person who owns this workspace can read what you did.",
 ].join(" ");
 
 export type DispatchOutcome = {
