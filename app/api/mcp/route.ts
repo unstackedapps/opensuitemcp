@@ -3,6 +3,7 @@ import {
   mcpAuthChallengeHeader,
   recordMcpKeyUse,
 } from "@/lib/mcp/server/authenticate";
+import { MCP_PROTECTED_RESOURCE_PATH } from "@/lib/mcp/server/config";
 import { dispatchMcpRequest } from "@/lib/mcp/server/dispatch";
 import {
   JSON_RPC_INVALID_REQUEST,
@@ -111,8 +112,21 @@ export function DELETE() {
   return methodNotAllowed();
 }
 
+/**
+ * The status is what the spec cares about; the body is for whoever is holding
+ * the terminal. An agent handed only a URL and a key probes this endpoint
+ * before it reads anything, so the reply says where the surface is described.
+ */
 function methodNotAllowed() {
-  return new Response(null, { status: 405, headers: { Allow: "POST" } });
+  return Response.json(
+    {
+      error: "method_not_allowed",
+      description:
+        "This MCP endpoint accepts POST with a JSON-RPC body. Start with tools/list.",
+      documentation: MCP_PROTECTED_RESOURCE_PATH,
+    },
+    { status: 405, headers: { Allow: "POST" } },
+  );
 }
 
 function rpc(response: JsonRpcResponse, status: number) {

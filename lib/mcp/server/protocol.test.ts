@@ -5,6 +5,7 @@ import {
   expectedMcpNameFor,
   isHandshakeEraVersion,
   type JsonRpcRequest,
+  jsonRpcError,
   MCP_HEADER_MISMATCH,
   MCP_LATEST_PROTOCOL_VERSION,
   MCP_UNSUPPORTED_PROTOCOL_VERSION,
@@ -192,5 +193,20 @@ describe("validateMcpHeaders version support", () => {
         ),
       );
     }
+  });
+});
+
+describe("jsonRpcError data", () => {
+  it("carries a data payload when one is given", () => {
+    const response = jsonRpcError(1, -32_601, "Method not found: listTools", {
+      supported: ["tools/list"],
+    });
+    assert.deepEqual(response.error?.data, { supported: ["tools/list"] });
+  });
+
+  it("omits data entirely when none is given", () => {
+    const response = jsonRpcError(1, -32_601, "Method not found: listTools");
+    assert.ok(response.error);
+    assert.equal("data" in response.error, false);
   });
 });
