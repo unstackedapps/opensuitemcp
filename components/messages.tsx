@@ -133,14 +133,6 @@ function PureMessages({
     (status === "submitted" && lastMessage?.role === "user") ||
     (assistantStreaming && !assistantHasVisibleContent(lastMessage));
 
-  /**
-   * Still working. Reasoning chips and tool calls count as progress to look at
-   * but not as an answer, so the indicator stays with them until text starts.
-   */
-  const assistantStillWorking =
-    (status === "submitted" && lastMessage?.role === "user") ||
-    (assistantStreaming && !assistantHasAnswerText(lastMessage));
-
   // biome-ignore lint/correctness/useExhaustiveDependencies: refs are stable
   useEffect(() => {
     const container = messagesContainerRef.current;
@@ -236,7 +228,7 @@ function PureMessages({
                     message.role === "assistant" &&
                     status === "streaming" &&
                     messages.length - 1 === index &&
-                    !assistantHasStartedTyping(message)
+                    !assistantHasAnswerText(message)
                   }
                   turnSkills={
                     message.role === "assistant"
@@ -263,7 +255,7 @@ function PureMessages({
               );
             })}
 
-            {assistantStillWorking ? (
+            {waitingForAssistant ? (
               <ThinkingMessage key="thinking" skills={activeSkills} />
             ) : null}
 
