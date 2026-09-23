@@ -5,6 +5,7 @@ import { ChatSDKError } from "@/lib/errors";
 import { writeOrgAuditLog } from "@/lib/org/audit";
 import {
   connectOrgConnectedSkillSource,
+  countConnectedSkillsOnDisk,
   disconnectOrgConnectedSkillSource,
   listOrgConnectedSkillSourceRows,
   type OrgConnectedSkillSourceRow,
@@ -15,7 +16,13 @@ import {
 export async function listAdminOrgConnectedSkillSources(
   orgId: string,
 ): Promise<OrgConnectedSkillSourceRow[]> {
-  return listOrgConnectedSkillSourceRows(orgId);
+  const rows = await listOrgConnectedSkillSourceRows(orgId);
+  // The row's skillCount is what the last sync wrote; the files can go without
+  // it. An admin deciding whether to re-sync needs what is actually there.
+  return rows.map((row) => ({
+    ...row,
+    skillCount: countConnectedSkillsOnDisk(orgId, row.id),
+  }));
 }
 
 export async function connectAdminOrgConnectedSkillSource({
