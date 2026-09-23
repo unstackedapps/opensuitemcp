@@ -21,6 +21,8 @@ export type PersonaListItem = {
   shortName: string;
   primaryRole: string;
   source: "ava" | "builtin" | "custom";
+  /** Present when a connected agent wrote this persona over Agent access. */
+  authoredBy?: "agent";
 };
 
 type PersonaPickerDialogProps = {
@@ -72,6 +74,7 @@ function PersonaOptionButton({
         <span className="text-muted-foreground text-xs">
           {persona.shortName}
           {persona.id === AVA_PERSONA_ID ? " · default" : ""}
+          {persona.authoredBy === "agent" ? " · written by an agent" : ""}
         </span>
         <span className="text-muted-foreground text-xs leading-snug">
           {persona.primaryRole}

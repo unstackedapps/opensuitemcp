@@ -24,6 +24,8 @@ export type McpPrincipal = {
   keyName: string;
   /** Account this key is pinned to; null follows the user's active account. */
   pinnedNetSuiteAccountId: string | null;
+  /** Persona this agent is assigned; null means it has no assigned role. */
+  personaId: string | null;
 };
 
 export type McpAuthDenial = {
@@ -113,6 +115,7 @@ function toPrincipal(authenticated: AuthenticatedMcpKey): McpPrincipal {
     keyId: authenticated.key.id,
     keyName: authenticated.key.name,
     pinnedNetSuiteAccountId: authenticated.key.netsuiteAccountId,
+    personaId: authenticated.key.personaId,
   };
 }
 

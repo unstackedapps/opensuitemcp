@@ -25,7 +25,8 @@ const PRIVATE_CACHE = { ttlMs: 60_000, cacheScope: "private" as const };
 
 const SERVER_INSTRUCTIONS = [
   "This server exposes one OpenSuiteMCP user's NetSuite workspace. Every call acts as that user, with their permissions and their connected NetSuite account.",
-  "Call osmcp_whoami first to confirm the acting identity and the active NetSuite account.",
+  "Call osmcp_whoami first to confirm the acting identity, the active NetSuite account, and the persona this key is assigned.",
+  "If osmcp_whoami reports a persona, read it with osmcp_get_persona and work as that specialist. You can write a new one with osmcp_create_persona and adopt it with osmcp_set_agent_persona, which also sheds the current one when called with no id.",
   "If a NetSuite tool fails, call osmcp_connection_status. A dead authorization needs a person to reconnect the account in the OpenSuiteMCP UI and will not recover on retry.",
   "Tools marked readOnlyHint never change NetSuite data. Tools without it may modify records, so confirm before calling one. The hint is derived from the tool name and is deliberately cautious: an unrecognised name is announced as a write.",
   "Tool results carry both readable text and structuredContent; prefer structuredContent for rows and columns.",

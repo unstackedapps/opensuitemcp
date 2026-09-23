@@ -689,6 +689,13 @@ export const mcpApiKey = pgTable(
     tokenHash: text("tokenHash").notNull(),
     /** Pins the key to one NetSuite account; null follows the active account. */
     netsuiteAccountId: varchar("netsuiteAccountId", { length: 64 }),
+    /**
+     * The persona this agent is meant to be, reported on osmcp_whoami so a
+     * fresh connection learns its role without being told. Advisory: the agent
+     * runs its own model, so adopting the persona is its own act. Null means
+     * the agent has no assigned role.
+     */
+    personaId: varchar("personaId", { length: 128 }),
     lastUsedAt: timestamp("lastUsedAt"),
     expiresAt: timestamp("expiresAt"),
     revokedAt: timestamp("revokedAt"),

@@ -19,6 +19,7 @@ export type McpApiKeySummary = {
   tokenId: string;
   maskedToken: string;
   netsuiteAccountId: string | null;
+  personaId: string | null;
   lastUsedAt: Date | null;
   expiresAt: Date | null;
   revokedAt: Date | null;
@@ -52,6 +53,7 @@ function toSummary(row: McpApiKey): McpApiKeySummary {
     tokenId: row.tokenId,
     maskedToken: maskMcpApiKey(row.tokenId),
     netsuiteAccountId: row.netsuiteAccountId,
+    personaId: row.personaId,
     lastUsedAt: row.lastUsedAt,
     expiresAt: row.expiresAt,
     revokedAt: row.revokedAt,
@@ -151,6 +153,38 @@ export async function revokeMcpApiKey(params: {
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to revoke the MCP API key",
+    );
+  }
+}
+
+/**
+ * Assign or clear the persona an agent key is meant to act as.
+ *
+ * Scoped to the owning user and to live keys: a revoked key keeps whatever it
+ * had, so the audit trail still says what it was doing.
+ */
+export async function setMcpApiKeyPersona(params: {
+  userId: string;
+  keyId: string;
+  personaId: string | null;
+}): Promise<boolean> {
+  try {
+    const updated = await db
+      .update(mcpApiKey)
+      .set({ personaId: params.personaId })
+      .where(
+        and(
+          eq(mcpApiKey.id, params.keyId),
+          eq(mcpApiKey.userId, params.userId),
+          isNull(mcpApiKey.revokedAt),
+        ),
+      )
+      .returning({ id: mcpApiKey.id });
+    return updated.length > 0;
+  } catch (_error) {
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to set the persona for the MCP API key",
     );
   }
 }

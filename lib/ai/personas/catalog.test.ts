@@ -6,6 +6,7 @@ import {
   isPersonaBuilderId,
   isValidPersonaId,
   listBuiltinPersonas,
+  listPersonasForClient,
   normalizeCustomPersonas,
   PERSONA_BUILDER_ID,
   resolvePersona,
@@ -135,5 +136,49 @@ describe("persona interview coverage", () => {
     ]);
     assert.equal(isPersonaInterviewComplete(merged), true);
     assert.deepEqual(normalizePersonaInterviewState(merged).missing, []);
+  });
+});
+
+describe("agent-authored personas", () => {
+  const agentPersona = {
+    id: "p-agent",
+    name: "AP Close Specialist",
+    shortName: "AP Close",
+    primaryRole: "Month-end payables",
+    content: "Work the payables close.",
+    updatedAt: "2026-09-23T00:00:00.000Z",
+    authoredBy: "agent" as const,
+  };
+
+  it("keeps the authoredBy stamp through normalization", () => {
+    const [normalized] = normalizeCustomPersonas([agentPersona]);
+    assert.equal(normalized.authoredBy, "agent");
+  });
+
+  it("leaves a person-written persona unstamped", () => {
+    const [normalized] = normalizeCustomPersonas([
+      { ...agentPersona, authoredBy: undefined },
+    ]);
+    assert.equal(normalized.authoredBy, undefined);
+  });
+
+  it("ignores an authoredBy value it does not recognise", () => {
+    const [normalized] = normalizeCustomPersonas([
+      { ...agentPersona, authoredBy: "somebody-else" },
+    ]);
+    assert.equal(normalized.authoredBy, undefined);
+  });
+
+  it("surfaces the stamp to the picker", () => {
+    const listed = listPersonasForClient([agentPersona]);
+    const found = listed.find((persona) => persona.id === agentPersona.id);
+    assert.equal(found?.authoredBy, "agent");
+    assert.equal(found?.source, "custom");
+  });
+
+  it("does not stamp builtins", () => {
+    const listed = listPersonasForClient([agentPersona]);
+    const ava = listed.find((persona) => persona.id === AVA_PERSONA_ID);
+    assert.equal(ava?.authoredBy, undefined);
   });
 });
