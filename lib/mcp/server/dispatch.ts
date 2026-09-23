@@ -16,6 +16,7 @@ import {
   MCP_LATEST_PROTOCOL_VERSION,
   MCP_SUPPORTED_PROTOCOL_VERSIONS,
   type McpProtocolVersion,
+  negotiateInitializeVersion,
 } from "./protocol";
 import { buildToolSurface, findTool, toWireTool } from "./tools";
 
@@ -65,7 +66,12 @@ export async function dispatchMcpRequest(params: {
         if (!isHandshakeEraVersion(protocolVersion)) {
           return notFound(id, request.method);
         }
-        return ok(id, initializeResult(protocolVersion));
+        return ok(
+          id,
+          initializeResult(
+            negotiateInitializeVersion(request, protocolVersion),
+          ),
+        );
 
       case "ping":
         return ok(id, {});
