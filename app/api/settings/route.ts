@@ -118,6 +118,14 @@ const customPersonaSchema = z.object({
   primaryRole: z.string().max(300).optional(),
   content: z.string().max(32_000),
   updatedAt: z.string().optional(),
+  /**
+   * Who wrote this persona. The panel sends the whole list back on every save,
+   * and a field absent from this schema is dropped from every entry — which
+   * silently unstamped agent-written personas and, worse, handed them to the
+   * guardrail as person-written, so the agent that wrote one could no longer
+   * revise it.
+   */
+  authoredBy: z.literal("agent").optional(),
 });
 
 const settingsSchema = z.object({
