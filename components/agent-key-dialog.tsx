@@ -75,8 +75,8 @@ export function AgentKeyDialog({
           <DialogTitle>{creating ? "New agent" : "Edit agent"}</DialogTitle>
           <DialogDescription>
             {creating
-              ? "Name the agent and choose the specialist it acts as. You will be shown its key once."
-              : "Change what this agent is called and which specialist it acts as. Its key is not affected."}
+              ? "Name it and pick the specialist it acts as."
+              : "Its key is not affected."}
           </DialogDescription>
         </DialogHeader>
 
@@ -124,11 +124,6 @@ export function AgentKeyDialog({
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-muted-foreground text-xs leading-relaxed">
-              The specialist this agent is meant to be. It reads the persona on
-              connect and works that way. The agent can change it later and
-              write new ones of its own; shedding one returns it to Ava.
-            </p>
           </div>
         </div>
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { Copy, KeyRound, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import useSWR from "swr";
 import {
   AgentKeyDialog,
@@ -21,6 +21,7 @@ type McpKeySummary = {
   id: string;
   name: string;
   maskedToken: string;
+  copyable: boolean;
   netsuiteAccountId: string | null;
   personaId: string | null;
   lastUsedAt: string | null;
@@ -92,20 +93,11 @@ export function McpAccessPanel({
     fetcher,
   );
   const [saving, setSaving] = useState(false);
-  const [issuedToken, setIssuedToken] = useState<string | null>(null);
   const [creatingOpen, setCreatingOpen] = useState(false);
   const [editing, setEditing] = useState<McpKeySummary | null>(null);
   const [pendingRotate, setPendingRotate] = useState<McpKeySummary | null>(
     null,
   );
-
-  // Drop the one-time token as soon as the panel closes so it does not sit in
-  // component state for the rest of the session.
-  useEffect(() => {
-    if (!active) {
-      setIssuedToken(null);
-    }
-  }, [active]);
 
   const copy = useCallback(async (value: string, label: string) => {
     try {
@@ -115,6 +107,34 @@ export function McpAccessPanel({
       toast({ type: "error", description: `Could not copy the ${label}.` });
     }
   }, []);
+
+  const copyKey = useCallback(
+    async (key: McpKeySummary) => {
+      if (!key.copyable) {
+        toast({
+          type: "error",
+          description:
+            "This key predates copiable keys. Use Replace to get one you can copy.",
+        });
+        return;
+      }
+      try {
+        const response = await fetch(`${ENDPOINT}/${key.id}/reveal`);
+        const payload = await response.json();
+        if (!response.ok) {
+          toast({
+            type: "error",
+            description: payload.error ?? "Could not copy the key.",
+          });
+          return;
+        }
+        await copy(payload.token, "Agent key");
+      } catch {
+        toast({ type: "error", description: "Could not copy the key." });
+      }
+    },
+    [copy],
+  );
 
   const createKey = useCallback(
     async (draft: AgentKeyDraft) => {
@@ -134,18 +154,21 @@ export function McpAccessPanel({
           return;
         }
 
-        setIssuedToken(payload.token);
         setCreatingOpen(false);
         await mutate();
         await onChanged?.();
-        toast({ type: "success", description: `${draft.name} created.` });
+        await copy(payload.token, "Agent key");
+        toast({
+          type: "success",
+          description: `${draft.name} created. Its key is on your clipboard.`,
+        });
       } catch {
         toast({ type: "error", description: "Could not create the agent." });
       } finally {
         setSaving(false);
       }
     },
-    [mutate, onChanged],
+    [copy, mutate, onChanged],
   );
 
   const saveKey = useCallback(
@@ -192,17 +215,17 @@ export function McpAccessPanel({
           });
           return;
         }
-        setIssuedToken(payload.token);
         await mutate();
+        await copy(payload.token, "Agent key");
         toast({
           type: "success",
-          description: `New key issued for ${key.name}.`,
+          description: `New key for ${key.name} copied to your clipboard.`,
         });
       } catch {
         toast({ type: "error", description: "Could not replace the key." });
       }
     },
-    [mutate],
+    [copy, mutate],
   );
 
   const revokeKey = useCallback(
@@ -287,37 +310,6 @@ export function McpAccessPanel({
           </p>
         ) : null}
 
-        {issuedToken ? (
-          <section className="space-y-2 rounded-md border border-border/60 bg-muted/40 p-3">
-            <p className="font-medium text-xs">
-              Copy this key now — it is shown once and cannot be retrieved
-              again.
-            </p>
-            <div className="flex items-center gap-2">
-              <Input
-                className="font-mono text-xs"
-                readOnly
-                value={issuedToken}
-              />
-              <Button
-                onClick={() => copy(issuedToken, "Agent key")}
-                size="sm"
-                type="button"
-              >
-                <Copy className="size-3.5" />
-              </Button>
-            </div>
-            <Button
-              onClick={() => setIssuedToken(null)}
-              size="sm"
-              type="button"
-              variant="ghost"
-            >
-              Done
-            </Button>
-          </section>
-        ) : null}
-
         <section className="space-y-2">
           <div className="flex items-center justify-between gap-3">
             <Label className="text-xs">Your agents</Label>
@@ -377,6 +369,17 @@ export function McpAccessPanel({
                   </div>
                   {key.status === "active" ? (
                     <div className="flex shrink-0 items-center gap-1">
+                      <Button
+                        onClick={() => copyKey(key)}
+                        size="sm"
+                        type="button"
+                        variant="ghost"
+                      >
+                        <Copy className="size-3.5" />
+                        <span className="sr-only">
+                          Copy the key for {key.name}
+                        </span>
+                      </Button>
                       <Button
                         onClick={() => setEditing(key)}
                         size="sm"
