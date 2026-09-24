@@ -1,20 +1,18 @@
 "use client";
 
-import { Copy, KeyRound, Plus, RefreshCw, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { Copy, KeyRound, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
+import {
+  AgentKeyDialog,
+  type AgentKeyDraft,
+  type AgentPersonaOption,
+} from "@/components/agent-key-dialog";
 import { ConfirmDestructiveDialog } from "@/components/confirm-destructive-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { AVA_PERSONA_ID } from "@/lib/ai/personas/ids";
 import { fetcher } from "@/lib/utils";
 import { toast } from "./toast";
@@ -42,14 +40,7 @@ type McpKeysResponse = {
     managedByOrg: boolean;
   };
   keys: McpKeySummary[];
-  personas: PersonaOption[];
-};
-
-type PersonaOption = {
-  id: string;
-  name: string;
-  primaryRole: string;
-  authoredBy: "agent" | "user";
+  personas: AgentPersonaOption[];
 };
 
 const ENDPOINT = "/api/settings/mcp-keys";
@@ -71,7 +62,7 @@ function blockedReason(data: McpKeysResponse): string {
  */
 function personaLabel(
   personaId: string | null,
-  personas: PersonaOption[],
+  personas: AgentPersonaOption[],
 ): string {
   const match = personaId
     ? personas.find((persona) => persona.id === personaId)
@@ -82,6 +73,10 @@ function personaLabel(
   return (
     personas.find((persona) => persona.id === AVA_PERSONA_ID)?.name ?? "Ava"
   );
+}
+
+function formatDate(value: string): string {
+  return new Date(value).toLocaleDateString();
 }
 
 export function McpAccessPanel({
@@ -96,10 +91,10 @@ export function McpAccessPanel({
     active ? ENDPOINT : null,
     fetcher,
   );
-  const [name, setName] = useState("");
-  const [personaId, setPersonaId] = useState<string>(AVA_PERSONA_ID);
-  const [creating, setCreating] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [issuedToken, setIssuedToken] = useState<string | null>(null);
+  const [creatingOpen, setCreatingOpen] = useState(false);
+  const [editing, setEditing] = useState<McpKeySummary | null>(null);
   const [pendingRotate, setPendingRotate] = useState<McpKeySummary | null>(
     null,
   );
@@ -121,44 +116,67 @@ export function McpAccessPanel({
     }
   }, []);
 
-  const createKey = useCallback(async () => {
-    const trimmed = name.trim();
-    if (!trimmed) {
-      toast({ type: "error", description: "Give the key a name." });
-      return;
-    }
-
-    setCreating(true);
-    try {
-      const response = await fetch(ENDPOINT, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: trimmed,
-          personaId,
-        }),
-      });
-      const payload = await response.json();
-      if (!response.ok) {
-        toast({
-          type: "error",
-          description: payload.error ?? "Could not create the key.",
+  const createKey = useCallback(
+    async (draft: AgentKeyDraft) => {
+      setSaving(true);
+      try {
+        const response = await fetch(ENDPOINT, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(draft),
         });
-        return;
-      }
+        const payload = await response.json();
+        if (!response.ok) {
+          toast({
+            type: "error",
+            description: payload.error ?? "Could not create the agent.",
+          });
+          return;
+        }
 
-      setIssuedToken(payload.token);
-      setName("");
-      setPersonaId(AVA_PERSONA_ID);
-      await mutate();
-      await onChanged?.();
-      toast({ type: "success", description: "Agent key created." });
-    } catch {
-      toast({ type: "error", description: "Could not create the key." });
-    } finally {
-      setCreating(false);
-    }
-  }, [mutate, name, onChanged, personaId]);
+        setIssuedToken(payload.token);
+        setCreatingOpen(false);
+        await mutate();
+        await onChanged?.();
+        toast({ type: "success", description: `${draft.name} created.` });
+      } catch {
+        toast({ type: "error", description: "Could not create the agent." });
+      } finally {
+        setSaving(false);
+      }
+    },
+    [mutate, onChanged],
+  );
+
+  const saveKey = useCallback(
+    async (keyId: string, draft: AgentKeyDraft) => {
+      setSaving(true);
+      try {
+        const response = await fetch(`${ENDPOINT}/${keyId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(draft),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          toast({
+            type: "error",
+            description: payload.error ?? "Could not save the agent.",
+          });
+          return;
+        }
+
+        setEditing(null);
+        await mutate();
+        toast({ type: "success", description: `${draft.name} saved.` });
+      } catch {
+        toast({ type: "error", description: "Could not save the agent." });
+      } finally {
+        setSaving(false);
+      }
+    },
+    [mutate],
+  );
 
   const rotateKey = useCallback(
     async (key: McpKeySummary) => {
@@ -195,12 +213,23 @@ export function McpAccessPanel({
       if (response.ok) {
         await mutate();
         await onChanged?.();
-        toast({ type: "success", description: "Agent key revoked." });
+        toast({ type: "success", description: "Agent revoked." });
       } else {
-        toast({ type: "error", description: "Could not revoke the key." });
+        toast({ type: "error", description: "Could not revoke the agent." });
       }
     },
     [mutate, onChanged],
+  );
+
+  const editingDraft = useMemo<AgentKeyDraft | undefined>(
+    () =>
+      editing
+        ? {
+            name: editing.name,
+            personaId: editing.personaId ?? AVA_PERSONA_ID,
+          }
+        : undefined,
+    [editing],
   );
 
   if (isLoading || !data) {
@@ -289,72 +318,32 @@ export function McpAccessPanel({
           </section>
         ) : null}
 
-        <section className="space-y-3">
-          <Label className="text-xs" htmlFor="mcp-key-name">
-            New key
-          </Label>
-          <Input
-            disabled={blocked || atLimit}
-            id="mcp-key-name"
-            maxLength={128}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="e.g. AP review agent"
-            value={name}
-          />
-          <div className="space-y-1.5">
-            <Label className="text-xs" htmlFor="mcp-key-persona">
-              Persona
-            </Label>
-            <Select
+        <section className="space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <Label className="text-xs">Your agents</Label>
+            <Button
               disabled={blocked || atLimit}
-              onValueChange={setPersonaId}
-              value={personaId}
+              onClick={() => setCreatingOpen(true)}
+              size="sm"
+              type="button"
             >
-              <SelectTrigger
-                aria-label="Persona for this agent key"
-                className="h-9 w-full text-xs"
-                id="mcp-key-persona"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {personas.map((persona) => (
-                  <SelectItem key={persona.id} value={persona.id}>
-                    {persona.name}
-                    {persona.authoredBy === "agent"
-                      ? " · written by an agent"
-                      : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-muted-foreground text-xs leading-relaxed">
-              The specialist this agent is meant to be. It reads the persona on
-              connect and works that way. The agent can change or shed it later,
-              and write new ones of its own.
-            </p>
+              <Plus className="size-3.5" />
+              New agent
+            </Button>
           </div>
-          <Button
-            disabled={blocked || atLimit || creating}
-            onClick={createKey}
-            size="sm"
-            type="button"
-          >
-            <Plus className="size-3.5" />
-            {creating ? "Creating…" : "Create key"}
-          </Button>
+
           {atLimit ? (
             <p className="text-muted-foreground text-xs">
               You have reached the limit of {data.policy.maxKeysPerUser} active
-              keys. Revoke one to create another.
+              agents. Revoke one to create another.
             </p>
           ) : null}
-        </section>
 
-        <section className="space-y-2">
-          <Label className="text-xs">Your keys</Label>
           {data.keys.length === 0 ? (
-            <p className="text-muted-foreground text-xs">No keys yet.</p>
+            <p className="text-muted-foreground text-xs">
+              No agents yet. Create one to get a server URL and key you can hand
+              to an external AI agent.
+            </p>
           ) : (
             <ul className="space-y-2">
               {data.keys.map((key) => (
@@ -371,23 +360,32 @@ export function McpAccessPanel({
                       {key.status !== "active" ? (
                         <Badge variant="outline">{key.status}</Badge>
                       ) : null}
+                      <Badge variant="secondary">
+                        {personaLabel(key.personaId, personas)}
+                      </Badge>
                       <span className="text-muted-foreground text-xs">
                         {key.lastUsedAt
-                          ? `Last used ${new Date(key.lastUsedAt).toLocaleDateString()}`
+                          ? `Last used ${formatDate(key.lastUsedAt)}`
                           : "Never used"}
                       </span>
                       {key.rotatedAt ? (
                         <span className="text-muted-foreground text-xs">
-                          {`Key replaced ${new Date(key.rotatedAt).toLocaleDateString()}`}
+                          {`Key replaced ${formatDate(key.rotatedAt)}`}
                         </span>
                       ) : null}
-                      <Badge variant="secondary">
-                        {personaLabel(key.personaId, personas)}
-                      </Badge>
                     </div>
                   </div>
                   {key.status === "active" ? (
                     <div className="flex shrink-0 items-center gap-1">
+                      <Button
+                        onClick={() => setEditing(key)}
+                        size="sm"
+                        type="button"
+                        variant="ghost"
+                      >
+                        <Pencil className="size-3.5" />
+                        <span className="sr-only">Edit {key.name}</span>
+                      </Button>
                       <Button
                         onClick={() => setPendingRotate(key)}
                         size="sm"
@@ -416,6 +414,34 @@ export function McpAccessPanel({
           )}
         </section>
       </div>
+
+      <AgentKeyDialog
+        mode="create"
+        onOpenChange={setCreatingOpen}
+        onSubmit={createKey}
+        open={creatingOpen}
+        personas={personas}
+        saving={saving}
+      />
+
+      <AgentKeyDialog
+        initial={editingDraft}
+        mode="edit"
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditing(null);
+          }
+        }}
+        onSubmit={(draft) => {
+          if (editing) {
+            void saveKey(editing.id, draft);
+          }
+        }}
+        open={Boolean(editing)}
+        personas={personas}
+        saving={saving}
+      />
+
       <ConfirmDestructiveDialog
         confirmLabel="Replace key"
         description={
