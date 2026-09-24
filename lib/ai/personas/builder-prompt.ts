@@ -7,6 +7,7 @@ import {
   PERSONA_INTERVIEW_DIMENSION_LABELS,
   PERSONA_INTERVIEW_DIMENSIONS,
 } from "./interview";
+import { personaPlaybookOutline } from "./playbook-shape";
 import type { CustomPersona } from "./types";
 
 function truncate(body: string, max: number): string {
@@ -72,11 +73,10 @@ INTERVIEW RULES
 - After each user answer that advances coverage, call \`updatePersonaInterview\` with the full list of dimensions covered so far.
 - Do not call \`proposeCustomPersona\` until every dimension is covered (or the user asks to finish).
 - When proposing, draft builtin-shaped markdown including:
-  - Persona Metadata (Name, Short Name, Primary Role, Default Risk Posture, Recommended Write Policy, Recommended Default Mode)
-  - Persona Instructions (second person, as a system prompt — not an interview summary)
-  - Operating Principles
-  - Preferred Tools / Approaches
-  - Boundaries / Never-dos
+${personaPlaybookOutline()
+  .split("\n")
+  .map((line) => `  ${line}`)
+  .join("\n")}
 - Keep the playbook practical for OpenSuiteMCP (MCP tools, SuiteQL, SuiteScript, reports/searches, confirm-before-write habits).
 - Stay concise and professional.
 

@@ -7,6 +7,7 @@ import {
   MAX_CUSTOM_PERSONAS,
   normalizeCustomPersonas,
 } from "@/lib/ai/personas/catalog";
+import { personaPlaybookOutlineInline } from "@/lib/ai/personas/playbook-shape";
 import type { CustomPersona } from "@/lib/ai/personas/types";
 import { getUserSettings, upsertUserSettings } from "@/lib/db/queries";
 import { generateUUID } from "@/lib/utils";
@@ -65,7 +66,7 @@ const createPersona: McpToolDefinition = {
   name: "osmcp_create_persona",
   title: "Create persona",
   description:
-    "Write a new persona into this OpenSuiteMCP user's library and optionally adopt it for this connection. A persona is a NetSuite specialist playbook — the role, domains, and working approach a specialist brings. The persona is saved for the user and appears in their OpenSuiteMCP persona picker marked as agent-authored. Pass `adopt: true` to assign it to this API key in the same call.",
+    "Write a new persona into this OpenSuiteMCP user's library and optionally adopt it for this connection. A persona is a NetSuite specialist playbook — the role, domains, and working approach a specialist brings. It is saved for the user and appears in their persona picker marked as agent-authored, so write it to the same standard a person would. If you have not written one before, call osmcp_get_persona on a builtin such as `suiteql-data-analyst` first: it is the canonical example of the structure and voice expected. Pass `adopt: true` to assign the new persona to this API key in the same call.",
   inputSchema: {
     type: "object",
     properties: {
@@ -75,8 +76,7 @@ const createPersona: McpToolDefinition = {
       },
       content: {
         type: "string",
-        description:
-          "The persona instructions as markdown: role, domains, tasks, risk posture, approach, tone, and constraints.",
+        description: `The playbook as markdown, in the structure the builtin personas use — sections: ${personaPlaybookOutlineInline()}. Write it as operating instructions addressed to whoever adopts it, not as a description of a specialist in the third person. Cover role, domains, tasks, risk posture, approach, tone, and constraints across those sections.`,
       },
       shortName: {
         type: "string",
@@ -188,7 +188,11 @@ const updatePersona: McpToolDefinition = {
         description: "The `id` of an agent-authored persona.",
       },
       name: { type: "string", description: "New display name." },
-      content: { type: "string", description: "New persona instructions." },
+      content: {
+        type: "string",
+        description:
+          "Replacement playbook markdown, in the same structure the persona already uses.",
+      },
       shortName: { type: "string", description: "New short label." },
       primaryRole: { type: "string", description: "New one-line summary." },
     },

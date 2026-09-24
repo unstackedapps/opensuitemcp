@@ -453,7 +453,7 @@ const getPersona: McpToolDefinition = {
   name: "osmcp_get_persona",
   title: "Get persona",
   description:
-    "Read the full instructions of one persona listed by osmcp_list_personas. A persona is a NetSuite specialist playbook — how a controller, auditor, or administrator approaches work. Adopt it yourself for the task at hand; this does not change any setting in OpenSuiteMCP.",
+    "Read the full instructions of one persona listed by osmcp_list_personas. A persona is a NetSuite specialist playbook — how a controller, auditor, or administrator approaches work. Adopt it yourself for the task at hand; this does not change any setting in OpenSuiteMCP. Reading a builtin is also how you learn the structure and voice a playbook takes here, before writing one with osmcp_create_persona.",
   inputSchema: {
     type: "object",
     properties: {
