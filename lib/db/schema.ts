@@ -697,6 +697,8 @@ export const mcpApiKey = pgTable(
      */
     personaId: varchar("personaId", { length: 128 }),
     lastUsedAt: timestamp("lastUsedAt"),
+    /** Last time the secret was replaced on this row; null means never. */
+    rotatedAt: timestamp("rotatedAt"),
     expiresAt: timestamp("expiresAt"),
     revokedAt: timestamp("revokedAt"),
     createdAt: timestamp("createdAt").notNull(),

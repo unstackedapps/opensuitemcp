@@ -28,6 +28,7 @@ import { buildOrgAwarePersonaList } from "@/lib/org/enforcement";
 import { isOrgInstallMode } from "@/lib/org/install-config";
 import { resolveAssignedPersona } from "../persona-assignment";
 import { resolveMcpPolicy } from "../policy";
+import { toolSurfaceDigest } from "./digest";
 import {
   EMPTY_INPUT_SCHEMA,
   type McpToolDefinition,
@@ -70,10 +71,10 @@ const whoami: McpToolDefinition = {
   name: "osmcp_whoami",
   title: "Who am I",
   description:
-    "Identify the OpenSuiteMCP user this connection acts as, the NetSuite account calls will run against, and the persona this agent is acting as. Every key has a persona; a key with none assigned acts as Ava. Call this first to confirm the acting identity before doing work.",
+    "Identify the OpenSuiteMCP user this connection acts as, the NetSuite account calls will run against, and the persona this agent is acting as. Every key has a persona; a key with none assigned acts as Ava. Also returns toolsDigest, a fingerprint of your tool surface you can poll to notice tools appearing or disappearing. Call this first to confirm the acting identity before doing work.",
   inputSchema: EMPTY_INPUT_SCHEMA,
   annotations: { title: "Who am I", ...READ_ONLY },
-  execute: async (_args, principal) => {
+  execute: async (_args, principal, context) => {
     const settings = await getUserSettings({ userId: principal.userId });
     const accounts = resolveNetSuiteAccounts(settings ?? {});
     const activeAccountId = resolveAccountForPrincipal({
@@ -82,6 +83,7 @@ const whoami: McpToolDefinition = {
       fallbackAccountId: accounts[0]?.accountId,
     });
     const policy = await resolveMcpPolicy(principal.orgId);
+    const surface = await context.toolSurface();
     const persona = resolveAssignedPersona(
       principal.personaId,
       settings?.customPersonas,
@@ -110,6 +112,10 @@ const whoami: McpToolDefinition = {
       },
       policy: {
         managedByOrganization: policy.managedByOrg,
+      },
+      tools: {
+        count: surface.length,
+        digest: toolSurfaceDigest(surface),
       },
       timezone: settings?.timezone ?? "UTC",
     });
