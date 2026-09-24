@@ -76,7 +76,7 @@ export function AgentKeyDialog({
           <DialogDescription>
             {creating
               ? "Name it and pick the specialist it acts as."
-              : "Its key is not affected."}
+              : "Rename your agent and update its assigned persona."}
           </DialogDescription>
         </DialogHeader>
 
