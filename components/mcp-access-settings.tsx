@@ -275,8 +275,7 @@ export function McpAccessPanel({
         </p>
         <p className="text-muted-foreground text-xs leading-relaxed">
           An agent acts as you over MCP, reaching exactly what you have enabled
-          in OpenSuiteMCP — nothing more. Give its key to whatever runs it:
-          Claude, an Aura, your own code.
+          in OpenSuiteMCP — nothing more.
         </p>
       </div>
 
