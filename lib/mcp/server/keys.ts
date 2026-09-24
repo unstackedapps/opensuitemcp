@@ -137,6 +137,52 @@ export async function createMcpApiKey(params: {
 }
 
 /**
+ * Rename an agent, or change the persona it acts as.
+ *
+ * Neither touches the secret, so an agent already running keeps working while
+ * its owner corrects a name or moves it to a different specialist. A revoked
+ * key is left alone: its row is history.
+ */
+export async function updateMcpApiKey(params: {
+  userId: string;
+  keyId: string;
+  name?: string;
+  personaId?: string | null;
+}): Promise<McpApiKeySummary | null> {
+  const patch: { name?: string; personaId?: string | null } = {};
+  if (params.name !== undefined) {
+    patch.name = params.name.trim();
+  }
+  if (params.personaId !== undefined) {
+    patch.personaId = params.personaId?.trim() || null;
+  }
+  if (Object.keys(patch).length === 0) {
+    return null;
+  }
+
+  try {
+    const [row] = await db
+      .update(mcpApiKey)
+      .set(patch)
+      .where(
+        and(
+          eq(mcpApiKey.id, params.keyId),
+          eq(mcpApiKey.userId, params.userId),
+          isNull(mcpApiKey.revokedAt),
+        ),
+      )
+      .returning();
+
+    return row ? toSummary(row) : null;
+  } catch (_error) {
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to update the MCP API key",
+    );
+  }
+}
+
+/**
  * Replace the secret on a key without replacing the key.
  *
  * A leaked credential and a finished agent are different problems. Minting a

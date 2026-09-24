@@ -2,10 +2,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
 import {
-  listPersonasForClient,
-  normalizeCustomPersonas,
-} from "@/lib/ai/personas/catalog";
-import { getUserSettings } from "@/lib/db/queries";
+  isPersonaAvailableToUser,
+  listAgentPersonaOptions,
+} from "@/lib/mcp/server/agent-personas";
 import { getMcpServerUrl } from "@/lib/mcp/server/config";
 import {
   countActiveMcpApiKeys,
@@ -14,8 +13,6 @@ import {
 } from "@/lib/mcp/server/keys";
 import { resolveMcpPolicyForUser } from "@/lib/mcp/server/policy";
 import { writeOrgAuditLog } from "@/lib/org/audit";
-import { buildOrgAwarePersonaList } from "@/lib/org/enforcement";
-import { isOrgInstallMode } from "@/lib/org/install-config";
 
 const createSchema = z.object({
   name: z.string().trim().min(1).max(128),
@@ -23,24 +20,6 @@ const createSchema = z.object({
   personaId: z.string().trim().max(128).optional().nullable(),
   expiresInDays: z.number().int().min(1).max(3650).optional().nullable(),
 });
-
-/**
- * Personas this user may hand to an agent.
- *
- * The same list their own picker shows, org policy included: a key is the
- * user acting through an agent, so it cannot reach a persona they cannot.
- */
-async function personasForUser(user: { id: string; orgId: string | null }) {
-  const settings = await getUserSettings({ userId: user.id });
-  const customPersonas = settings?.customPersonas ?? [];
-  return isOrgInstallMode() && user.orgId
-    ? await buildOrgAwarePersonaList(
-        user.orgId,
-        user.id,
-        normalizeCustomPersonas(customPersonas),
-      )
-    : listPersonasForClient(customPersonas);
-}
 
 export async function GET(request: Request) {
   const session = await auth();
@@ -53,7 +32,7 @@ export async function GET(request: Request) {
     session.user.id,
   );
   const keys = await listMcpApiKeys(session.user.id);
-  const personas = await personasForUser({
+  const personas = await listAgentPersonaOptions({
     id: session.user.id,
     orgId: session.user.orgId,
   });
@@ -115,17 +94,17 @@ export async function POST(request: Request) {
     }
 
     const requestedPersonaId = parsed.personaId?.trim() || null;
-    if (requestedPersonaId) {
-      const available = await personasForUser({
-        id: session.user.id,
-        orgId: session.user.orgId,
-      });
-      if (!available.some((persona) => persona.id === requestedPersonaId)) {
-        return NextResponse.json(
-          { error: "That persona is not available to you." },
-          { status: 400 },
-        );
-      }
+    if (
+      requestedPersonaId &&
+      !(await isPersonaAvailableToUser(
+        { id: session.user.id, orgId: session.user.orgId },
+        requestedPersonaId,
+      ))
+    ) {
+      return NextResponse.json(
+        { error: "That persona is not available to you." },
+        { status: 400 },
+      );
     }
 
     const created = await createMcpApiKey({
