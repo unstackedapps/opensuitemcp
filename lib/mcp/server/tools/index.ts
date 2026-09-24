@@ -4,6 +4,7 @@ import type { McpPrincipal } from "../authenticate";
 import { chatWriteTools } from "./chats";
 import { loadNetSuitePassthroughTools } from "./netsuite-passthrough";
 import { personaTools } from "./personas";
+import { promptTools } from "./prompts";
 import { searchTools } from "./search";
 import type { McpToolDefinition } from "./types";
 import { workspaceTools } from "./workspace";
@@ -25,6 +26,7 @@ export async function buildToolSurface(
     ...workspaceTools,
     ...chatWriteTools,
     ...personaTools,
+    ...promptTools,
     ...searchTools,
     ...netsuiteTools,
   ];

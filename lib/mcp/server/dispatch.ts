@@ -33,6 +33,7 @@ const SERVER_INSTRUCTIONS = [
   "Tools marked readOnlyHint never change NetSuite data. Tools without it may modify records, so confirm before calling one. The hint is derived from the tool name and is deliberately cautious: an unrecognised name is announced as a write.",
   "Tool results carry both readable text and structuredContent; prefer structuredContent for rows and columns.",
   "This server does not push notifications, so a tool appearing or disappearing is something you must ask about. tools/list and osmcp_whoami both return toolsDigest, a short fingerprint of your tool surface: compare it against the last one you saw and only re-read tools/list when it differs.",
+  "NetSuite ships a library of prompts written for NetSuite work. Before composing your own approach to a request, call osmcp_list_prompts to see whether an established one fits. Square brackets in a prompt are blanks to fill, never text to use as written.",
   "Work nobody watched is work nobody can check. For a task of any length, open a thread with osmcp_create_chat and record each step with osmcp_append_chat, so the person who owns this workspace can read what you did.",
 ].join(" ");
 
