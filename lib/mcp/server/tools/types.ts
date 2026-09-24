@@ -29,6 +29,18 @@ export type McpToolAnnotations = {
   openWorldHint?: boolean;
 };
 
+/**
+ * What a tool may know about the call around it.
+ *
+ * `toolSurface` is how osmcp_whoami reports the digest of the whole surface
+ * without importing the builder that assembles it — the builder already has
+ * every tool, this one included, and a tool reaching back for it would close
+ * that loop. The dispatcher owns both, so it hands the answer down.
+ */
+export type McpToolContext = {
+  toolSurface: () => Promise<McpToolDefinition[]>;
+};
+
 export type McpToolDefinition = {
   name: string;
   title: string;
@@ -38,6 +50,7 @@ export type McpToolDefinition = {
   execute: (
     args: Record<string, unknown>,
     principal: McpPrincipal,
+    context: McpToolContext,
   ) => Promise<McpToolResult>;
 };
 

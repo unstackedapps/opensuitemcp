@@ -1,8 +1,9 @@
 "use client";
 
-import { Copy, KeyRound, Plus, Trash2 } from "lucide-react";
+import { Copy, KeyRound, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import useSWR from "swr";
+import { ConfirmDestructiveDialog } from "@/components/confirm-destructive-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +26,7 @@ type McpKeySummary = {
   netsuiteAccountId: string | null;
   personaId: string | null;
   lastUsedAt: string | null;
+  rotatedAt: string | null;
   expiresAt: string | null;
   createdAt: string;
   status: "active" | "revoked" | "expired";
@@ -98,6 +100,9 @@ export function McpAccessPanel({
   const [personaId, setPersonaId] = useState<string>(AVA_PERSONA_ID);
   const [creating, setCreating] = useState(false);
   const [issuedToken, setIssuedToken] = useState<string | null>(null);
+  const [pendingRotate, setPendingRotate] = useState<McpKeySummary | null>(
+    null,
+  );
 
   // Drop the one-time token as soon as the panel closes so it does not sit in
   // component state for the rest of the session.
@@ -154,6 +159,33 @@ export function McpAccessPanel({
       setCreating(false);
     }
   }, [mutate, name, onChanged, personaId]);
+
+  const rotateKey = useCallback(
+    async (key: McpKeySummary) => {
+      try {
+        const response = await fetch(`${ENDPOINT}/${key.id}/rotate`, {
+          method: "POST",
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          toast({
+            type: "error",
+            description: payload.error ?? "Could not replace the key.",
+          });
+          return;
+        }
+        setIssuedToken(payload.token);
+        await mutate();
+        toast({
+          type: "success",
+          description: `New key issued for ${key.name}.`,
+        });
+      } catch {
+        toast({ type: "error", description: "Could not replace the key." });
+      }
+    },
+    [mutate],
+  );
 
   const revokeKey = useCallback(
     async (keyId: string) => {
@@ -344,21 +376,39 @@ export function McpAccessPanel({
                           ? `Last used ${new Date(key.lastUsedAt).toLocaleDateString()}`
                           : "Never used"}
                       </span>
+                      {key.rotatedAt ? (
+                        <span className="text-muted-foreground text-xs">
+                          {`Key replaced ${new Date(key.rotatedAt).toLocaleDateString()}`}
+                        </span>
+                      ) : null}
                       <Badge variant="secondary">
                         {personaLabel(key.personaId, personas)}
                       </Badge>
                     </div>
                   </div>
                   {key.status === "active" ? (
-                    <Button
-                      onClick={() => revokeKey(key.id)}
-                      size="sm"
-                      type="button"
-                      variant="ghost"
-                    >
-                      <Trash2 className="size-3.5" />
-                      <span className="sr-only">Revoke {key.name}</span>
-                    </Button>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <Button
+                        onClick={() => setPendingRotate(key)}
+                        size="sm"
+                        type="button"
+                        variant="ghost"
+                      >
+                        <RefreshCw className="size-3.5" />
+                        <span className="sr-only">
+                          Replace the key for {key.name}
+                        </span>
+                      </Button>
+                      <Button
+                        onClick={() => revokeKey(key.id)}
+                        size="sm"
+                        type="button"
+                        variant="ghost"
+                      >
+                        <Trash2 className="size-3.5" />
+                        <span className="sr-only">Revoke {key.name}</span>
+                      </Button>
+                    </div>
                   ) : null}
                 </li>
               ))}
@@ -366,6 +416,26 @@ export function McpAccessPanel({
           )}
         </section>
       </div>
+      <ConfirmDestructiveDialog
+        confirmLabel="Replace key"
+        description={
+          pendingRotate
+            ? `${pendingRotate.name} keeps its name, persona and settings, but its current key stops working immediately. Anything already using that key must be given the new one.`
+            : ""
+        }
+        onConfirm={() => {
+          if (pendingRotate) {
+            void rotateKey(pendingRotate);
+          }
+        }}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingRotate(null);
+          }
+        }}
+        open={Boolean(pendingRotate)}
+        title="Replace this agent's key?"
+      />
     </div>
   );
 }

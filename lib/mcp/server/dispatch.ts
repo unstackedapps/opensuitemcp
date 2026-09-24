@@ -19,6 +19,8 @@ import {
   negotiateInitializeVersion,
 } from "./protocol";
 import { buildToolSurface, findTool, toWireTool } from "./tools";
+import { toolSurfaceDigest } from "./tools/digest";
+import type { McpToolDefinition } from "./tools/types";
 
 /** Discovery results are per-user, so they must never be cached across keys. */
 const PRIVATE_CACHE = { ttlMs: 60_000, cacheScope: "private" as const };
@@ -30,6 +32,7 @@ const SERVER_INSTRUCTIONS = [
   "If a NetSuite tool fails, call osmcp_connection_status. A dead authorization needs a person to reconnect the account in the OpenSuiteMCP UI and will not recover on retry.",
   "Tools marked readOnlyHint never change NetSuite data. Tools without it may modify records, so confirm before calling one. The hint is derived from the tool name and is deliberately cautious: an unrecognised name is announced as a write.",
   "Tool results carry both readable text and structuredContent; prefer structuredContent for rows and columns.",
+  "This server does not push notifications, so a tool appearing or disappearing is something you must ask about. tools/list and osmcp_whoami both return toolsDigest, a short fingerprint of your tool surface: compare it against the last one you saw and only re-read tools/list when it differs.",
   "Work nobody watched is work nobody can check. For a task of any length, open a thread with osmcp_create_chat and record each step with osmcp_append_chat, so the person who owns this workspace can read what you did.",
 ].join(" ");
 
@@ -83,6 +86,10 @@ export async function dispatchMcpRequest(params: {
         return ok(id, {
           tools: tools.map(toWireTool),
           resultType: "complete",
+          // This server cannot push tools/list_changed (see toolSurfaceDigest).
+          // A watching agent compares this instead of every entry.
+          toolsDigest: toolSurfaceDigest(tools),
+          toolCount: tools.length,
           ...PRIVATE_CACHE,
         });
       }
@@ -153,7 +160,14 @@ async function callTool(
     return notFound(id, `tools/call ${name}`);
   }
 
-  const result = await tool.execute(args, principal);
+  // Assembled at most once per call, and only if a tool asks for it.
+  let surface: McpToolDefinition[] | null = null;
+  const result = await tool.execute(args, principal, {
+    toolSurface: async () => {
+      surface ??= await buildToolSurface(principal);
+      return surface;
+    },
+  });
   return ok(id, { ...result, resultType: "complete" });
 }
 

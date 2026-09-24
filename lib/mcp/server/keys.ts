@@ -21,6 +21,7 @@ export type McpApiKeySummary = {
   netsuiteAccountId: string | null;
   personaId: string | null;
   lastUsedAt: Date | null;
+  rotatedAt: Date | null;
   expiresAt: Date | null;
   revokedAt: Date | null;
   createdAt: Date;
@@ -55,6 +56,7 @@ function toSummary(row: McpApiKey): McpApiKeySummary {
     netsuiteAccountId: row.netsuiteAccountId,
     personaId: row.personaId,
     lastUsedAt: row.lastUsedAt,
+    rotatedAt: row.rotatedAt,
     expiresAt: row.expiresAt,
     revokedAt: row.revokedAt,
     createdAt: row.createdAt,
@@ -130,6 +132,53 @@ export async function createMcpApiKey(params: {
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to create an MCP API key",
+    );
+  }
+}
+
+/**
+ * Replace the secret on a key without replacing the key.
+ *
+ * A leaked credential and a finished agent are different problems. Minting a
+ * fresh key solves the first by creating a second agent: a new row, with none
+ * of the persona, pinned account, or history the first one had, and a name the
+ * person has to keep straight. Rotating keeps the agent and changes only what
+ * was exposed. The old secret stops working the moment this returns.
+ */
+export async function rotateMcpApiKey(params: {
+  userId: string;
+  keyId: string;
+}): Promise<MintedMcpApiKey | null> {
+  const minted = generateMcpApiKey();
+
+  try {
+    const [row] = await db
+      .update(mcpApiKey)
+      .set({
+        tokenId: minted.tokenId,
+        tokenHash: minted.tokenHash,
+        rotatedAt: new Date(),
+        // A rotated key starts its usage history over; the row's createdAt
+        // still says when the agent itself was made.
+        lastUsedAt: null,
+      })
+      .where(
+        and(
+          eq(mcpApiKey.id, params.keyId),
+          eq(mcpApiKey.userId, params.userId),
+          isNull(mcpApiKey.revokedAt),
+        ),
+      )
+      .returning();
+
+    if (!row) {
+      return null;
+    }
+    return { summary: toSummary(row), token: minted.token };
+  } catch (_error) {
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to rotate the MCP API key",
     );
   }
 }
