@@ -274,8 +274,9 @@ export function McpAccessPanel({
           Agent access
         </p>
         <p className="text-muted-foreground text-xs leading-relaxed">
-          Let an external AI agent act as you over MCP. It reaches exactly what
-          you have enabled in OpenSuiteMCP — nothing more.
+          An agent acts as you over MCP, reaching exactly what you have enabled
+          in OpenSuiteMCP — nothing more. Give its key to whatever runs it:
+          Claude, an Aura, your own code.
         </p>
       </div>
 
@@ -298,9 +299,7 @@ export function McpAccessPanel({
             </Button>
           </div>
           <p className="text-muted-foreground text-xs">
-            Give this URL and a key to the agent. It derives from this install's
-            public address, so self-hosted and hosted installs each have their
-            own.
+            This install's public address. Every agent here connects through it.
           </p>
         </section>
 
@@ -332,10 +331,7 @@ export function McpAccessPanel({
           ) : null}
 
           {data.keys.length === 0 ? (
-            <p className="text-muted-foreground text-xs">
-              No agents yet. Create one to get a server URL and key you can hand
-              to an external AI agent.
-            </p>
+            <p className="text-muted-foreground text-xs">No agents yet.</p>
           ) : (
             <ul className="space-y-2">
               {data.keys.map((key) => (
