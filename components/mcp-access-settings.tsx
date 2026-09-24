@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { AVA_PERSONA_ID } from "@/lib/ai/personas/ids";
 import { fetcher } from "@/lib/utils";
 import { toast } from "./toast";
@@ -98,6 +99,10 @@ export function McpAccessPanel({
   const [pendingRotate, setPendingRotate] = useState<McpKeySummary | null>(
     null,
   );
+  const [pendingRevoke, setPendingRevoke] = useState<McpKeySummary | null>(
+    null,
+  );
+  const [showArchived, setShowArchived] = useState(false);
 
   const copy = useCallback(async (value: string, label: string) => {
     try {
@@ -229,16 +234,16 @@ export function McpAccessPanel({
   );
 
   const revokeKey = useCallback(
-    async (keyId: string) => {
-      const response = await fetch(`${ENDPOINT}/${keyId}`, {
+    async (key: McpKeySummary) => {
+      const response = await fetch(`${ENDPOINT}/${key.id}`, {
         method: "DELETE",
       });
       if (response.ok) {
         await mutate();
         await onChanged?.();
-        toast({ type: "success", description: "Agent revoked." });
+        toast({ type: "success", description: `${key.name} archived.` });
       } else {
-        toast({ type: "error", description: "Could not revoke the agent." });
+        toast({ type: "error", description: "Could not archive the agent." });
       }
     },
     [mutate, onChanged],
@@ -263,6 +268,10 @@ export function McpAccessPanel({
 
   const personas = data.personas ?? [];
   const activeKeys = data.keys.filter((key) => key.status === "active");
+  // Revoked and expired agents are kept — the threads they opened and the work
+  // they did still refer to them — but an archive is not a working list.
+  const archivedKeys = data.keys.filter((key) => key.status !== "active");
+  const visibleKeys = showArchived ? data.keys : activeKeys;
   const atLimit = activeKeys.length >= data.policy.maxKeysPerUser;
   const blocked = !(data.policy.enabled && data.policy.memberAllowed);
 
@@ -289,12 +298,13 @@ export function McpAccessPanel({
               value={data.serverUrl}
             />
             <Button
+              className="size-8 shrink-0 p-0 md:size-10"
               onClick={() => copy(data.serverUrl, "Server URL")}
-              size="sm"
               type="button"
               variant="outline"
             >
               <Copy className="size-3.5" />
+              <span className="sr-only">Copy the server URL</span>
             </Button>
           </div>
           <p className="text-muted-foreground text-xs">
@@ -309,17 +319,34 @@ export function McpAccessPanel({
         ) : null}
 
         <section className="space-y-2">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <Label className="text-xs">Your agents</Label>
-            <Button
-              disabled={blocked || atLimit}
-              onClick={() => setCreatingOpen(true)}
-              size="sm"
-              type="button"
-            >
-              <Plus className="size-3.5" />
-              New agent
-            </Button>
+            <div className="flex items-center gap-3">
+              {archivedKeys.length > 0 ? (
+                <div className="flex items-center gap-2">
+                  <Label
+                    className="text-muted-foreground text-xs"
+                    htmlFor="show-archived-agents"
+                  >
+                    Show archived
+                  </Label>
+                  <Switch
+                    checked={showArchived}
+                    id="show-archived-agents"
+                    onCheckedChange={setShowArchived}
+                  />
+                </div>
+              ) : null}
+              <Button
+                disabled={blocked || atLimit}
+                onClick={() => setCreatingOpen(true)}
+                size="sm"
+                type="button"
+              >
+                <Plus className="size-3.5" />
+                New agent
+              </Button>
+            </div>
           </div>
 
           {atLimit ? (
@@ -329,11 +356,15 @@ export function McpAccessPanel({
             </p>
           ) : null}
 
-          {data.keys.length === 0 ? (
-            <p className="text-muted-foreground text-xs">No agents yet.</p>
+          {visibleKeys.length === 0 ? (
+            <p className="text-muted-foreground text-xs">
+              {activeKeys.length === 0
+                ? "No agents yet."
+                : "No agents to show."}
+            </p>
           ) : (
             <ul className="space-y-2">
-              {data.keys.map((key) => (
+              {visibleKeys.map((key) => (
                 <li
                   className="flex items-start justify-between gap-3 rounded-md border border-border/60 p-3"
                   key={key.id}
@@ -344,9 +375,11 @@ export function McpAccessPanel({
                       {key.maskedToken}
                     </p>
                     <div className="flex flex-wrap items-center gap-1.5">
-                      {key.status !== "active" ? (
-                        <Badge variant="outline">{key.status}</Badge>
-                      ) : null}
+                      {key.status === "active" ? null : (
+                        <Badge variant="outline">
+                          {key.status === "expired" ? "Expired" : "Archived"}
+                        </Badge>
+                      )}
                       <Badge variant="secondary">
                         {personaLabel(key.personaId, personas)}
                       </Badge>
@@ -396,7 +429,7 @@ export function McpAccessPanel({
                         </span>
                       </Button>
                       <Button
-                        onClick={() => revokeKey(key.id)}
+                        onClick={() => setPendingRevoke(key)}
                         size="sm"
                         type="button"
                         variant="ghost"
@@ -438,6 +471,27 @@ export function McpAccessPanel({
         open={Boolean(editing)}
         personas={personas}
         saving={saving}
+      />
+
+      <ConfirmDestructiveDialog
+        confirmLabel="Archive agent"
+        description={
+          pendingRevoke
+            ? `${pendingRevoke.name} stops working immediately and its key can never be used again. It moves to your archive, where the threads it opened still name it. This cannot be undone.`
+            : ""
+        }
+        onConfirm={() => {
+          if (pendingRevoke) {
+            void revokeKey(pendingRevoke);
+          }
+        }}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingRevoke(null);
+          }
+        }}
+        open={Boolean(pendingRevoke)}
+        title="Archive this agent?"
       />
 
       <ConfirmDestructiveDialog
