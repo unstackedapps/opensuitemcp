@@ -131,6 +131,9 @@ export async function POST(
     nextCustoms.map((p) =>
       p.id === savedId
         ? {
+            // Spread first: authoredBy records who wrote a persona, and the
+            // interview refining one must not quietly restate its origin.
+            ...p,
             id: p.id,
             name,
             shortName,
