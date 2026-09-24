@@ -41,6 +41,30 @@ export function isSupportedProtocolVersion(
   );
 }
 
+/**
+ * The revision to answer `initialize` with.
+ *
+ * A client states the revision it wants in the `initialize` body. The
+ * `MCP-Protocol-Version` header is only defined for the requests that follow
+ * the handshake, so on `initialize` it is normally absent and header
+ * validation falls back to the oldest revision this server accepts. Answering
+ * from that fallback pinned every conformant client to 2025-03-26 even when it
+ * had asked for something newer, which the spec forbids: a server that
+ * supports the requested revision must respond with it.
+ *
+ * An absent or unsupported body version keeps the header-derived answer, which
+ * is what pre-2025-06-18 clients rely on.
+ */
+export function negotiateInitializeVersion(
+  request: JsonRpcRequest,
+  fromHeader: McpProtocolVersion,
+): McpProtocolVersion {
+  const asked = request.params?.protocolVersion;
+  return typeof asked === "string" && isSupportedProtocolVersion(asked)
+    ? asked
+    : fromHeader;
+}
+
 export const MCP_PROTOCOL_VERSION_HEADER = "mcp-protocol-version";
 export const MCP_METHOD_HEADER = "mcp-method";
 export const MCP_NAME_HEADER = "mcp-name";

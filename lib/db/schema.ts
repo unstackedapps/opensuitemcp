@@ -687,9 +687,25 @@ export const mcpApiKey = pgTable(
     name: varchar("name", { length: 128 }).notNull(),
     tokenId: varchar("tokenId", { length: 32 }).notNull(),
     tokenHash: text("tokenHash").notNull(),
+    /**
+     * The key itself, AES-256-GCM under ENCRYPTION_KEY, so its owner can copy
+     * it again rather than being shown it once. tokenHash still does the
+     * authenticating; this is only ever read back to the person who owns it.
+     * Null on keys minted before this existed — those stay copy-once.
+     */
+    tokenCipher: text("tokenCipher"),
     /** Pins the key to one NetSuite account; null follows the active account. */
     netsuiteAccountId: varchar("netsuiteAccountId", { length: 64 }),
+    /**
+     * The persona this agent is meant to be, reported on osmcp_whoami so a
+     * fresh connection learns its role without being told. Advisory: the agent
+     * runs its own model, so adopting the persona is its own act. Null means
+     * the agent has no assigned role.
+     */
+    personaId: varchar("personaId", { length: 128 }),
     lastUsedAt: timestamp("lastUsedAt"),
+    /** Last time the secret was replaced on this row; null means never. */
+    rotatedAt: timestamp("rotatedAt"),
     expiresAt: timestamp("expiresAt"),
     revokedAt: timestamp("revokedAt"),
     createdAt: timestamp("createdAt").notNull(),

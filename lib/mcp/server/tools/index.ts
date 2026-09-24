@@ -1,7 +1,11 @@
 import "server-only";
 
 import type { McpPrincipal } from "../authenticate";
+import { chatWriteTools } from "./chats";
 import { loadNetSuitePassthroughTools } from "./netsuite-passthrough";
+import { personaTools } from "./personas";
+import { promptTools } from "./prompts";
+import { searchTools } from "./search";
 import type { McpToolDefinition } from "./types";
 import { workspaceTools } from "./workspace";
 
@@ -18,7 +22,14 @@ export async function buildToolSurface(
   principal: McpPrincipal,
 ): Promise<McpToolDefinition[]> {
   const netsuiteTools = await loadNetSuitePassthroughTools(principal);
-  const all = [...workspaceTools, ...netsuiteTools];
+  const all = [
+    ...workspaceTools,
+    ...chatWriteTools,
+    ...personaTools,
+    ...promptTools,
+    ...searchTools,
+    ...netsuiteTools,
+  ];
 
   // Deterministic order keeps prompt caches warm for the calling agent.
   return all.sort((left, right) => left.name.localeCompare(right.name));

@@ -1,12 +1,20 @@
 "use client";
 
-import { Copy, KeyRound, Plus, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { Copy, KeyRound, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
 import useSWR from "swr";
+import {
+  AgentKeyDialog,
+  type AgentKeyDraft,
+  type AgentPersonaOption,
+} from "@/components/agent-key-dialog";
+import { ConfirmDestructiveDialog } from "@/components/confirm-destructive-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { AVA_PERSONA_ID } from "@/lib/ai/personas/ids";
 import { fetcher } from "@/lib/utils";
 import { toast } from "./toast";
 
@@ -14,8 +22,11 @@ type McpKeySummary = {
   id: string;
   name: string;
   maskedToken: string;
+  copyable: boolean;
   netsuiteAccountId: string | null;
+  personaId: string | null;
   lastUsedAt: string | null;
+  rotatedAt: string | null;
   expiresAt: string | null;
   createdAt: string;
   status: "active" | "revoked" | "expired";
@@ -31,6 +42,7 @@ type McpKeysResponse = {
     managedByOrg: boolean;
   };
   keys: McpKeySummary[];
+  personas: AgentPersonaOption[];
 };
 
 const ENDPOINT = "/api/settings/mcp-keys";
@@ -40,6 +52,33 @@ function blockedReason(data: McpKeysResponse): string {
     return "Agent access is turned off for your organization. Ask an administrator to enable it.";
   }
   return "Agent access is limited to selected members of your organization. Ask an administrator to add you.";
+}
+
+/**
+ * The persona a key acts as.
+ *
+ * Every key has one. A key minted before personas existed, and a key whose
+ * persona was deleted afterwards, both fall back to Ava — she ships with the
+ * install and cannot be removed, so no key is ever left holding a role that
+ * does not exist. Mirrors resolveAssignedPersona on the server.
+ */
+function personaLabel(
+  personaId: string | null,
+  personas: AgentPersonaOption[],
+): string {
+  const match = personaId
+    ? personas.find((persona) => persona.id === personaId)
+    : undefined;
+  if (match) {
+    return match.name;
+  }
+  return (
+    personas.find((persona) => persona.id === AVA_PERSONA_ID)?.name ?? "Ava"
+  );
+}
+
+function formatDate(value: string): string {
+  return new Date(value).toLocaleDateString();
 }
 
 export function McpAccessPanel({
@@ -54,17 +93,16 @@ export function McpAccessPanel({
     active ? ENDPOINT : null,
     fetcher,
   );
-  const [name, setName] = useState("");
-  const [creating, setCreating] = useState(false);
-  const [issuedToken, setIssuedToken] = useState<string | null>(null);
-
-  // Drop the one-time token as soon as the panel closes so it does not sit in
-  // component state for the rest of the session.
-  useEffect(() => {
-    if (!active) {
-      setIssuedToken(null);
-    }
-  }, [active]);
+  const [saving, setSaving] = useState(false);
+  const [creatingOpen, setCreatingOpen] = useState(false);
+  const [editing, setEditing] = useState<McpKeySummary | null>(null);
+  const [pendingRotate, setPendingRotate] = useState<McpKeySummary | null>(
+    null,
+  );
+  const [pendingRevoke, setPendingRevoke] = useState<McpKeySummary | null>(
+    null,
+  );
+  const [showArchived, setShowArchived] = useState(false);
 
   const copy = useCallback(async (value: string, label: string) => {
     try {
@@ -75,55 +113,151 @@ export function McpAccessPanel({
     }
   }, []);
 
-  const createKey = useCallback(async () => {
-    const trimmed = name.trim();
-    if (!trimmed) {
-      toast({ type: "error", description: "Give the key a name." });
-      return;
-    }
-
-    setCreating(true);
-    try {
-      const response = await fetch(ENDPOINT, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: trimmed }),
-      });
-      const payload = await response.json();
-      if (!response.ok) {
+  const copyKey = useCallback(
+    async (key: McpKeySummary) => {
+      if (!key.copyable) {
         toast({
           type: "error",
-          description: payload.error ?? "Could not create the key.",
+          description:
+            "This key predates copiable keys. Use Replace to get one you can copy.",
         });
         return;
       }
+      try {
+        const response = await fetch(`${ENDPOINT}/${key.id}/reveal`);
+        const payload = await response.json();
+        if (!response.ok) {
+          toast({
+            type: "error",
+            description: payload.error ?? "Could not copy the key.",
+          });
+          return;
+        }
+        await copy(payload.token, "Agent key");
+      } catch {
+        toast({ type: "error", description: "Could not copy the key." });
+      }
+    },
+    [copy],
+  );
 
-      setIssuedToken(payload.token);
-      setName("");
-      await mutate();
-      await onChanged?.();
-      toast({ type: "success", description: "Agent key created." });
-    } catch {
-      toast({ type: "error", description: "Could not create the key." });
-    } finally {
-      setCreating(false);
-    }
-  }, [mutate, name, onChanged]);
+  const createKey = useCallback(
+    async (draft: AgentKeyDraft) => {
+      setSaving(true);
+      try {
+        const response = await fetch(ENDPOINT, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(draft),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          toast({
+            type: "error",
+            description: payload.error ?? "Could not create the agent.",
+          });
+          return;
+        }
+
+        setCreatingOpen(false);
+        await mutate();
+        await onChanged?.();
+        await copy(payload.token, "Agent key");
+        toast({
+          type: "success",
+          description: `${draft.name} created. Its key is on your clipboard.`,
+        });
+      } catch {
+        toast({ type: "error", description: "Could not create the agent." });
+      } finally {
+        setSaving(false);
+      }
+    },
+    [copy, mutate, onChanged],
+  );
+
+  const saveKey = useCallback(
+    async (keyId: string, draft: AgentKeyDraft) => {
+      setSaving(true);
+      try {
+        const response = await fetch(`${ENDPOINT}/${keyId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(draft),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          toast({
+            type: "error",
+            description: payload.error ?? "Could not save the agent.",
+          });
+          return;
+        }
+
+        setEditing(null);
+        await mutate();
+        toast({ type: "success", description: `${draft.name} saved.` });
+      } catch {
+        toast({ type: "error", description: "Could not save the agent." });
+      } finally {
+        setSaving(false);
+      }
+    },
+    [mutate],
+  );
+
+  const rotateKey = useCallback(
+    async (key: McpKeySummary) => {
+      try {
+        const response = await fetch(`${ENDPOINT}/${key.id}/rotate`, {
+          method: "POST",
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          toast({
+            type: "error",
+            description: payload.error ?? "Could not replace the key.",
+          });
+          return;
+        }
+        await mutate();
+        await copy(payload.token, "Agent key");
+        toast({
+          type: "success",
+          description: `New key for ${key.name} copied to your clipboard.`,
+        });
+      } catch {
+        toast({ type: "error", description: "Could not replace the key." });
+      }
+    },
+    [copy, mutate],
+  );
 
   const revokeKey = useCallback(
-    async (keyId: string) => {
-      const response = await fetch(`${ENDPOINT}/${keyId}`, {
+    async (key: McpKeySummary) => {
+      const response = await fetch(`${ENDPOINT}/${key.id}`, {
         method: "DELETE",
       });
       if (response.ok) {
         await mutate();
         await onChanged?.();
-        toast({ type: "success", description: "Agent key revoked." });
+        toast({ type: "success", description: `${key.name} archived.` });
       } else {
-        toast({ type: "error", description: "Could not revoke the key." });
+        toast({ type: "error", description: "Could not archive the agent." });
       }
     },
     [mutate, onChanged],
+  );
+
+  const editingDraft = useMemo<AgentKeyDraft | undefined>(
+    () =>
+      editing
+        ? {
+            name: editing.name,
+            personaId: editing.personaId ?? AVA_PERSONA_ID,
+          }
+        : undefined,
+    [editing],
   );
 
   if (isLoading || !data) {
@@ -132,7 +266,12 @@ export function McpAccessPanel({
     );
   }
 
+  const personas = data.personas ?? [];
   const activeKeys = data.keys.filter((key) => key.status === "active");
+  // Revoked and expired agents are kept — the threads they opened and the work
+  // they did still refer to them — but an archive is not a working list.
+  const archivedKeys = data.keys.filter((key) => key.status !== "active");
+  const visibleKeys = showArchived ? data.keys : activeKeys;
   const atLimit = activeKeys.length >= data.policy.maxKeysPerUser;
   const blocked = !(data.policy.enabled && data.policy.memberAllowed);
 
@@ -144,8 +283,8 @@ export function McpAccessPanel({
           Agent access
         </p>
         <p className="text-muted-foreground text-xs leading-relaxed">
-          Let an external AI agent act as you over MCP. It reaches exactly what
-          you have enabled in OpenSuiteMCP — nothing more.
+          An agent acts as you over MCP, reaching exactly what you have enabled
+          in OpenSuiteMCP — nothing more.
         </p>
       </div>
 
@@ -159,18 +298,17 @@ export function McpAccessPanel({
               value={data.serverUrl}
             />
             <Button
+              className="size-8 shrink-0 p-0 md:size-10"
               onClick={() => copy(data.serverUrl, "Server URL")}
-              size="sm"
               type="button"
               variant="outline"
             >
               <Copy className="size-3.5" />
+              <span className="sr-only">Copy the server URL</span>
             </Button>
           </div>
           <p className="text-muted-foreground text-xs">
-            Give this URL and a key to the agent. It derives from this install's
-            public address, so self-hosted and hosted installs each have their
-            own.
+            This install's public address. Every agent here connects through it.
           </p>
         </section>
 
@@ -180,73 +318,53 @@ export function McpAccessPanel({
           </p>
         ) : null}
 
-        {issuedToken ? (
-          <section className="space-y-2 rounded-md border border-border/60 bg-muted/40 p-3">
-            <p className="font-medium text-xs">
-              Copy this key now — it is shown once and cannot be retrieved
-              again.
-            </p>
-            <div className="flex items-center gap-2">
-              <Input
-                className="font-mono text-xs"
-                readOnly
-                value={issuedToken}
-              />
+        <section className="space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <Label className="text-xs">Your agents</Label>
+            <div className="flex items-center gap-3">
+              {archivedKeys.length > 0 ? (
+                <div className="flex items-center gap-2">
+                  <Label
+                    className="text-muted-foreground text-xs"
+                    htmlFor="show-archived-agents"
+                  >
+                    Show archived
+                  </Label>
+                  <Switch
+                    checked={showArchived}
+                    id="show-archived-agents"
+                    onCheckedChange={setShowArchived}
+                  />
+                </div>
+              ) : null}
               <Button
-                onClick={() => copy(issuedToken, "Agent key")}
+                disabled={blocked || atLimit}
+                onClick={() => setCreatingOpen(true)}
                 size="sm"
                 type="button"
               >
-                <Copy className="size-3.5" />
+                <Plus className="size-3.5" />
+                New agent
               </Button>
             </div>
-            <Button
-              onClick={() => setIssuedToken(null)}
-              size="sm"
-              type="button"
-              variant="ghost"
-            >
-              Done
-            </Button>
-          </section>
-        ) : null}
+          </div>
 
-        <section className="space-y-3">
-          <Label className="text-xs" htmlFor="mcp-key-name">
-            New key
-          </Label>
-          <Input
-            disabled={blocked || atLimit}
-            id="mcp-key-name"
-            maxLength={128}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="e.g. AP review agent"
-            value={name}
-          />
-          <Button
-            disabled={blocked || atLimit || creating}
-            onClick={createKey}
-            size="sm"
-            type="button"
-          >
-            <Plus className="size-3.5" />
-            {creating ? "Creating…" : "Create key"}
-          </Button>
           {atLimit ? (
             <p className="text-muted-foreground text-xs">
               You have reached the limit of {data.policy.maxKeysPerUser} active
-              keys. Revoke one to create another.
+              agents. Revoke one to create another.
             </p>
           ) : null}
-        </section>
 
-        <section className="space-y-2">
-          <Label className="text-xs">Your keys</Label>
-          {data.keys.length === 0 ? (
-            <p className="text-muted-foreground text-xs">No keys yet.</p>
+          {visibleKeys.length === 0 ? (
+            <p className="text-muted-foreground text-xs">
+              {activeKeys.length === 0
+                ? "No agents yet."
+                : "No agents to show."}
+            </p>
           ) : (
             <ul className="space-y-2">
-              {data.keys.map((key) => (
+              {visibleKeys.map((key) => (
                 <li
                   className="flex items-start justify-between gap-3 rounded-md border border-border/60 p-3"
                   key={key.id}
@@ -257,26 +375,69 @@ export function McpAccessPanel({
                       {key.maskedToken}
                     </p>
                     <div className="flex flex-wrap items-center gap-1.5">
-                      {key.status !== "active" ? (
-                        <Badge variant="outline">{key.status}</Badge>
-                      ) : null}
+                      {key.status === "active" ? null : (
+                        <Badge variant="outline">
+                          {key.status === "expired" ? "Expired" : "Archived"}
+                        </Badge>
+                      )}
+                      <Badge variant="secondary">
+                        {personaLabel(key.personaId, personas)}
+                      </Badge>
                       <span className="text-muted-foreground text-xs">
                         {key.lastUsedAt
-                          ? `Last used ${new Date(key.lastUsedAt).toLocaleDateString()}`
+                          ? `Last used ${formatDate(key.lastUsedAt)}`
                           : "Never used"}
                       </span>
+                      {key.rotatedAt ? (
+                        <span className="text-muted-foreground text-xs">
+                          {`Key replaced ${formatDate(key.rotatedAt)}`}
+                        </span>
+                      ) : null}
                     </div>
                   </div>
                   {key.status === "active" ? (
-                    <Button
-                      onClick={() => revokeKey(key.id)}
-                      size="sm"
-                      type="button"
-                      variant="ghost"
-                    >
-                      <Trash2 className="size-3.5" />
-                      <span className="sr-only">Revoke {key.name}</span>
-                    </Button>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <Button
+                        onClick={() => copyKey(key)}
+                        size="sm"
+                        type="button"
+                        variant="ghost"
+                      >
+                        <Copy className="size-3.5" />
+                        <span className="sr-only">
+                          Copy the key for {key.name}
+                        </span>
+                      </Button>
+                      <Button
+                        onClick={() => setEditing(key)}
+                        size="sm"
+                        type="button"
+                        variant="ghost"
+                      >
+                        <Pencil className="size-3.5" />
+                        <span className="sr-only">Edit {key.name}</span>
+                      </Button>
+                      <Button
+                        onClick={() => setPendingRotate(key)}
+                        size="sm"
+                        type="button"
+                        variant="ghost"
+                      >
+                        <RefreshCw className="size-3.5" />
+                        <span className="sr-only">
+                          Replace the key for {key.name}
+                        </span>
+                      </Button>
+                      <Button
+                        onClick={() => setPendingRevoke(key)}
+                        size="sm"
+                        type="button"
+                        variant="ghost"
+                      >
+                        <Trash2 className="size-3.5" />
+                        <span className="sr-only">Revoke {key.name}</span>
+                      </Button>
+                    </div>
                   ) : null}
                 </li>
               ))}
@@ -284,6 +445,75 @@ export function McpAccessPanel({
           )}
         </section>
       </div>
+
+      <AgentKeyDialog
+        mode="create"
+        onOpenChange={setCreatingOpen}
+        onSubmit={createKey}
+        open={creatingOpen}
+        personas={personas}
+        saving={saving}
+      />
+
+      <AgentKeyDialog
+        initial={editingDraft}
+        mode="edit"
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditing(null);
+          }
+        }}
+        onSubmit={(draft) => {
+          if (editing) {
+            void saveKey(editing.id, draft);
+          }
+        }}
+        open={Boolean(editing)}
+        personas={personas}
+        saving={saving}
+      />
+
+      <ConfirmDestructiveDialog
+        confirmLabel="Archive agent"
+        description={
+          pendingRevoke
+            ? `${pendingRevoke.name} stops working immediately and its key can never be used again. It moves to your archive, where the threads it opened still name it. This cannot be undone.`
+            : ""
+        }
+        onConfirm={() => {
+          if (pendingRevoke) {
+            void revokeKey(pendingRevoke);
+          }
+        }}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingRevoke(null);
+          }
+        }}
+        open={Boolean(pendingRevoke)}
+        title="Archive this agent?"
+      />
+
+      <ConfirmDestructiveDialog
+        confirmLabel="Replace key"
+        description={
+          pendingRotate
+            ? `${pendingRotate.name} keeps its name, persona and settings, but its current key stops working immediately. Anything already using that key must be given the new one.`
+            : ""
+        }
+        onConfirm={() => {
+          if (pendingRotate) {
+            void rotateKey(pendingRotate);
+          }
+        }}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingRotate(null);
+          }
+        }}
+        open={Boolean(pendingRotate)}
+        title="Replace this agent's key?"
+      />
     </div>
   );
 }

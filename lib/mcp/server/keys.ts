@@ -3,6 +3,7 @@ import "server-only";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { type McpApiKey, mcpApiKey, user } from "@/lib/db/schema";
+import { decrypt, encrypt } from "@/lib/encryption";
 import { ChatSDKError } from "@/lib/errors";
 import { normalizeNetSuiteAccountId } from "@/lib/netsuite/accounts";
 import {
@@ -18,8 +19,12 @@ export type McpApiKeySummary = {
   name: string;
   tokenId: string;
   maskedToken: string;
+  /** Whether the key can still be copied, or was minted before that existed. */
+  copyable: boolean;
   netsuiteAccountId: string | null;
+  personaId: string | null;
   lastUsedAt: Date | null;
+  rotatedAt: Date | null;
   expiresAt: Date | null;
   revokedAt: Date | null;
   createdAt: Date;
@@ -51,8 +56,11 @@ function toSummary(row: McpApiKey): McpApiKeySummary {
     name: row.name,
     tokenId: row.tokenId,
     maskedToken: maskMcpApiKey(row.tokenId),
+    copyable: Boolean(row.tokenCipher),
     netsuiteAccountId: row.netsuiteAccountId,
+    personaId: row.personaId,
     lastUsedAt: row.lastUsedAt,
+    rotatedAt: row.rotatedAt,
     expiresAt: row.expiresAt,
     revokedAt: row.revokedAt,
     createdAt: row.createdAt,
@@ -98,6 +106,8 @@ export async function createMcpApiKey(params: {
   orgId: string | null;
   name: string;
   netsuiteAccountId?: string | null;
+  /** Persona the agent is assigned from the start; null gives it no role. */
+  personaId?: string | null;
   expiresAt?: Date | null;
 }): Promise<MintedMcpApiKey> {
   const minted = generateMcpApiKey();
@@ -114,7 +124,9 @@ export async function createMcpApiKey(params: {
         name: params.name,
         tokenId: minted.tokenId,
         tokenHash: minted.tokenHash,
+        tokenCipher: encrypt(minted.token),
         netsuiteAccountId: pinnedAccountId,
+        personaId: params.personaId?.trim() || null,
         expiresAt: params.expiresAt ?? null,
         createdAt: new Date(),
       })
@@ -125,6 +137,100 @@ export async function createMcpApiKey(params: {
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to create an MCP API key",
+    );
+  }
+}
+
+/**
+ * Rename an agent, or change the persona it acts as.
+ *
+ * Neither touches the secret, so an agent already running keeps working while
+ * its owner corrects a name or moves it to a different specialist. A revoked
+ * key is left alone: its row is history.
+ */
+export async function updateMcpApiKey(params: {
+  userId: string;
+  keyId: string;
+  name?: string;
+  personaId?: string | null;
+}): Promise<McpApiKeySummary | null> {
+  const patch: { name?: string; personaId?: string | null } = {};
+  if (params.name !== undefined) {
+    patch.name = params.name.trim();
+  }
+  if (params.personaId !== undefined) {
+    patch.personaId = params.personaId?.trim() || null;
+  }
+  if (Object.keys(patch).length === 0) {
+    return null;
+  }
+
+  try {
+    const [row] = await db
+      .update(mcpApiKey)
+      .set(patch)
+      .where(
+        and(
+          eq(mcpApiKey.id, params.keyId),
+          eq(mcpApiKey.userId, params.userId),
+          isNull(mcpApiKey.revokedAt),
+        ),
+      )
+      .returning();
+
+    return row ? toSummary(row) : null;
+  } catch (_error) {
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to update the MCP API key",
+    );
+  }
+}
+
+/**
+ * Replace the secret on a key without replacing the key.
+ *
+ * A leaked credential and a finished agent are different problems. Minting a
+ * fresh key solves the first by creating a second agent: a new row, with none
+ * of the persona, pinned account, or history the first one had, and a name the
+ * person has to keep straight. Rotating keeps the agent and changes only what
+ * was exposed. The old secret stops working the moment this returns.
+ */
+export async function rotateMcpApiKey(params: {
+  userId: string;
+  keyId: string;
+}): Promise<MintedMcpApiKey | null> {
+  const minted = generateMcpApiKey();
+
+  try {
+    const [row] = await db
+      .update(mcpApiKey)
+      .set({
+        tokenId: minted.tokenId,
+        tokenHash: minted.tokenHash,
+        tokenCipher: encrypt(minted.token),
+        rotatedAt: new Date(),
+        // A rotated key starts its usage history over; the row's createdAt
+        // still says when the agent itself was made.
+        lastUsedAt: null,
+      })
+      .where(
+        and(
+          eq(mcpApiKey.id, params.keyId),
+          eq(mcpApiKey.userId, params.userId),
+          isNull(mcpApiKey.revokedAt),
+        ),
+      )
+      .returning();
+
+    if (!row) {
+      return null;
+    }
+    return { summary: toSummary(row), token: minted.token };
+  } catch (_error) {
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to rotate the MCP API key",
     );
   }
 }
@@ -151,6 +257,80 @@ export async function revokeMcpApiKey(params: {
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to revoke the MCP API key",
+    );
+  }
+}
+
+/**
+ * Assign or clear the persona an agent key is meant to act as.
+ *
+ * Scoped to the owning user and to live keys: a revoked key keeps whatever it
+ * had, so the audit trail still says what it was doing.
+ */
+export async function setMcpApiKeyPersona(params: {
+  userId: string;
+  keyId: string;
+  personaId: string | null;
+}): Promise<boolean> {
+  try {
+    const updated = await db
+      .update(mcpApiKey)
+      .set({ personaId: params.personaId })
+      .where(
+        and(
+          eq(mcpApiKey.id, params.keyId),
+          eq(mcpApiKey.userId, params.userId),
+          isNull(mcpApiKey.revokedAt),
+        ),
+      )
+      .returning({ id: mcpApiKey.id });
+    return updated.length > 0;
+  } catch (_error) {
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to set the persona for the MCP API key",
+    );
+  }
+}
+
+/**
+ * Hand the owner their own key back.
+ *
+ * The secret is stored encrypted as well as hashed so a person can copy it
+ * whenever they need it, rather than losing it to a dismissed dialog. That is
+ * a deliberate trade: the hash alone could not be turned back into a working
+ * credential, and this can, which is why it is scoped to the owning user, why
+ * the ciphertext never leaves the server, and why the key is still never
+ * rendered on screen.
+ *
+ * Returns null for a key minted before the cipher column existed — there is
+ * nothing to recover, and replacing it is the way forward.
+ */
+export async function revealMcpApiKey(params: {
+  userId: string;
+  keyId: string;
+}): Promise<string | null> {
+  try {
+    const [row] = await db
+      .select({ tokenCipher: mcpApiKey.tokenCipher })
+      .from(mcpApiKey)
+      .where(
+        and(
+          eq(mcpApiKey.id, params.keyId),
+          eq(mcpApiKey.userId, params.userId),
+          isNull(mcpApiKey.revokedAt),
+        ),
+      )
+      .limit(1);
+
+    if (!row?.tokenCipher) {
+      return null;
+    }
+    return decrypt(row.tokenCipher);
+  } catch (_error) {
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to read the MCP API key",
     );
   }
 }

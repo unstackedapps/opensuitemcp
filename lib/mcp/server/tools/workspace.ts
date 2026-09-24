@@ -3,6 +3,7 @@ import "server-only";
 import {
   getPersonaContent,
   listPersonasForClient,
+  normalizeCustomPersonas,
 } from "@/lib/ai/personas/catalog";
 import {
   readUserSkillContent,
@@ -23,7 +24,11 @@ import {
   getNetSuiteToken,
   listConnectedNetSuiteAccountIds,
 } from "@/lib/netsuite/tokens";
+import { buildOrgAwarePersonaList } from "@/lib/org/enforcement";
+import { isOrgInstallMode } from "@/lib/org/install-config";
+import { resolveAssignedPersona } from "../persona-assignment";
 import { resolveMcpPolicy } from "../policy";
+import { toolSurfaceDigest } from "./digest";
 import {
   EMPTY_INPUT_SCHEMA,
   type McpToolDefinition,
@@ -66,10 +71,10 @@ const whoami: McpToolDefinition = {
   name: "osmcp_whoami",
   title: "Who am I",
   description:
-    "Identify the OpenSuiteMCP user this connection acts as and the NetSuite account calls will run against. Call this first to confirm the acting identity before doing work.",
+    "Identify the OpenSuiteMCP user this connection acts as, the NetSuite account calls will run against, and the persona this agent is acting as. Every key has a persona; a key with none assigned acts as Ava. Also returns toolsDigest, a fingerprint of your tool surface you can poll to notice tools appearing or disappearing. Call this first to confirm the acting identity before doing work.",
   inputSchema: EMPTY_INPUT_SCHEMA,
   annotations: { title: "Who am I", ...READ_ONLY },
-  execute: async (_args, principal) => {
+  execute: async (_args, principal, context) => {
     const settings = await getUserSettings({ userId: principal.userId });
     const accounts = resolveNetSuiteAccounts(settings ?? {});
     const activeAccountId = resolveAccountForPrincipal({
@@ -78,6 +83,11 @@ const whoami: McpToolDefinition = {
       fallbackAccountId: accounts[0]?.accountId,
     });
     const policy = await resolveMcpPolicy(principal.orgId);
+    const surface = await context.toolSurface();
+    const persona = resolveAssignedPersona(
+      principal.personaId,
+      settings?.customPersonas,
+    );
 
     return toolResult({
       user: {
@@ -89,6 +99,12 @@ const whoami: McpToolDefinition = {
         name: principal.keyName,
         pinnedNetSuiteAccountId: principal.pinnedNetSuiteAccountId,
       },
+      persona: {
+        id: persona.id,
+        name: persona.name,
+        primaryRole: persona.primaryRole,
+        source: persona.source,
+      },
       netsuite: {
         activeAccountId,
         accountPinnedToKey: Boolean(principal.pinnedNetSuiteAccountId),
@@ -96,6 +112,10 @@ const whoami: McpToolDefinition = {
       },
       policy: {
         managedByOrganization: policy.managedByOrg,
+      },
+      tools: {
+        count: surface.length,
+        digest: toolSurfaceDigest(surface),
       },
       timezone: settings?.timezone ?? "UTC",
     });
@@ -328,24 +348,39 @@ const listPersonas: McpToolDefinition = {
   name: "osmcp_list_personas",
   title: "List personas",
   description:
-    "List the OpenSuiteMCP personas available to this user. A persona is a NetSuite specialist playbook; its instructions can inform how you approach a task.",
+    "List the OpenSuiteMCP personas available to this user. A persona is a NetSuite specialist playbook; its instructions can inform how you approach a task. `authoredBy` says whether a person or an agent wrote it, and `assignedPersonaId` is the one this API key is assigned.",
   inputSchema: EMPTY_INPUT_SCHEMA,
   annotations: { title: "List personas", ...READ_ONLY },
   execute: async (_args, principal) => {
     const settings = await getUserSettings({ userId: principal.userId });
-    const rows = listPersonasForClient(settings?.customPersonas ?? []).map(
-      (persona) => ({
-        id: persona.id,
-        name: persona.name,
-        primaryRole: persona.primaryRole,
-        source: persona.source,
-      }),
-    );
+    const customPersonas = settings?.customPersonas ?? [];
+    // An org that narrows which builtin personas its members may use narrows
+    // them here too: an agent acts as the member, so it sees the member's list.
+    const available =
+      isOrgInstallMode() && principal.orgId
+        ? await buildOrgAwarePersonaList(
+            principal.orgId,
+            principal.userId,
+            normalizeCustomPersonas(customPersonas),
+          )
+        : listPersonasForClient(customPersonas);
+
+    const rows = available.map((persona) => ({
+      id: persona.id,
+      name: persona.name,
+      primaryRole: persona.primaryRole,
+      source: persona.source,
+      authoredBy: persona.authoredBy ?? "user",
+    }));
 
     return toolResult({
-      columns: ["id", "name", "primaryRole", "source"],
+      columns: ["id", "name", "primaryRole", "source", "authoredBy"],
       rows,
       defaultPersonaId: settings?.defaultPersonaId ?? null,
+      assignedPersonaId: resolveAssignedPersona(
+        principal.personaId,
+        customPersonas,
+      ).id,
     });
   },
 };
@@ -424,7 +459,7 @@ const getPersona: McpToolDefinition = {
   name: "osmcp_get_persona",
   title: "Get persona",
   description:
-    "Read the full instructions of one persona listed by osmcp_list_personas. A persona is a NetSuite specialist playbook — how a controller, auditor, or administrator approaches work. Adopt it yourself for the task at hand; this does not change any setting in OpenSuiteMCP.",
+    "Read the full instructions of one persona listed by osmcp_list_personas. A persona is a NetSuite specialist playbook — how a controller, auditor, or administrator approaches work. Adopt it yourself for the task at hand; this does not change any setting in OpenSuiteMCP. Reading a builtin is also how you learn the structure and voice a playbook takes here, before writing one with osmcp_create_persona.",
   inputSchema: {
     type: "object",
     properties: {

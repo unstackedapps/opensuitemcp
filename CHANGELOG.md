@@ -5,6 +5,34 @@ All notable changes to OpenSuiteMCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.4.0] - 2026-09-24
+
+### ✨ Added
+
+- **An agent can write personas and choose which one it is.** A key is assigned a persona the way it is already pinned to a NetSuite account: `osmcp_whoami` reports it, so a fresh connection learns which specialist it is meant to be without being told. `osmcp_create_persona` writes one — with `adopt` to become it in the same call — alongside `osmcp_update_persona`, `osmcp_delete_persona`, and `osmcp_set_agent_persona`, which sheds the current persona and returns the agent to Ava. Every key acts as some persona; Ava ships with the install and cannot be deleted, so no key is ever left holding a role that does not exist
+- **A person assigns the persona when they create the agent.** Agent access now opens a dialog, and each agent can be renamed or moved to a different specialist afterwards without touching its key
+- **NetSuite's prompt library is brokered to an agent.** `osmcp_list_prompts` and `osmcp_get_prompt` read the Companion SuiteApp's prompts live from the account, filterable by search, category, role and industry. Prompts carry their blanks as bracketed tokens and NetSuite publishes no schema for them, so they are detected rather than declared: `get` returns the filled text, the untouched template, and the blanks still open, and never refuses
+- **`osmcp_search_netsuite_docs`** — the Oracle NetSuite Help Center, through this install's own search and result cache, so an agent answers from documentation rather than memory
+- **`osmcp_create_chat` and `osmcp_append_chat`** — an agent's work appears as a thread in its owner's sidebar, stamped with the persona it acts as
+- **`toolsDigest`** on `tools/list` and `osmcp_whoami` — a fingerprint of the tool surface a key can reach. This server is stateless and cannot push `notifications/tools/list_changed`, so a watching agent compares one string instead of every entry
+- **An agent's key can be replaced without replacing the agent**, and copied again whenever its owner needs it — stored encrypted as well as hashed, returned only to that owner, and never rendered on screen
+- **Agents are archived rather than silently retired.** Revoking asks first, the agent keeps its name because the threads it opened still refer to it, and the archive is hidden behind a toggle
+
+### 🐛 Fixed
+
+- **`initialize` answers the revision the client asked for.** A conformant client states its revision in the request body; the `MCP-Protocol-Version` header is only defined for the calls that follow. Answering from the header pinned every such client to the oldest accepted revision
+- **A settings save no longer erases who wrote a persona.** The Personas panel sends the whole list back on every save and the settings schema did not name `authoredBy`, so adding one persona in the app unstamped every persona an agent had written — and the guardrail then read them as person-written, leaving an agent unable to revise its own work
+- **`osmcp_list_personas` honours organization persona policy.** An agent acting for a member of an organization that narrows the builtin personas could see all of them
+- **Saving a persona in Settings keeps its primary role**, a field the editor does not expose and was rebuilding away
+
+### ♻️ Changed
+
+- Personas carry an `authoredBy` stamp and the picker says which an agent wrote. An agent may revise or delete what agents wrote, never a persona a person wrote and never one its owner has made their default
+- The persona playbook structure has one definition, rendered into both the persona-builder interview and the MCP tool schema, so a persona written by an agent reads like one written by a person
+- The prompt browser and the MCP tools read one parser. NetSuite's payload opens by telling its reader to ignore the response — it is addressed to the app, not to a model — and only the prompt records leave that parser
+
+---
+
 ## [5.3.1] - 2026-09-23
 
 ### 🐛 Fixed

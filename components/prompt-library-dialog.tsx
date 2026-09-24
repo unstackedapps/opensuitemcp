@@ -22,21 +22,16 @@ import {
 } from "@/components/ui/select";
 import { ORACLE_DOC_LINKS } from "@/lib/netsuite/integration-checklist";
 import {
+  type NetSuitePrompt as PromptRecord,
+  parsePromptLibraryResult,
+} from "@/lib/netsuite/prompt-library";
+import {
   applyPromptPlaceholders,
   extractPromptPlaceholders,
   labelForPlaceholderField,
   type PromptPlaceholderField,
 } from "@/lib/netsuite/prompt-placeholders";
 import { cn } from "@/lib/utils";
-
-type PromptRecord = {
-  id: string;
-  name: string;
-  category: string;
-  roles: string[];
-  industries: string[];
-  prompt: string;
-};
 
 type PromptLibraryPanelProps = {
   active: boolean;
@@ -46,83 +41,6 @@ type PromptLibraryPanelProps = {
   onSelectPrompt?: (promptText: string, promptName: string) => void;
   onRequestClose?: () => void;
 };
-
-function parsePromptLibraryResult(result: unknown): {
-  prompts: PromptRecord[];
-  message?: string;
-  error?: string;
-} {
-  if (!result || typeof result !== "object") {
-    return { prompts: [], error: "Empty tool result" };
-  }
-
-  const record = result as {
-    content?: Array<{ type?: string; text?: string }>;
-    error?: string;
-  };
-
-  const text = record.content?.find((block) => block.type === "text")?.text;
-  if (!text) {
-    return {
-      prompts: [],
-      error: "No prompt payload was received from NetSuite.",
-    };
-  }
-
-  try {
-    const parsed = JSON.parse(text) as {
-      prompts?: unknown[];
-      message?: string;
-      error?: string;
-    };
-    const prompts = Array.isArray(parsed.prompts)
-      ? parsed.prompts
-          .map((item) => {
-            if (!item || typeof item !== "object") {
-              return null;
-            }
-            const prompt = item as Record<string, unknown>;
-            if (
-              typeof prompt.id !== "string" ||
-              typeof prompt.name !== "string" ||
-              typeof prompt.category !== "string" ||
-              !Array.isArray(prompt.roles) ||
-              !Array.isArray(prompt.industries) ||
-              typeof prompt.prompt !== "string"
-            ) {
-              return null;
-            }
-            return {
-              id: prompt.id,
-              name: prompt.name,
-              category: prompt.category,
-              roles: prompt.roles.filter(
-                (role): role is string => typeof role === "string",
-              ),
-              industries: prompt.industries.filter(
-                (industry): industry is string => typeof industry === "string",
-              ),
-              prompt: prompt.prompt,
-            } satisfies PromptRecord;
-          })
-          .filter((prompt): prompt is PromptRecord => prompt !== null)
-      : [];
-
-    return {
-      prompts,
-      message: parsed.message,
-      error: parsed.error,
-    };
-  } catch (error) {
-    return {
-      prompts: [],
-      error:
-        error instanceof Error
-          ? `Failed to parse prompt payload: ${error.message}`
-          : "Failed to parse prompt payload",
-    };
-  }
-}
 
 function emptyValuesForFields(
   fields: PromptPlaceholderField[],

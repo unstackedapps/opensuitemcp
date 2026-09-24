@@ -480,6 +480,7 @@ export async function buildOrgAwarePersonaList(
     shortName: string;
     primaryRole: string;
     source: PersonaSource;
+    authoredBy?: "agent";
   }>
 > {
   const personas = listPersonasForClient(customPersonas);
