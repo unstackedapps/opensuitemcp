@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { AVA_PERSONA_ID } from "@/lib/ai/personas/ids";
 import { fetcher } from "@/lib/utils";
 import { toast } from "./toast";
 
@@ -50,8 +51,6 @@ type PersonaOption = {
 };
 
 const ENDPOINT = "/api/settings/mcp-keys";
-/** Radix Select has no empty value, so "no persona" needs a sentinel. */
-const NO_PERSONA = "none";
 
 function blockedReason(data: McpKeysResponse): string {
   if (!data.policy.enabled) {
@@ -61,21 +60,26 @@ function blockedReason(data: McpKeysResponse): string {
 }
 
 /**
- * What a key's row says about its persona.
+ * The persona a key acts as.
  *
- * A key can outlive the persona it was minted with — an agent may delete one
- * it wrote. The row says so rather than falling silent, because a key that
- * looks roleless and one that lost its role need different fixes.
+ * Every key has one. A key minted before personas existed, and a key whose
+ * persona was deleted afterwards, both fall back to Ava — she ships with the
+ * install and cannot be removed, so no key is ever left holding a role that
+ * does not exist. Mirrors resolveAssignedPersona on the server.
  */
 function personaLabel(
   personaId: string | null,
   personas: PersonaOption[],
-): string | null {
-  if (!personaId) {
-    return null;
+): string {
+  const match = personaId
+    ? personas.find((persona) => persona.id === personaId)
+    : undefined;
+  if (match) {
+    return match.name;
   }
-  const match = personas.find((persona) => persona.id === personaId);
-  return match ? match.name : "Persona no longer exists";
+  return (
+    personas.find((persona) => persona.id === AVA_PERSONA_ID)?.name ?? "Ava"
+  );
 }
 
 export function McpAccessPanel({
@@ -91,7 +95,7 @@ export function McpAccessPanel({
     fetcher,
   );
   const [name, setName] = useState("");
-  const [personaId, setPersonaId] = useState<string>(NO_PERSONA);
+  const [personaId, setPersonaId] = useState<string>(AVA_PERSONA_ID);
   const [creating, setCreating] = useState(false);
   const [issuedToken, setIssuedToken] = useState<string | null>(null);
 
@@ -126,7 +130,7 @@ export function McpAccessPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: trimmed,
-          personaId: personaId === NO_PERSONA ? null : personaId,
+          personaId,
         }),
       });
       const payload = await response.json();
@@ -140,7 +144,7 @@ export function McpAccessPanel({
 
       setIssuedToken(payload.token);
       setName("");
-      setPersonaId(NO_PERSONA);
+      setPersonaId(AVA_PERSONA_ID);
       await mutate();
       await onChanged?.();
       toast({ type: "success", description: "Agent key created." });
@@ -282,7 +286,6 @@ export function McpAccessPanel({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={NO_PERSONA}>No persona</SelectItem>
                 {personas.map((persona) => (
                   <SelectItem key={persona.id} value={persona.id}>
                     {persona.name}
@@ -341,11 +344,9 @@ export function McpAccessPanel({
                           ? `Last used ${new Date(key.lastUsedAt).toLocaleDateString()}`
                           : "Never used"}
                       </span>
-                      {personaLabel(key.personaId, personas) ? (
-                        <Badge variant="secondary">
-                          {personaLabel(key.personaId, personas)}
-                        </Badge>
-                      ) : null}
+                      <Badge variant="secondary">
+                        {personaLabel(key.personaId, personas)}
+                      </Badge>
                     </div>
                   </div>
                   {key.status === "active" ? (

@@ -11,6 +11,7 @@ import type { CustomPersona } from "@/lib/ai/personas/types";
 import { getUserSettings, upsertUserSettings } from "@/lib/db/queries";
 import { generateUUID } from "@/lib/utils";
 import { setMcpApiKeyPersona } from "../keys";
+import { resolveAssignedPersona } from "../persona-assignment";
 import { type McpToolDefinition, toolError, toolResult } from "./types";
 
 /** Matches the per-persona storage cap enforced by normalizeCustomPersonas. */
@@ -272,7 +273,7 @@ const deletePersona: McpToolDefinition = {
   name: "osmcp_delete_persona",
   title: "Delete persona",
   description:
-    "Remove a persona this agent wrote. Only agent-authored personas can be deleted, and never one the user has made their default in OpenSuiteMCP. If this key is currently assigned that persona, the assignment is cleared too.",
+    "Remove a persona this agent wrote. Only agent-authored personas can be deleted, and never one the user has made their default in OpenSuiteMCP. If this key is currently acting as that persona, it falls back to Ava.",
   inputSchema: {
     type: "object",
     properties: {
@@ -328,10 +329,15 @@ const deletePersona: McpToolDefinition = {
       });
     }
 
+    const ava = resolveAssignedPersona(null, null);
     return toolResult(
-      { id: personaId, deleted: true, assignmentCleared: wasAdopted },
+      {
+        id: personaId,
+        deleted: true,
+        ...(wasAdopted ? { nowActingAs: ava.id } : {}),
+      },
       wasAdopted
-        ? `Deleted persona ${existing.name} and cleared it from this connection.`
+        ? `Deleted persona ${existing.name}. This connection now acts as ${ava.name}.`
         : `Deleted persona ${existing.name}.`,
     );
   },
@@ -341,14 +347,14 @@ const setAgentPersona: McpToolDefinition = {
   name: "osmcp_set_agent_persona",
   title: "Set agent persona",
   description:
-    "Assign a persona to this API key, or shed the current one by omitting `personaId`. The assignment is reported by osmcp_whoami on every future connection, so a fresh session learns which specialist it is meant to be. It records intent only: read the instructions with osmcp_get_persona and adopt them yourself.",
+    "Assign a persona to this API key, or shed the current one by omitting `personaId`, which returns this connection to Ava. Every key acts as some persona; Ava is the one it falls back to. The assignment is reported by osmcp_whoami on every future connection, so a fresh session learns which specialist it is meant to be. It records intent only: read the instructions with osmcp_get_persona and adopt them yourself.",
   inputSchema: {
     type: "object",
     properties: {
       personaId: {
         type: "string",
         description:
-          "An `id` from osmcp_list_personas. Omit or pass an empty string to shed the current persona.",
+          "An `id` from osmcp_list_personas. Omit or pass an empty string to shed the current persona and return to Ava.",
       },
     },
     additionalProperties: false,
@@ -363,9 +369,10 @@ const setAgentPersona: McpToolDefinition = {
         keyId: principal.keyId,
         personaId: null,
       });
+      const ava = resolveAssignedPersona(null, null);
       return toolResult(
-        { personaId: null, name: null },
-        "This connection no longer has an assigned persona.",
+        { personaId: ava.id, name: ava.name, shed: true },
+        `Shed the previous persona. This connection now acts as ${ava.name}.`,
       );
     }
 

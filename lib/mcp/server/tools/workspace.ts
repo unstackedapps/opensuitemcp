@@ -26,6 +26,7 @@ import {
 } from "@/lib/netsuite/tokens";
 import { buildOrgAwarePersonaList } from "@/lib/org/enforcement";
 import { isOrgInstallMode } from "@/lib/org/install-config";
+import { resolveAssignedPersona } from "../persona-assignment";
 import { resolveMcpPolicy } from "../policy";
 import {
   EMPTY_INPUT_SCHEMA,
@@ -65,34 +66,11 @@ export function resolveAccountForPrincipal(params: {
     : null;
 }
 
-/**
- * What osmcp_whoami says about the persona this key is assigned.
- *
- * A deleted persona is reported rather than hidden: an agent told nothing
- * would act roleless without knowing it had lost one.
- */
-function describeAssignedPersona(
-  assignedId: string | null,
-  resolved: { id: string; name: string } | null,
-): Record<string, unknown> | null {
-  if (resolved) {
-    return { id: resolved.id, name: resolved.name };
-  }
-  if (!assignedId) {
-    return null;
-  }
-  return {
-    id: assignedId,
-    name: null,
-    note: "This key is assigned a persona that no longer exists. Call osmcp_set_agent_persona to pick another or shed it.",
-  };
-}
-
 const whoami: McpToolDefinition = {
   name: "osmcp_whoami",
   title: "Who am I",
   description:
-    "Identify the OpenSuiteMCP user this connection acts as, the NetSuite account calls will run against, and the persona this agent is assigned. Call this first to confirm the acting identity before doing work.",
+    "Identify the OpenSuiteMCP user this connection acts as, the NetSuite account calls will run against, and the persona this agent is acting as. Every key has a persona; a key with none assigned acts as Ava. Call this first to confirm the acting identity before doing work.",
   inputSchema: EMPTY_INPUT_SCHEMA,
   annotations: { title: "Who am I", ...READ_ONLY },
   execute: async (_args, principal) => {
@@ -104,9 +82,10 @@ const whoami: McpToolDefinition = {
       fallbackAccountId: accounts[0]?.accountId,
     });
     const policy = await resolveMcpPolicy(principal.orgId);
-    const persona = principal.personaId
-      ? getPersonaContent(principal.personaId, settings?.customPersonas ?? [])
-      : null;
+    const persona = resolveAssignedPersona(
+      principal.personaId,
+      settings?.customPersonas,
+    );
 
     return toolResult({
       user: {
@@ -118,7 +97,12 @@ const whoami: McpToolDefinition = {
         name: principal.keyName,
         pinnedNetSuiteAccountId: principal.pinnedNetSuiteAccountId,
       },
-      persona: describeAssignedPersona(principal.personaId, persona),
+      persona: {
+        id: persona.id,
+        name: persona.name,
+        primaryRole: persona.primaryRole,
+        source: persona.source,
+      },
       netsuite: {
         activeAccountId,
         accountPinnedToKey: Boolean(principal.pinnedNetSuiteAccountId),
@@ -387,7 +371,10 @@ const listPersonas: McpToolDefinition = {
       columns: ["id", "name", "primaryRole", "source", "authoredBy"],
       rows,
       defaultPersonaId: settings?.defaultPersonaId ?? null,
-      assignedPersonaId: principal.personaId,
+      assignedPersonaId: resolveAssignedPersona(
+        principal.personaId,
+        customPersonas,
+      ).id,
     });
   },
 };
