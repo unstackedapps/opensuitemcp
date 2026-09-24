@@ -1,7 +1,13 @@
 import "server-only";
 
-import { getChatById, saveChat, saveMessages } from "@/lib/db/queries";
+import {
+  getChatById,
+  getUserSettings,
+  saveChat,
+  saveMessages,
+} from "@/lib/db/queries";
 import { generateUUID } from "@/lib/utils";
+import { resolveAssignedPersona } from "../persona-assignment";
 import { type McpToolDefinition, toolError, toolResult } from "./types";
 
 const MAX_TITLE = 200;
@@ -30,7 +36,7 @@ const createChat: McpToolDefinition = {
   name: "osmcp_create_chat",
   title: "Create chat",
   description:
-    "Open a new thread in this user's OpenSuiteMCP chat history to record what this agent is doing. The thread is private to the user and appears in their sidebar alongside their own conversations, which is how a person reviews autonomous work after the fact. Create one at the start of a task, then record each step with osmcp_append_chat. If this key is assigned a persona, the thread is stamped with it.",
+    "Open a new thread in this user's OpenSuiteMCP chat history to record what this agent is doing. The thread is private to the user and appears in their sidebar alongside their own conversations, which is how a person reviews autonomous work after the fact. Create one at the start of a task, then record each step with osmcp_append_chat. The thread is stamped with the persona this key acts as.",
   inputSchema: {
     type: "object",
     properties: {
@@ -56,10 +62,15 @@ const createChat: McpToolDefinition = {
 
     const summary = readString(args, "summary").slice(0, MAX_SUMMARY);
     const chatId = generateUUID();
+    // The persona the key actually acts as, so a thread is never stamped with
+    // an id that has since been deleted.
+    const settings = await getUserSettings({ userId: principal.userId });
+    const acting = resolveAssignedPersona(
+      principal.personaId,
+      settings?.customPersonas,
+    );
     const personaId =
-      principal.personaId && principal.personaId.length <= MAX_CHAT_PERSONA_ID
-        ? principal.personaId
-        : null;
+      acting.id.length <= MAX_CHAT_PERSONA_ID ? acting.id : null;
 
     await saveChat({
       id: chatId,
