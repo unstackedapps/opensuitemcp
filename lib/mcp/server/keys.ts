@@ -3,6 +3,7 @@ import "server-only";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { type McpApiKey, mcpApiKey, user } from "@/lib/db/schema";
+import { decrypt, encrypt } from "@/lib/encryption";
 import { ChatSDKError } from "@/lib/errors";
 import { normalizeNetSuiteAccountId } from "@/lib/netsuite/accounts";
 import {
@@ -18,6 +19,8 @@ export type McpApiKeySummary = {
   name: string;
   tokenId: string;
   maskedToken: string;
+  /** Whether the key can still be copied, or was minted before that existed. */
+  copyable: boolean;
   netsuiteAccountId: string | null;
   personaId: string | null;
   lastUsedAt: Date | null;
@@ -53,6 +56,7 @@ function toSummary(row: McpApiKey): McpApiKeySummary {
     name: row.name,
     tokenId: row.tokenId,
     maskedToken: maskMcpApiKey(row.tokenId),
+    copyable: Boolean(row.tokenCipher),
     netsuiteAccountId: row.netsuiteAccountId,
     personaId: row.personaId,
     lastUsedAt: row.lastUsedAt,
@@ -120,6 +124,7 @@ export async function createMcpApiKey(params: {
         name: params.name,
         tokenId: minted.tokenId,
         tokenHash: minted.tokenHash,
+        tokenCipher: encrypt(minted.token),
         netsuiteAccountId: pinnedAccountId,
         personaId: params.personaId?.trim() || null,
         expiresAt: params.expiresAt ?? null,
@@ -203,6 +208,7 @@ export async function rotateMcpApiKey(params: {
       .set({
         tokenId: minted.tokenId,
         tokenHash: minted.tokenHash,
+        tokenCipher: encrypt(minted.token),
         rotatedAt: new Date(),
         // A rotated key starts its usage history over; the row's createdAt
         // still says when the agent itself was made.
@@ -283,6 +289,48 @@ export async function setMcpApiKeyPersona(params: {
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to set the persona for the MCP API key",
+    );
+  }
+}
+
+/**
+ * Hand the owner their own key back.
+ *
+ * The secret is stored encrypted as well as hashed so a person can copy it
+ * whenever they need it, rather than losing it to a dismissed dialog. That is
+ * a deliberate trade: the hash alone could not be turned back into a working
+ * credential, and this can, which is why it is scoped to the owning user, why
+ * the ciphertext never leaves the server, and why the key is still never
+ * rendered on screen.
+ *
+ * Returns null for a key minted before the cipher column existed — there is
+ * nothing to recover, and replacing it is the way forward.
+ */
+export async function revealMcpApiKey(params: {
+  userId: string;
+  keyId: string;
+}): Promise<string | null> {
+  try {
+    const [row] = await db
+      .select({ tokenCipher: mcpApiKey.tokenCipher })
+      .from(mcpApiKey)
+      .where(
+        and(
+          eq(mcpApiKey.id, params.keyId),
+          eq(mcpApiKey.userId, params.userId),
+          isNull(mcpApiKey.revokedAt),
+        ),
+      )
+      .limit(1);
+
+    if (!row?.tokenCipher) {
+      return null;
+    }
+    return decrypt(row.tokenCipher);
+  } catch (_error) {
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to read the MCP API key",
     );
   }
 }
