@@ -13,13 +13,18 @@ import {
 async function main() {
   const attempts = skillSyncAttemptCount();
 
+  // Reported, not fatal — the same answer the Community sync below already
+  // gives. This runs from the container entrypoint under `set -e`, before the
+  // server starts, so exiting non-zero here turned an unreachable Oracle into
+  // an app that never came up: the boot repeated, and re-ran migrations, every
+  // few seconds. Skills stay at the last pack that synced, which is a worse
+  // install than a fresh sync and a far better one than no install at all.
   try {
     await withSkillSyncRetry("Oracle sync", syncOracleSkills);
   } catch (error) {
     console.error(
-      `[skills] Oracle sync failed after ${attempts} attempt(s): ${formatSkillSyncError(error)}`,
+      `[skills] Oracle sync failed after ${attempts} attempt(s): ${formatSkillSyncError(error)}. Continuing with the packs already on disk.`,
     );
-    process.exit(1);
   }
 
   try {
