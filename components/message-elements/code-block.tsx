@@ -22,12 +22,17 @@ const CodeBlockContext = createContext<CodeBlockContextType>({
   code: "",
 });
 
-const TOOL_CODE_HIGHLIGHT_STYLE = {
+const HIGHLIGHT_BASE = {
   margin: 0,
   padding: "0.5rem",
   fontSize: "0.75rem",
   background: "hsl(var(--background))",
   color: "hsl(var(--foreground))",
+} as const;
+
+/** Inside a chat bubble: nothing may overflow sideways, so lines wrap. */
+const WRAPPED_HIGHLIGHT_STYLE = {
+  ...HIGHLIGHT_BASE,
   overflow: "hidden",
   overflowX: "hidden",
   overflowWrap: "anywhere",
@@ -36,17 +41,47 @@ const TOOL_CODE_HIGHLIGHT_STYLE = {
   maxWidth: "100%",
 } as const;
 
+/**
+ * Given a pane of its own: lines keep their length and the block scrolls.
+ *
+ * These have to be inline rather than classes — the highlighter writes its own
+ * style attribute, and an inline rule beats any class we could put on it.
+ */
+const SCROLLED_HIGHLIGHT_STYLE = {
+  ...HIGHLIGHT_BASE,
+  overflowX: "auto",
+  overflowY: "hidden",
+  overflowWrap: "normal",
+  wordBreak: "normal",
+  whiteSpace: "pre",
+} as const;
+
 const CODE_BLOCK_FRAME_CLASSNAME =
-  "relative w-full min-w-0 max-w-full overflow-hidden rounded-md border bg-background text-foreground [&_code]:wrap-break-word [&_code]:whitespace-pre-wrap [&_pre]:max-w-full [&_pre]:overflow-x-hidden [&_pre]:whitespace-pre-wrap [&_pre]:wrap-break-word";
+  "relative w-full min-w-0 max-w-full rounded-md border bg-background text-foreground";
+
+/** Wrapping keeps a block inside a chat bubble; nothing overflows sideways. */
+const WRAPPED_CLASSNAME =
+  "overflow-hidden [&_code]:wrap-break-word [&_code]:whitespace-pre-wrap [&_pre]:max-w-full [&_pre]:overflow-x-hidden [&_pre]:whitespace-pre-wrap [&_pre]:wrap-break-word";
+
+/**
+ * Scrolling is for a block with room of its own. Code wrapped mid-token is
+ * harder to read than code you scroll, and indentation is most of how a script
+ * is read at all — which is the whole reason for moving it somewhere wider.
+ */
+const SCROLLED_CLASSNAME =
+  // Marked important on purpose. The highlighter writes its own style
+  // attribute on the `pre`, and an inline rule beats any ordinary class we
+  // could hand it — so the one place this can be stated is here.
+  "overflow-hidden [&_code]:whitespace-pre [&_code]:[overflow-wrap:normal] [&_code]:[word-break:normal] [&_pre]:!overflow-x-auto [&_pre]:!overflow-y-hidden [&_pre]:!whitespace-pre [&_pre]:min-w-full";
 
 function WrappingPre({ className, style, ...props }: ComponentProps<"pre">) {
   return (
     <pre
       {...props}
-      className={cn(
-        "max-w-full overflow-x-hidden whitespace-pre-wrap wrap-break-word",
-        className,
-      )}
+      // No wrapping decision of its own: the frame above sets wrapped or
+      // scrolled for every element inside it, and a hardcoded rule here would
+      // win over the scrolled one by specificity of being inline.
+      className={cn("max-w-full", className)}
       style={{
         ...style,
         maxWidth: "100%",
@@ -107,21 +142,27 @@ function CodeBlockHighlight({
   code,
   language,
   showLineNumbers,
+  wrap,
 }: {
   code: string;
   language: string;
   showLineNumbers: boolean;
+  wrap: boolean;
   children?: ReactNode;
 }) {
+  const codeClassName = wrap
+    ? "font-mono text-xs wrap-break-word whitespace-pre-wrap"
+    : "font-mono text-xs whitespace-pre";
+  const highlightStyle = wrap
+    ? WRAPPED_HIGHLIGHT_STYLE
+    : SCROLLED_HIGHLIGHT_STYLE;
   return (
     <div className="relative">
       <SyntaxHighlighter
         PreTag={WrappingPre}
-        className="overflow-hidden dark:hidden"
-        codeTagProps={{
-          className: "font-mono text-xs wrap-break-word whitespace-pre-wrap",
-        }}
-        customStyle={TOOL_CODE_HIGHLIGHT_STYLE}
+        className={cn(wrap && "overflow-hidden", "dark:hidden")}
+        codeTagProps={{ className: codeClassName }}
+        customStyle={highlightStyle}
         language={language}
         lineNumberStyle={{
           color: "hsl(var(--muted-foreground))",
@@ -130,17 +171,15 @@ function CodeBlockHighlight({
         }}
         showLineNumbers={showLineNumbers}
         style={oneLight}
-        wrapLongLines
+        wrapLongLines={wrap}
       >
         {code}
       </SyntaxHighlighter>
       <SyntaxHighlighter
         PreTag={WrappingPre}
-        className="hidden overflow-hidden dark:block"
-        codeTagProps={{
-          className: "font-mono text-xs wrap-break-word whitespace-pre-wrap",
-        }}
-        customStyle={TOOL_CODE_HIGHLIGHT_STYLE}
+        className={cn("hidden", wrap && "overflow-hidden", "dark:block")}
+        codeTagProps={{ className: codeClassName }}
+        customStyle={highlightStyle}
         language={language}
         lineNumberStyle={{
           color: "hsl(var(--muted-foreground))",
@@ -149,7 +188,7 @@ function CodeBlockHighlight({
         }}
         showLineNumbers={showLineNumbers}
         style={oneDark}
-        wrapLongLines
+        wrapLongLines={wrap}
       >
         {code}
       </SyntaxHighlighter>
@@ -166,6 +205,8 @@ export type CodeBlockProps = HTMLAttributes<HTMLDivElement> & {
   code: string;
   language: string;
   showLineNumbers?: boolean;
+  /** False scrolls long lines instead of wrapping them. */
+  wrap?: boolean;
   children?: ReactNode;
 };
 
@@ -173,6 +214,7 @@ export const CodeBlock = ({
   code,
   language,
   showLineNumbers = false,
+  wrap = true,
   className,
   children,
   ...props
@@ -182,7 +224,11 @@ export const CodeBlock = ({
   return (
     <CodeBlockContext.Provider value={{ code }}>
       <div
-        className={cn(CODE_BLOCK_FRAME_CLASSNAME, className)}
+        className={cn(
+          CODE_BLOCK_FRAME_CLASSNAME,
+          wrap ? WRAPPED_CLASSNAME : SCROLLED_CLASSNAME,
+          className,
+        )}
         {...props}
         aria-busy={!isHighlighted}
       >
@@ -191,6 +237,7 @@ export const CodeBlock = ({
             code={code}
             language={language}
             showLineNumbers={showLineNumbers}
+            wrap={wrap}
           >
             {children}
           </CodeBlockHighlight>

@@ -6,6 +6,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import { unstable_serialize } from "swr/infinite";
+import { CanvasPanel } from "@/components/canvas/canvas-panel";
+import { CanvasProvider } from "@/components/canvas/context";
 import { ChatHeader } from "@/components/chat-header";
 import {
   type PersonaListItem,
@@ -875,196 +877,207 @@ export function Chat({
   };
 
   return (
-    <>
-      <div className="overscroll-behavior-contain flex h-dvh min-h-0 min-w-0 touch-pan-y flex-col overflow-hidden bg-background">
-        <ChatHeader
-          chatId={id}
-          isReadonly={isReadonly}
-          onPersonaClick={
-            canChangePersona
-              ? () => {
-                  setIsChangingPersona(true);
-                  setShowPersonaPicker(true);
-                }
-              : undefined
-          }
-          personaName={personaDisplayName}
-          selectedVisibilityType={initialVisibilityType}
-        />
-
-        <Messages
-          chatId={id}
-          inputComponent={
-            !isReadonly && messages.length === 0 ? (
-              <MultimodalInput
-                aiProviderId={aiProviderId}
-                chatId={id}
-                disabled={maxIterationsReached || !personaReady}
-                followSettingsDefault
-                input={input}
-                isPersonaBuilder={isPersonaBuilder}
-                key={id}
-                onAiProviderChange={setAiProviderId}
-                onCancelInterview={
-                  isPersonaBuilder ? handleCancelInterview : undefined
-                }
-                onModelChange={setCurrentModelId}
-                onSavePersona={isPersonaBuilder ? handleSavePersona : undefined}
-                isDraftingPersona={isDraftingPersona}
-                personaName={personaDisplayName}
-                selectedModelId={currentModelId}
-                selectedVisibilityType={visibilityType}
-                sendMessage={sendMessage}
-                setInput={setInput}
-                setMessages={setMessages}
-                status={status}
-                stop={stop}
-                usage={usage}
-              />
-            ) : undefined
-          }
-          isReadonly={isReadonly}
-          messages={messages}
-          onMcpAppUserMessage={(text) => {
-            if (
-              maxIterationsReached ||
-              status === "streaming" ||
-              status === "submitted"
-            ) {
-              setInput(text);
-              return;
+    // Provider and panel live here rather than in the route layout: the hosted
+    // repo ships its own copy of app/(chat)/layout.tsx, and anything mounted
+    // there is overwritten at image build with no warning. Chat is the widest
+    // component the overlay leaves alone.
+    <CanvasProvider>
+      <div className="flex h-dvh min-h-0 w-full overflow-hidden">
+        <div className="overscroll-behavior-contain flex h-dvh min-h-0 min-w-0 flex-1 touch-pan-y flex-col overflow-hidden bg-background">
+          <ChatHeader
+            chatId={id}
+            isReadonly={isReadonly}
+            onPersonaClick={
+              canChangePersona
+                ? () => {
+                    setIsChangingPersona(true);
+                    setShowPersonaPicker(true);
+                  }
+                : undefined
             }
-            sendMessage({
-              role: "user",
-              parts: [{ type: "text", text }],
-            });
-          }}
-          regenerate={regenerate}
-          selectedModelId={initialChatModel}
-          setMessages={setMessages}
-          status={status}
-          usage={usage}
-          votes={votes}
-        />
+            personaName={personaDisplayName}
+            selectedVisibilityType={initialVisibilityType}
+          />
 
-        {messages.length > 0 && (
-          <div className="relative z-1 mx-auto flex w-full max-w-composer flex-col gap-2 border-t-0 bg-background px-2 pb-3 md:px-4 md:pb-4">
-            <div
-              aria-hidden
-              className="pointer-events-none absolute inset-x-0 -top-10 h-10 bg-linear-to-t from-background to-transparent"
-            />
-            {maxIterationsReached && !isReadonly && (
-              <Card className="w-full border-blue-500/50 bg-blue-500/10 dark:bg-blue-500/20">
-                <CardContent className="p-4">
-                  <div className="mb-2 flex items-center gap-2">
-                    <div className="text-blue-600 dark:text-blue-400">
-                      <InfoIcon size={16} />
-                    </div>
-                    <h4 className="font-semibold text-blue-600 dark:text-blue-400">
-                      Information
-                    </h4>
-                  </div>
-                  <div className="space-y-3">
-                    <div className="wrap-break-word text-sm text-blue-700 dark:text-blue-300">
-                      I've reached the maximum number of reasoning steps allowed
-                      for this response. What would you like to do?
-                    </div>
-                    <div className="flex flex-wrap gap-2 pt-2">
-                      <Button
-                        onClick={async () => {
-                          // Clear the flag
-                          await fetch(`/api/chat/${id}/max-iterations`, {
-                            method: "POST",
-                          });
-                          setMaxIterationsReached(false);
-                          // Send auto message
-                          sendMessage({
-                            role: "user",
-                            parts: [
-                              {
-                                type: "text",
-                                text: "Please search NetSuite web resources to help you better understand the steps to take, then please try again.",
-                              },
-                            ],
-                          });
-                        }}
-                        size="sm"
-                        variant="default"
-                      >
-                        Check NetSuite KB and continue
-                      </Button>
-                      <Button
-                        onClick={async () => {
-                          // Clear the flag
-                          await fetch(`/api/chat/${id}/max-iterations`, {
-                            method: "POST",
-                          });
-                          setMaxIterationsReached(false);
-                        }}
-                        size="sm"
-                        variant="outline"
-                      >
-                        No, I'm fine
-                      </Button>
-                      <Button
-                        onClick={async () => {
-                          // Clear the flag
-                          await fetch(`/api/chat/${id}/max-iterations`, {
-                            method: "POST",
-                          });
-                          setMaxIterationsReached(false);
-                          // Send auto message
-                          sendMessage({
-                            role: "user",
-                            parts: [
-                              {
-                                type: "text",
-                                text: "Please continue and try to answer my question.",
-                              },
-                            ],
-                          });
-                        }}
-                        size="sm"
-                        variant="secondary"
-                      >
-                        Brute force it
-                      </Button>
-                    </div>
-                    <p className="text-xs text-blue-600/80 dark:text-blue-400/80">
-                      You can change this limit in Settings under AI Provider →
-                      Max Reasoning Steps.
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-            {!isReadonly && (
-              <MultimodalInput
-                aiProviderId={aiProviderId}
-                chatId={id}
-                disabled={maxIterationsReached || !personaReady}
-                input={input}
-                isPersonaBuilder={isPersonaBuilder}
-                onAiProviderChange={setAiProviderId}
-                onCancelInterview={
-                  isPersonaBuilder ? handleCancelInterview : undefined
-                }
-                onModelChange={setCurrentModelId}
-                onSavePersona={isPersonaBuilder ? handleSavePersona : undefined}
-                isDraftingPersona={isDraftingPersona}
-                personaName={personaDisplayName}
-                selectedModelId={currentModelId}
-                selectedVisibilityType={visibilityType}
-                sendMessage={sendMessage}
-                setInput={setInput}
-                setMessages={setMessages}
-                status={status}
-                stop={stop}
-                usage={usage}
+          <Messages
+            chatId={id}
+            inputComponent={
+              !isReadonly && messages.length === 0 ? (
+                <MultimodalInput
+                  aiProviderId={aiProviderId}
+                  chatId={id}
+                  disabled={maxIterationsReached || !personaReady}
+                  followSettingsDefault
+                  input={input}
+                  isPersonaBuilder={isPersonaBuilder}
+                  key={id}
+                  onAiProviderChange={setAiProviderId}
+                  onCancelInterview={
+                    isPersonaBuilder ? handleCancelInterview : undefined
+                  }
+                  onModelChange={setCurrentModelId}
+                  onSavePersona={
+                    isPersonaBuilder ? handleSavePersona : undefined
+                  }
+                  isDraftingPersona={isDraftingPersona}
+                  personaName={personaDisplayName}
+                  selectedModelId={currentModelId}
+                  selectedVisibilityType={visibilityType}
+                  sendMessage={sendMessage}
+                  setInput={setInput}
+                  setMessages={setMessages}
+                  status={status}
+                  stop={stop}
+                  usage={usage}
+                />
+              ) : undefined
+            }
+            isReadonly={isReadonly}
+            messages={messages}
+            onMcpAppUserMessage={(text) => {
+              if (
+                maxIterationsReached ||
+                status === "streaming" ||
+                status === "submitted"
+              ) {
+                setInput(text);
+                return;
+              }
+              sendMessage({
+                role: "user",
+                parts: [{ type: "text", text }],
+              });
+            }}
+            regenerate={regenerate}
+            selectedModelId={initialChatModel}
+            setMessages={setMessages}
+            status={status}
+            usage={usage}
+            votes={votes}
+          />
+
+          {messages.length > 0 && (
+            <div className="relative z-1 mx-auto flex w-full max-w-composer flex-col gap-2 border-t-0 bg-background px-2 pb-3 md:px-4 md:pb-4">
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-x-0 -top-10 h-10 bg-linear-to-t from-background to-transparent"
               />
-            )}
-          </div>
-        )}
+              {maxIterationsReached && !isReadonly && (
+                <Card className="w-full border-blue-500/50 bg-blue-500/10 dark:bg-blue-500/20">
+                  <CardContent className="p-4">
+                    <div className="mb-2 flex items-center gap-2">
+                      <div className="text-blue-600 dark:text-blue-400">
+                        <InfoIcon size={16} />
+                      </div>
+                      <h4 className="font-semibold text-blue-600 dark:text-blue-400">
+                        Information
+                      </h4>
+                    </div>
+                    <div className="space-y-3">
+                      <div className="wrap-break-word text-sm text-blue-700 dark:text-blue-300">
+                        I've reached the maximum number of reasoning steps
+                        allowed for this response. What would you like to do?
+                      </div>
+                      <div className="flex flex-wrap gap-2 pt-2">
+                        <Button
+                          onClick={async () => {
+                            // Clear the flag
+                            await fetch(`/api/chat/${id}/max-iterations`, {
+                              method: "POST",
+                            });
+                            setMaxIterationsReached(false);
+                            // Send auto message
+                            sendMessage({
+                              role: "user",
+                              parts: [
+                                {
+                                  type: "text",
+                                  text: "Please search NetSuite web resources to help you better understand the steps to take, then please try again.",
+                                },
+                              ],
+                            });
+                          }}
+                          size="sm"
+                          variant="default"
+                        >
+                          Check NetSuite KB and continue
+                        </Button>
+                        <Button
+                          onClick={async () => {
+                            // Clear the flag
+                            await fetch(`/api/chat/${id}/max-iterations`, {
+                              method: "POST",
+                            });
+                            setMaxIterationsReached(false);
+                          }}
+                          size="sm"
+                          variant="outline"
+                        >
+                          No, I'm fine
+                        </Button>
+                        <Button
+                          onClick={async () => {
+                            // Clear the flag
+                            await fetch(`/api/chat/${id}/max-iterations`, {
+                              method: "POST",
+                            });
+                            setMaxIterationsReached(false);
+                            // Send auto message
+                            sendMessage({
+                              role: "user",
+                              parts: [
+                                {
+                                  type: "text",
+                                  text: "Please continue and try to answer my question.",
+                                },
+                              ],
+                            });
+                          }}
+                          size="sm"
+                          variant="secondary"
+                        >
+                          Brute force it
+                        </Button>
+                      </div>
+                      <p className="text-xs text-blue-600/80 dark:text-blue-400/80">
+                        You can change this limit in Settings under AI Provider
+                        → Max Reasoning Steps.
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+              {!isReadonly && (
+                <MultimodalInput
+                  aiProviderId={aiProviderId}
+                  chatId={id}
+                  disabled={maxIterationsReached || !personaReady}
+                  input={input}
+                  isPersonaBuilder={isPersonaBuilder}
+                  onAiProviderChange={setAiProviderId}
+                  onCancelInterview={
+                    isPersonaBuilder ? handleCancelInterview : undefined
+                  }
+                  onModelChange={setCurrentModelId}
+                  onSavePersona={
+                    isPersonaBuilder ? handleSavePersona : undefined
+                  }
+                  isDraftingPersona={isDraftingPersona}
+                  personaName={personaDisplayName}
+                  selectedModelId={currentModelId}
+                  selectedVisibilityType={visibilityType}
+                  sendMessage={sendMessage}
+                  setInput={setInput}
+                  setMessages={setMessages}
+                  status={status}
+                  stop={stop}
+                  usage={usage}
+                />
+              )}
+            </div>
+          )}
+        </div>
+        <CanvasPanel />
       </div>
 
       {!isReadonly ? (
@@ -1163,6 +1176,6 @@ export function Chat({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </>
+    </CanvasProvider>
   );
 }

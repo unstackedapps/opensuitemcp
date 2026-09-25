@@ -610,7 +610,10 @@ const PurePreviewMessage = ({
                     output={
                       recorded.output === undefined ||
                       recorded.output === null ? null : (
-                        <McpToolOutput output={recorded.output} />
+                        <McpToolOutput
+                          output={recorded.output}
+                          toolName={recorded.toolName}
+                        />
                       )
                     }
                     state={recorded.state}
@@ -664,7 +667,10 @@ const PurePreviewMessage = ({
                         ) : null}
                         {toolPart.output === undefined ||
                         toolPart.output === null ? null : (
-                          <McpToolOutput output={toolPart.output} />
+                          <McpToolOutput
+                            output={toolPart.output}
+                            toolName={toolPart.type.replace(/^tool-/, "")}
+                          />
                         )}
                       </div>
                     }
