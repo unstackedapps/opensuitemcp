@@ -528,7 +528,12 @@ const SidebarInset = forwardRef<HTMLDivElement, ComponentProps<"main">>(
     return (
       <main
         className={cn(
-          "relative flex w-full flex-1 flex-col bg-background",
+          // min-w-0 is what lets this shrink to the room the sidebar leaves it.
+          // A flex item defaults to min-width:auto, so content wider than the
+          // available space pushes the item past it instead — invisible while
+          // everything inside was centred and clipped, and plain as soon as
+          // something sits flush against the right edge.
+          "relative flex w-full min-w-0 flex-1 flex-col bg-background",
           "md:peer-data-[state=collapsed]:peer-data-[variant=inset]:ml-2 md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow",
           className
         )}

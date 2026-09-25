@@ -3,6 +3,7 @@
 import type { ComponentProps, ElementType, HTMLAttributes } from "react";
 import { memo, useEffect, useState } from "react";
 import { Streamdown } from "streamdown";
+import { CanvasablePre } from "@/components/canvas/canvasable-pre";
 import { cn } from "@/lib/utils";
 
 type ResponseProps = ComponentProps<typeof Streamdown>;
@@ -51,6 +52,9 @@ export const Response = memo(
         components={{
           ...components,
           p: ParagraphAsDiv as ElementType,
+          // A long fence is the case canvas exists for, and a script the model
+          // wrote is a fence like any other.
+          pre: CanvasablePre as ElementType,
         }}
         {...props}
       >
