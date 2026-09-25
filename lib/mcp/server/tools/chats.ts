@@ -3,12 +3,11 @@ import "server-only";
 import { appendChatMessage, getUserSettings, saveChat } from "@/lib/db/queries";
 import { generateUUID } from "@/lib/utils";
 import { resolveAssignedPersona } from "../persona-assignment";
+import { buildMessageParts } from "./chat-parts";
 import { type McpToolDefinition, toolError, toolResult } from "./types";
 
 const MAX_TITLE = 200;
 const MAX_SUMMARY = 1000;
-/** Matches what a person could paste into one chat turn. */
-const MAX_APPEND_TEXT = 32_000;
 /** Chat.personaId is varchar(64); a key may hold a longer custom persona id. */
 const MAX_CHAT_PERSONA_ID = 64;
 
@@ -92,7 +91,7 @@ const appendChat: McpToolDefinition = {
   name: "osmcp_append_chat",
   title: "Append to chat",
   description:
-    "Add a message to a thread this agent owns, so a person can read what happened. Use role `user` for the instruction or trigger this agent acted on, and `assistant` for what the agent did or concluded. Append as you go rather than in one block at the end — a thread that stops mid-task is itself a useful record.",
+    "Add a message to a thread this agent owns, so a person can read what happened. Use role `user` for the instruction or trigger this agent acted on, and `assistant` for what the agent did or concluded. Append as you go rather than in one block at the end — a thread that stops mid-task is itself a useful record. For plain prose pass `text`. To record a turn as it actually happened, pass `parts` instead: entries of kind `text`, `reasoning`, or `tool` with the tool's `name`, `input` and `output` — a recorded tool call is shown the way this app shows its own, with its arguments and result, rather than described in prose.",
   inputSchema: {
     type: "object",
     properties: {
@@ -109,10 +108,48 @@ const appendChat: McpToolDefinition = {
       },
       text: {
         type: "string",
-        description: "The message body as markdown.",
+        description:
+          "The message body as markdown. Use this or `parts`, not both.",
+      },
+      parts: {
+        type: "array",
+        description:
+          "The turn as it happened, in order. Use instead of `text` when the turn had reasoning or tool calls worth keeping.",
+        items: {
+          type: "object",
+          properties: {
+            kind: {
+              type: "string",
+              enum: ["text", "reasoning", "tool"],
+              description:
+                "`text` for prose, `reasoning` for the agent's thinking, `tool` for a call it made.",
+            },
+            text: {
+              type: "string",
+              description: "Body of a `text` or `reasoning` part.",
+            },
+            name: {
+              type: "string",
+              description:
+                "Name of the tool called, as its own system reports it.",
+            },
+            input: {
+              type: "object",
+              description: "Arguments the tool was called with.",
+            },
+            output: {
+              description: "What the tool returned. Omit if it has not yet.",
+            },
+            error: {
+              type: "string",
+              description: "Why the call failed, if it did.",
+            },
+          },
+          required: ["kind"],
+        },
       },
     },
-    required: ["chatId", "role", "text"],
+    required: ["chatId", "role"],
     additionalProperties: false,
   },
   annotations: { title: "Append to chat", ...WRITE },
@@ -129,13 +166,9 @@ const appendChat: McpToolDefinition = {
         `\`role\` must be one of ${APPENDABLE_ROLES.join(", ")}.`,
       );
     }
-    if (!text.trim()) {
-      return toolError("Pass the `text` to record.");
-    }
-    if (text.length > MAX_APPEND_TEXT) {
-      return toolError(
-        `\`text\` is limited to ${MAX_APPEND_TEXT} characters; this one is ${text.length}. Append it in parts.`,
-      );
+    const built = buildMessageParts({ role, text, parts: args.parts });
+    if (!built.ok) {
+      return toolError(built.error);
     }
 
     const messageId = generateUUID();
@@ -148,7 +181,7 @@ const appendChat: McpToolDefinition = {
       userId: principal.userId,
       id: messageId,
       role,
-      parts: [{ type: "text", text }],
+      parts: built.parts,
     });
 
     if (!appended) {
@@ -158,7 +191,13 @@ const appendChat: McpToolDefinition = {
     }
 
     return toolResult(
-      { messageId, chatId, role, createdAt: appended.createdAt.toISOString() },
+      {
+        messageId,
+        chatId,
+        role,
+        parts: built.parts.length,
+        createdAt: appended.createdAt.toISOString(),
+      },
       `Recorded a ${role} message in ${appended.chatTitle}.`,
     );
   },
