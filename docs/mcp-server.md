@@ -124,6 +124,39 @@ pointing at `/.well-known/oauth-protected-resource`, per RFC 9728.
 | `osmcp_get_persona` | The full instructions of one persona |
 | `osmcp_set_netsuite_account` | Switch the active NetSuite account |
 
+### Chat tools
+
+An agent's work is invisible unless it says what it did. These write a thread
+into its owner's sidebar, beside that person's own conversations, which is how
+autonomous work is reviewed after the fact.
+
+| Tool | What it does |
+| --- | --- |
+| `osmcp_create_chat` | Open a thread, stamped with the persona the key acts as |
+| `osmcp_append_chat` | Add a message to a thread this agent owns |
+
+`osmcp_append_chat` takes either `text` for plain prose, or `parts` for a turn
+recorded as it happened — entries of kind `text`, `reasoning`, or `tool`:
+
+```json
+{
+  "chatId": "…",
+  "role": "assistant",
+  "parts": [
+    { "kind": "reasoning", "text": "The statement is the source of truth." },
+    { "kind": "tool", "name": "searchVendorBills",
+      "input": { "vendor": "Acme" }, "output": { "rows": [] } },
+    { "kind": "text", "text": "**Two bills are over 30 days.**" }
+  ]
+}
+```
+
+A recorded call is shown the way this app shows its own, with its arguments and
+its result, rather than described in prose. It is stored as `dynamic-tool`, so a
+tool an agent ran in some other system is never rendered as one this install
+made: a recorded `ns_` call is a report about NetSuite, not a call to it.
+Reasoning and tool parts belong to an `assistant` message only.
+
 ### NetSuite tools
 
 Every NetSuite MCP Standard Tool the user is allowed to run is re-exposed under

@@ -5,6 +5,20 @@ All notable changes to OpenSuiteMCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.4.1] - 2026-09-25
+
+### 🐛 Fixed
+
+- **An agent's thread no longer ends in an error it never wrote.** A thread written over Agent access never opens a stream — `osmcp_append_chat` records messages directly — so one left on a user message, which the tool invites because a record that stops mid-task is still a record, asked the reader's page to resume a stream that was never going to exist. The reader was shown "Something went wrong" under an otherwise healthy transcript. Nothing to resume is not a failure, and the route already said so when there is no stream context at all
+- **A tool call is held to the schema its tool publishes.** Every tool declares `additionalProperties: false` and none of it was enforced, so an agent recording its own transcript — sending `parts` beside `text` — got a message id back and had the part dropped on the floor. It went on believing the step was recorded, and the person reading the thread never learned one was lost. Only what a schema states is checked, so a NetSuite schema forwarded verbatim is held to its own terms and no stricter
+- **An appended message keeps its place in the order.** Message order is read from `createdAt`, a millisecond stamp, and an agent logging steps as it works puts two appends inside the same millisecond. The tie had no defined order, so a transcript could be read back out of sequence, differently on each load. The chat row is now locked for the insert and the stamp forced past the last one
+
+### ✨ Added
+
+- **An agent can record a turn as it happened rather than prose about it.** A turn in this app is reasoning, then tool calls with their arguments and results, then an answer, and the transcript reads well because each of those is stored as itself. An agent working in another system has the same material and had one field to put it in. `osmcp_append_chat` now takes `parts` beside `text` — entries of kind `text`, `reasoning`, or `tool` with the tool's `name`, `input` and `output` — and a recorded call is shown the way this app shows its own, with its arguments and result. Recorded calls are stored as `dynamic-tool`, which keeps a tool run elsewhere from rendering as one this install made: a recorded `ns_` call is a report about NetSuite, not a call to it
+
+---
+
 ## [5.4.0] - 2026-09-24
 
 ### ✨ Added
