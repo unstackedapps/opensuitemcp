@@ -20,7 +20,8 @@ import {
 } from "./protocol";
 import { buildToolSurface, findTool, toWireTool } from "./tools";
 import { toolSurfaceDigest } from "./tools/digest";
-import type { McpToolDefinition } from "./tools/types";
+import { type McpToolDefinition, toolError } from "./tools/types";
+import { validateToolArgs } from "./tools/validate-args";
 
 /** Discovery results are per-user, so they must never be cached across keys. */
 const PRIVATE_CACHE = { ttlMs: 60_000, cacheScope: "private" as const };
@@ -159,6 +160,15 @@ async function callTool(
     // A tool the key lacks scope for is reported as unknown rather than
     // forbidden, so the error does not confirm the tool exists.
     return notFound(id, `tools/call ${name}`);
+  }
+
+  // A tool publishes a schema so an agent can get the call right; enforcing it
+  // is what makes a wrong call say so instead of half-succeeding. Reported as a
+  // tool result rather than a JSON-RPC error so the model reads the reason and
+  // retries, the way every other tool-level failure here behaves.
+  const invalid = validateToolArgs(name, tool.inputSchema, args);
+  if (invalid) {
+    return ok(id, { ...toolError(invalid), resultType: "complete" });
   }
 
   // Assembled at most once per call, and only if a tool asks for it.
