@@ -584,6 +584,42 @@ const PurePreviewMessage = ({
               }
 
               // Handle NetSuite MCP tools (tools starting with "tool-ns_")
+              if (type === "dynamic-tool") {
+                // Recorded by an agent working in another system. Shown with
+                // the same card as this app's own tools, and deliberately not
+                // through their bespoke branches: the output shape is whatever
+                // that system returned, and it has not been through NetSuite.
+                const recorded = part as unknown as {
+                  toolName: string;
+                  toolCallId: string;
+                  state:
+                    | "input-streaming"
+                    | "input-available"
+                    | "output-available"
+                    | "output-error";
+                  input?: unknown;
+                  output?: unknown;
+                  errorText?: string;
+                };
+
+                return (
+                  <MessageTool
+                    errorText={recorded.errorText}
+                    input={recorded.input}
+                    key={recorded.toolCallId}
+                    output={
+                      recorded.output === undefined ||
+                      recorded.output === null ? null : (
+                        <McpToolOutput output={recorded.output} />
+                      )
+                    }
+                    state={recorded.state}
+                    toolCallId={recorded.toolCallId}
+                    type={`tool-${recorded.toolName}` as `tool-${string}`}
+                  />
+                );
+              }
+
               if (type.startsWith("tool-ns_")) {
                 // Type assertion for dynamic NetSuite tools
                 const toolPart = part as {
