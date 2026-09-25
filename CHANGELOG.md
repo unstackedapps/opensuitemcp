@@ -5,6 +5,20 @@ All notable changes to OpenSuiteMCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.4.2] - 2026-09-25
+
+### ✨ Added
+
+- **A long result or script opens beside the conversation instead of inside it.** A NetSuite result renders into a code block, inside a collapsed tool card, inside a chat bubble; a script the model writes lands in a fence in the same column. Either way there is about forty characters of width in which to read a vendor ledger or a fifty-line UserEventScript. Results and fences past a dozen lines now offer a canvas: the conversation keeps its place on the left and stays usable, and the content takes a resizable pane on the right with copy and download of its own. A split rather than a dialog — a dialog over the conversation would trade one unreadable thing for another. Desktop only: a split pane needs a second column to split into, and a phone has one
+
+### 🐛 Fixed
+
+- **An unreachable Oracle no longer stops the app starting.** The container entrypoint syncs the Oracle skill packs before the server starts, under `set -e`, and the sync exited non-zero when the fetch failed — so a third-party outage, or a firewall rule on the way out, became an app that never came up at all, repeating its boot and re-running migrations every few seconds. Reported now instead, which is the answer the Community sync beside it already gave. Skills stay at the last pack that synced
+- **The main column no longer pushes past the room the sidebar leaves it.** It is a flex item with no minimum width, so `min-width: auto` applied and content wider than the space available pushed the column past it. Nothing showed while every child was centred and clipped; anything sitting flush against the right edge left the viewport by the width of the collapsed sidebar rail
+- **A code block given a pane of its own scrolls rather than wraps.** Wrapping is right for a block sharing a chat bubble and wrong for one with room: a script arrived broken mid-token with its indentation lost, less legible than the fence it came from. Wrapping remains the default everywhere else
+
+---
+
 ## [5.4.1] - 2026-09-25
 
 ### 🐛 Fixed
