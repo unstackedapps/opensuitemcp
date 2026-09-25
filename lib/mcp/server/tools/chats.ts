@@ -1,11 +1,6 @@
 import "server-only";
 
-import {
-  getChatById,
-  getUserSettings,
-  saveChat,
-  saveMessages,
-} from "@/lib/db/queries";
+import { appendChatMessage, getUserSettings, saveChat } from "@/lib/db/queries";
 import { generateUUID } from "@/lib/utils";
 import { resolveAssignedPersona } from "../persona-assignment";
 import { type McpToolDefinition, toolError, toolResult } from "./types";
@@ -143,31 +138,28 @@ const appendChat: McpToolDefinition = {
       );
     }
 
-    const chat = await getChatById({ id: chatId });
-    // Same answer for "not found" and "someone else's": an agent must not be
-    // able to probe for the existence of another user's threads.
-    if (!chat || chat.userId !== principal.userId) {
+    const messageId = generateUUID();
+    // Ownership is settled inside the append, under the same lock that keeps
+    // this message behind the last one. Same answer for "not found" and
+    // "someone else's": an agent must not be able to probe for the existence
+    // of another user's threads.
+    const appended = await appendChatMessage({
+      chatId,
+      userId: principal.userId,
+      id: messageId,
+      role,
+      parts: [{ type: "text", text }],
+    });
+
+    if (!appended) {
       return toolError(
         `No chat \`${chatId}\` belongs to this user. Create one with osmcp_create_chat.`,
       );
     }
 
-    const messageId = generateUUID();
-    await saveMessages({
-      messages: [
-        {
-          id: messageId,
-          chatId,
-          role,
-          parts: [{ type: "text", text }],
-          createdAt: new Date(),
-        },
-      ],
-    });
-
     return toolResult(
-      { messageId, chatId, role },
-      `Recorded a ${role} message in ${chat.title}.`,
+      { messageId, chatId, role, createdAt: appended.createdAt.toISOString() },
+      `Recorded a ${role} message in ${appended.chatTitle}.`,
     );
   },
 };
