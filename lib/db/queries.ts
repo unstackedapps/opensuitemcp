@@ -360,13 +360,77 @@ export async function saveMessages({ messages }: { messages: DBMessage[] }) {
   }
 }
 
+/**
+ * Record one message at the end of a chat, in the order it arrived.
+ *
+ * Order is read back from `createdAt`, a millisecond stamp, and two appends can
+ * land inside the same millisecond — an agent logging its steps as it works
+ * does exactly that. A tie has no defined order, so the transcript a person
+ * reads may not be the sequence the agent wrote. The chat row is locked for the
+ * insert and the stamp forced past the last one, which makes the order the
+ * server accepted appends the order they are read in.
+ *
+ * Ownership is checked inside the same transaction, and a chat that is missing
+ * and a chat belonging to someone else both return null, so a caller cannot
+ * tell them apart.
+ */
+export async function appendChatMessage({
+  chatId,
+  userId,
+  id,
+  role,
+  parts,
+}: {
+  chatId: string;
+  userId: string;
+  id: string;
+  role: string;
+  parts: unknown;
+}): Promise<{ createdAt: Date; chatTitle: string } | null> {
+  try {
+    return await db.transaction(async (tx) => {
+      const [owner] = await tx
+        .select({ userId: chat.userId, title: chat.title })
+        .from(chat)
+        .where(eq(chat.id, chatId))
+        .for("update")
+        .limit(1);
+
+      if (!owner || owner.userId !== userId) {
+        return null;
+      }
+
+      const [latest] = await tx
+        .select({ createdAt: message.createdAt })
+        .from(message)
+        .where(eq(message.chatId, chatId))
+        .orderBy(desc(message.createdAt))
+        .limit(1);
+
+      const previous = latest?.createdAt.getTime() ?? 0;
+      const createdAt = new Date(Math.max(Date.now(), previous + 1));
+
+      await tx.insert(message).values({ id, chatId, role, parts, createdAt });
+
+      return { createdAt, chatTitle: owner.title };
+    });
+  } catch (_error) {
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to append chat message",
+    );
+  }
+}
+
 export async function getMessagesByChatId({ id }: { id: string }) {
   try {
     return await db
       .select()
       .from(message)
       .where(eq(message.chatId, id))
-      .orderBy(asc(message.createdAt));
+      // `id` only ever breaks a tie. Two messages can share a millisecond, and
+      // a tie left to the planner reads back in a different order each load.
+      .orderBy(asc(message.createdAt), asc(message.id));
   } catch (_error) {
     throw new ChatSDKError(
       "bad_request:database",
