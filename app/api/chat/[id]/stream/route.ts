@@ -51,15 +51,19 @@ export async function GET(
   }
 
   const streamIds = await getStreamIdsByChatId({ chatId });
-
-  if (!streamIds.length) {
-    return new ChatSDKError("not_found:stream").toResponse();
-  }
-
   const recentStreamId = streamIds.at(-1);
 
+  /*
+   * A chat that never opened a stream has nothing to resume, and that is not a
+   * failure. A thread written over Agent access is the ordinary case:
+   * osmcp_append_chat records messages directly and never starts a generation,
+   * so a thread left on a user message — which the tool invites, a record that
+   * stops mid-task still being a record — asks to resume a stream that was
+   * never going to exist. Answered like a missing stream context above, with no
+   * content, rather than as an error the reader is shown under the transcript.
+   */
   if (!recentStreamId) {
-    return new ChatSDKError("not_found:stream").toResponse();
+    return new Response(null, { status: 204 });
   }
 
   const emptyDataStream = createUIMessageStream<ChatMessage>({
