@@ -304,7 +304,7 @@ async function getOrgReadiness(
       description:
         users.length > 1
           ? `${users.length} users in your org`
-          : "Add more users when you are ready — a solo org is fine to finish",
+          : "Add more users to your org",
       complete: usersComplete,
       optional: true,
     },

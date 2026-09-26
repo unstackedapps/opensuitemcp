@@ -64,8 +64,8 @@ export function ConsentForm({
       <div className="space-y-2 text-center">
         <h1 className="font-medium text-lg">{clientName} wants to connect</h1>
         <p className="text-muted-foreground text-sm">
-          It will act as {userEmail ?? "you"}, reaching exactly the NetSuite
-          tools you have enabled — nothing more.
+          It will act as {userEmail ?? "you"}, reaching the NetSuite tools you
+          have enabled.
         </p>
       </div>
 

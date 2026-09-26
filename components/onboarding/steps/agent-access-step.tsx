@@ -21,7 +21,7 @@ export function OnboardingAgentAccessStep({
     <div className="space-y-4">
       <OnboardingStepProse
         title="Agent apps"
-        description="Let an external AI agent work in this workspace as you. It reaches exactly what you have enabled — nothing more. Optional."
+        description="Let an external AI agent work in this workspace as you, reaching what you have enabled."
       />
       <div className="overflow-hidden rounded-md border border-border/60">
         <McpAccessPanel active onChanged={onRefresh} />
