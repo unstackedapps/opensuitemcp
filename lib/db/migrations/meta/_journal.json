@@ -239,6 +239,13 @@
       "when": 1790204720197,
       "tag": "0033_oauth_code_grant_fk",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1790208320197,
+      "tag": "0034_oauth_client_agent",
+      "breakpoints": true
     }
   ]
 }

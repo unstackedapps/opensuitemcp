@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -35,7 +36,7 @@ export type AgentAccountOption = {
   connected: boolean;
 };
 
-/** How the agent proves itself. Chosen once, at creation. */
+/** How the agent app proves itself. Chosen once, at creation. */
 export type AgentConnectionMethod = "key" | "signin";
 
 export type AgentDraft = {
@@ -44,6 +45,8 @@ export type AgentDraft = {
   /** Null follows whichever account is active at the time of the call. */
   netsuiteAccountId: string | null;
   method: AgentConnectionMethod;
+  /** Sign-in only: the connector wants an ID and secret, not to self-register. */
+  issueClientCredentials: boolean;
 };
 
 type AgentDialogProps = {
@@ -59,12 +62,13 @@ type AgentDialogProps = {
 };
 
 /**
- * The one place an agent is created.
+ * The one place an agent app is created.
  *
- * Both connection methods come from here, because an agent is one thing and
- * how it authenticates is one of its fields. The alternative — a second setup
- * form living inside the OAuth consent screen — meant the same agent could be
- * created two ways, with the two forms free to drift apart. They did.
+ * An agent app is the application: it holds the name, the persona, the account
+ * and whichever credential connects it. Everything it needs is issued from
+ * here — including a client ID and secret, which used to be a separate object
+ * in a peer tab and read as a second thing to build. It was never that; it is
+ * a property of an app whose connector happens to demand one.
  */
 
 /**
@@ -78,6 +82,7 @@ const EMPTY: AgentDraft = {
   personaId: AVA_PERSONA_ID,
   netsuiteAccountId: null,
   method: "key",
+  issueClientCredentials: false,
 };
 
 export function AgentDialog({
@@ -108,11 +113,13 @@ export function AgentDialog({
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{creating ? "New agent" : "Edit agent"}</DialogTitle>
+          <DialogTitle>
+            {creating ? "New agent app" : "Edit agent app"}
+          </DialogTitle>
           <DialogDescription>
             {creating
               ? "Name it, pick the specialist it acts as, and choose how it connects."
-              : "Rename your agent and update what it acts as."}
+              : "Rename it and update what it acts as."}
           </DialogDescription>
         </DialogHeader>
 
@@ -211,16 +218,46 @@ export function AgentDialog({
                 value={draft.method}
               >
                 <MethodOption
-                  description="Paste a secret into the client. Works anywhere, including without HTTPS."
+                  description="Paste a secret into the app. Works anywhere, including without HTTPS."
                   label="Agent key"
+                  suffix="bearer token"
                   value="key"
                 />
                 <MethodOption
-                  description="The client sends you here to approve it, then refreshes its own access."
+                  description="The app sends you here to approve it, then refreshes its own access."
                   label="Sign-in"
+                  suffix="OAuth 2.1"
                   value="signin"
                 />
               </RadioGroup>
+
+              {draft.method === "signin" ? (
+                <label
+                  className="flex cursor-pointer items-start gap-2.5 pt-0.5"
+                  htmlFor="agent-client-credentials"
+                >
+                  <Checkbox
+                    checked={draft.issueClientCredentials}
+                    className="mt-0.5"
+                    id="agent-client-credentials"
+                    onCheckedChange={(checked) =>
+                      setDraft((current) => ({
+                        ...current,
+                        issueClientCredentials: checked === true,
+                      }))
+                    }
+                  />
+                  <span>
+                    <span className="block text-xs">
+                      This connector asks for a client ID and secret
+                    </span>
+                    <span className="block text-muted-foreground text-xs leading-relaxed">
+                      Gemini does. Most — Claude, Cursor, VS Code — register
+                      themselves and need nothing here.
+                    </span>
+                  </span>
+                </label>
+              ) : null}
             </div>
           ) : null}
         </div>
@@ -255,10 +292,13 @@ export function AgentDialog({
 function MethodOption({
   value,
   label,
+  suffix,
   description,
 }: {
   value: AgentConnectionMethod;
   label: string;
+  /** The protocol name, for matching what a connector's own dialog says. */
+  suffix: string;
   description: string;
 }) {
   return (
@@ -272,7 +312,12 @@ function MethodOption({
         value={value}
       />
       <span>
-        <span className="block font-medium text-sm">{label}</span>
+        <span className="block font-medium text-sm">
+          {label}{" "}
+          <span className="font-normal text-muted-foreground text-xs">
+            {suffix}
+          </span>
+        </span>
         <span className="block text-muted-foreground text-xs leading-relaxed">
           {description}
         </span>

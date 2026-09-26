@@ -817,6 +817,19 @@ export const oauthClient = pgTable(
     softwareId: varchar("softwareId", { length: 128 }),
     /** Who created a manual client. Null for dcr and cimd rows. */
     createdByUserId: uuid("createdByUserId").references(() => user.id),
+    /**
+     * The agent this client was issued for, on a hand-made client.
+     *
+     * An agent is the application: it holds the name, the persona, the account
+     * and whichever credential connects it. A client issued from an agent may
+     * connect that agent and no other, so revoking the agent takes the
+     * credential with it. Null on a client that registered itself — Claude
+     * Code's, say — which is one piece of software connecting whatever its
+     * user approves.
+     */
+    grantId: uuid("grantId").references(() => oauthGrant.id, {
+      onDelete: "cascade",
+    }),
     orgId: uuid("orgId").references(() => org.id),
     /** CIMD cache bookkeeping; null on every other kind. */
     metadataFetchedAt: timestamp("metadataFetchedAt"),

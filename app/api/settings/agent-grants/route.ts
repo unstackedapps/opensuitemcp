@@ -3,6 +3,7 @@ import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
 import { authorizeAgentCreation } from "@/lib/mcp/server/agent-creation";
 import { MCP_SCOPE } from "@/lib/mcp/server/config";
+import { createManualOAuthClient } from "@/lib/mcp/server/oauth/clients";
 import { createPendingOAuthGrant } from "@/lib/mcp/server/oauth/grants";
 import { writeOrgAuditLog } from "@/lib/org/audit";
 
@@ -19,6 +20,8 @@ const createSchema = z.object({
   name: z.string().trim().min(1).max(128),
   netsuiteAccountId: z.string().trim().max(64).optional().nullable(),
   personaId: z.string().trim().max(128).optional().nullable(),
+  /** For a connector that demands an ID and secret rather than registering. */
+  issueClientCredentials: z.boolean().optional(),
 });
 
 export async function POST(request: Request) {
@@ -51,6 +54,19 @@ export async function POST(request: Request) {
       scope: MCP_SCOPE,
     });
 
+    // Issued from the agent app, bound to it, and shown once — the same
+    // bargain its key makes. A connector that registers itself needs none of
+    // this and never sees it.
+    const credentials = parsed.issueClientCredentials
+      ? await createManualOAuthClient({
+          userId: session.user.id,
+          orgId: session.user.orgId ?? null,
+          clientName: grant.name,
+          redirectUris: [],
+          grantId: grant.id,
+        })
+      : null;
+
     if (session.user.orgId) {
       await writeOrgAuditLog({
         orgId: session.user.orgId,
@@ -58,11 +74,15 @@ export async function POST(request: Request) {
         action: "mcp_oauth.create",
         targetType: "OAuthGrant",
         targetId: grant.id,
-        metadata: { name: grant.name },
+        metadata: { name: grant.name, clientCredentials: Boolean(credentials) },
       });
     }
 
-    return NextResponse.json({ grant });
+    return NextResponse.json({
+      grant,
+      clientId: credentials?.clientId ?? null,
+      clientSecret: credentials?.clientSecret ?? null,
+    });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(

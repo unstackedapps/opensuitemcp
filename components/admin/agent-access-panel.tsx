@@ -124,7 +124,7 @@ export function AgentAccessPanel({
 
   return (
     <div className="space-y-4">
-      <Frame title="Agent access">
+      <Frame title="Agent apps">
         <p className="text-muted-foreground text-xs leading-relaxed">
           An agent acts as the member who holds the key, and never sees more
           than they do.
@@ -140,8 +140,8 @@ export function AgentAccessPanel({
                 run(
                   () => adminSetAgentAccessPolicy({ enabled }),
                   enabled
-                    ? "Agent access enabled."
-                    : "Agent access disabled for the organization.",
+                    ? "Agent apps enabled."
+                    : "Agent apps disabled for the organization.",
                 )
               }
             />
@@ -214,7 +214,7 @@ export function AgentAccessPanel({
       </Frame>
 
       {state.enabled && selectedMode ? (
-        <Frame title="Members with agent access">
+        <Frame title="Members who may create agent apps">
           <Input
             className={cn(ADMIN_CONTROL_CLASS, "mb-3")}
             onChange={(event) => setQuery(event.target.value)}

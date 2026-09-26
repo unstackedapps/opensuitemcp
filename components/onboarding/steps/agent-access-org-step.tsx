@@ -18,7 +18,7 @@ type AgentAccessResponse = {
 async function fetchAgentAccess(): Promise<AgentAccessResponse> {
   const response = await fetch("/api/admin/agent-access");
   if (!response.ok) {
-    throw new Error("Failed to load Agent access settings.");
+    throw new Error("Failed to load Agent apps settings.");
   }
   return response.json();
 }
@@ -43,7 +43,7 @@ export function OnboardingAgentAccessOrgStep({
   return (
     <div className="space-y-4">
       <OnboardingStepProse
-        title="Agent access"
+        title="Agent apps"
         description="Let members connect an external AI agent to their NetSuite workspace. The agent acts as that member. Off until you turn it on."
       />
 

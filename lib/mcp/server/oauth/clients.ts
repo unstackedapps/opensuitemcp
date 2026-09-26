@@ -433,6 +433,8 @@ export async function createManualOAuthClient(params: {
   orgId: string | null;
   clientName: string;
   redirectUris: string[];
+  /** The agent this client is issued for. It may connect no other. */
+  grantId?: string | null;
 }): Promise<{
   summary: OAuthClientSummary;
   clientId: string;

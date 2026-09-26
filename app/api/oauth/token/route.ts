@@ -116,7 +116,7 @@ async function exchangeAuthorizationCode(params: {
   if (!grant) {
     return fail(
       "invalid_grant",
-      "That agent is no longer waiting to be connected. Create one in App Portal -> Agent access and try again.",
+      "That agent is no longer waiting to be connected. Create one in App Portal -> Agent apps and try again.",
       400,
     );
   }

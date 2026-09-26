@@ -119,7 +119,7 @@ const ADMIN_NAV = [
   { href: "/admin/netsuite", label: "NetSuite" },
   { href: "/admin/skills", label: "Skills" },
   { href: "/admin/personas", label: "Personas" },
-  { href: "/admin/agent-access", label: "Agent access" },
+  { href: "/admin/agent-access", label: "Agent apps" },
 ] as const;
 
 export function AdminShell({

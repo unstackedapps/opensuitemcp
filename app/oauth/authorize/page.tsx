@@ -75,7 +75,7 @@ export default async function AuthorizePage({
         <Notice description={prepared.description} title={prepared.title} />
         {prepared.openAgentAccess ? (
           <Button asChild className="w-full">
-            <Link href="/?portal=agent-access">Open Agent access</Link>
+            <Link href="/?portal=agent-access">Open Agent apps</Link>
           </Button>
         ) : null}
         <CancelForm context={prepared.context} />
