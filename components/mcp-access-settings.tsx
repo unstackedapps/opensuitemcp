@@ -652,9 +652,57 @@ export function McpAccessPanel({
         )}
 
         <section className="space-y-2">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <Label className="text-xs">Your agent apps</Label>
+          {/*
+            One row. The panel header two lines up already says "Agent apps",
+            so a "Your agent apps" label was a third row of chrome above a
+            list that often holds one thing.
+          */}
+          <div className="flex flex-wrap items-center gap-2">
+            {rows.length > 1 ? (
+              <>
+                <Input
+                  className="h-8 min-w-40 flex-1 text-xs"
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Filter apps"
+                  value={query}
+                />
+                <Select
+                  onValueChange={(value) =>
+                    setSort(value as "recent" | "name" | "used")
+                  }
+                  value={sort}
+                >
+                  <SelectTrigger className="h-8 w-auto gap-1.5 text-xs">
+                    <ArrowUpDown className="size-3.5 text-muted-foreground" />
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="recent">Newest</SelectItem>
+                    <SelectItem value="name">Name</SelectItem>
+                    <SelectItem value="used">Last used</SelectItem>
+                  </SelectContent>
+                </Select>
+              </>
+            ) : null}
+
+            {archivedRows.length > 0 ? (
+              <div className="flex items-center gap-2">
+                <Label
+                  className="text-muted-foreground text-xs"
+                  htmlFor="show-archived-apps"
+                >
+                  Archived
+                </Label>
+                <Switch
+                  checked={showArchived}
+                  id="show-archived-apps"
+                  onCheckedChange={setShowArchived}
+                />
+              </div>
+            ) : null}
+
             <Button
+              className="ml-auto"
               disabled={blocked || atLimit}
               onClick={() => setCreatingOpen(true)}
               size="sm"
@@ -664,48 +712,6 @@ export function McpAccessPanel({
               New app
             </Button>
           </div>
-
-          {rows.length > 1 ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <Input
-                className="h-8 min-w-40 flex-1 text-xs"
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Filter by name, note or persona"
-                value={query}
-              />
-              <Select
-                onValueChange={(value) =>
-                  setSort(value as "recent" | "name" | "used")
-                }
-                value={sort}
-              >
-                <SelectTrigger className="h-8 w-auto gap-1.5 text-xs">
-                  <ArrowUpDown className="size-3.5 text-muted-foreground" />
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="recent">Newest</SelectItem>
-                  <SelectItem value="name">Name</SelectItem>
-                  <SelectItem value="used">Last used</SelectItem>
-                </SelectContent>
-              </Select>
-              {archivedRows.length > 0 ? (
-                <div className="flex items-center gap-2">
-                  <Label
-                    className="text-muted-foreground text-xs"
-                    htmlFor="show-archived-apps"
-                  >
-                    Archived
-                  </Label>
-                  <Switch
-                    checked={showArchived}
-                    id="show-archived-apps"
-                    onCheckedChange={setShowArchived}
-                  />
-                </div>
-              ) : null}
-            </div>
-          ) : null}
 
           {atLimit ? (
             <p className="text-muted-foreground text-xs">
