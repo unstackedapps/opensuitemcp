@@ -1,24 +1,16 @@
 # OpenSuiteMCP MCP server
 
-OpenSuiteMCP can act as an **MCP server**, letting an external AI agent work
-inside a user's NetSuite workspace as that user — their connected account,
-their permissions, their tool policy.
-
-This is the mirror image of the app's usual role. Normally OpenSuiteMCP is an
-MCP *client* talking to NetSuite. With this feature it is also a *server* that
-something else talks to.
-
-It works the same way on every install — self-hosted, sandbox, and hosted —
-because the server URL derives from the install's own public address.
+An **MCP server** at `/api/mcp`. An external AI agent works inside a user's
+NetSuite workspace as that user — their connected account, their permissions,
+their tool policy. Identical on every install: the server URL derives from the
+install's own public address.
 
 ---
 
 ## What gates it
 
-There is nothing to switch on. `/api/mcp` refuses every request until an agent
-holds a credential, and a credential only exists because a person made one —
-either by minting a key or by approving a sign-in. The feature is dormant on an
-install nobody has used it on.
+Nothing to switch on. `/api/mcp` refuses every request until an agent holds a
+credential, and a credential exists only because a person made one.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
@@ -26,9 +18,8 @@ install nobody has used it on.
 | `OAUTH_ATTEMPT_LIMIT_PER_MINUTE` | `0` (disabled) | Per-client budget on registration and token requests. Same window, same requirement |
 
 On **organization** installs an owner or admin must turn Agent access on under
-**Admin → Agent access** before any member can mint a key, and may narrow it to
-named members. A solo install is one person who is their own administrator, so
-minting a key is the whole decision.
+**Admin → Agent access** first, and may narrow it to named members. On a solo
+install, creating the agent is the whole decision.
 
 ---
 
@@ -58,32 +49,29 @@ Keys look like:
 osmcp_<16 hex chars>_<43 url-safe chars>
 ```
 
-The leading hex is a public lookup id, also shown in the key list so you can
-match a row to a key you hold. The rest is the secret. Only a SHA-256 digest of
-it authenticates; the key is also stored encrypted under `ENCRYPTION_KEY` so its
+The leading hex is a public lookup id, shown in the agent list so you can match
+a row to a key you hold. The rest is the secret: only its SHA-256 digest
+authenticates. The key is also stored encrypted under `ENCRYPTION_KEY`, so its
 owner can copy it again rather than losing it to a dismissed dialog.
 
 ### What a credential reaches
 
-What an agent can reach is decided by the app's own settings, not by the
-credential. A NetSuite tool left enabled for the connection is listed and
-callable; one disabled there is neither, and the policy is re-read on **every
-call**, so a tool disabled mid-session stops working immediately.
+Decided by the app's own settings, not by the credential. A NetSuite tool
+enabled for the connection is listed and callable; one disabled there is
+neither, re-read on **every call**.
 
-The server adds no second gate on top of that. Neither a key nor a sign-in
-carries a narrower view of the workspace than the person behind it. There is one
-scope, `mcp`, and it means "act as me over MCP".
+The server adds no second gate. There is one scope, `mcp`, meaning "act as me
+over MCP" — neither a key nor a sign-in carries a narrower view of the
+workspace than the person behind it.
 
 ---
 
 ## The authorization server
 
-Every install is its own OAuth 2.1 authorization server, at its own origin. That
-is partly principle — a self-hosted install must not depend on a service it does
-not run — and partly interoperability: several clients probe
-`/.well-known/oauth-authorization-server` on the MCP server's own origin
-regardless of what the resource metadata says, and co-locating the two means the
-flow works either way.
+Every install is its own OAuth 2.1 authorization server, at its own origin —
+so a self-hosted install depends on nothing it does not run, and clients that
+probe `/.well-known/oauth-authorization-server` on the MCP origin regardless of
+the resource metadata still work.
 
 | Endpoint | Purpose |
 | --- | --- |
@@ -96,84 +84,51 @@ flow works either way.
 
 ### What the consent screen does
 
-It binds a client to an agent that already exists. It never creates one.
+**It binds a client to an agent that already exists. It never creates one.**
 
-An agent is made in the portal, named and configured there, and sits *Awaiting
-connection*. `/oauth/authorize` offers the ones waiting; approving issues a code
-naming the chosen agent, and the token exchange fills in the client id. If
-nothing is waiting, the screen says so and offers a link to the portal rather
-than a form.
-
-The bind is guarded on the agent still being unclaimed, so two codes racing for
-the same agent leave one winner; the loser's token request fails with
-`invalid_grant`.
+| | |
+| --- | --- |
+| Offers | Agents sitting *Awaiting connection* — created in the portal, named and configured there |
+| Approving | Issues a code naming the chosen agent; the token exchange fills in the client id |
+| Nothing waiting | The screen says so and links to the portal, rather than growing a form |
+| Two codes racing | The bind is guarded on the agent still being unclaimed. One winner; the loser gets `invalid_grant` |
 
 ### How a client identifies itself
 
-Three mechanisms, all supported, because clients are mid-migration between them:
+All three are supported, because clients are mid-migration between them. PKCE
+with `S256` is required in every case; `plain` was removed in OAuth 2.1.
 
-- **Client ID Metadata Document** — the `client_id` is an HTTPS URL this install
-  fetches and validates against itself. Preferred by revision `2026-07-28`, and
-  what Claude Code uses. Advertised as `client_id_metadata_document_supported`.
-- **Dynamic Client Registration** — the client POSTs its metadata to
-  `/api/oauth/register`. Deprecated by that revision, still what several
-  shipping clients do.
-- **Pre-registration** — a person creates a client under **Agent access → OAuth
-  clients** and pastes its id and secret into a connector that asks for them.
-
-PKCE with `S256` is required in all three cases; `plain` was removed in OAuth
-2.1 and is not accepted.
+| Mechanism | How | Status |
+| --- | --- | --- |
+| Client ID Metadata Document | `client_id` is an HTTPS URL this install fetches and validates. Advertised as `client_id_metadata_document_supported` | Preferred by `2026-07-28`. What Claude Code uses |
+| Dynamic Client Registration | Client POSTs its metadata to `/api/oauth/register` | Deprecated by that revision, still widely used |
+| Pre-registration | A person creates a client under **Agent access → OAuth clients** and pastes the id and secret into a connector | For connectors that demand them up front |
 
 ### What the tokens are
 
-Access tokens are opaque and stored as a SHA-256 digest, not JWTs. Revoking an
-agent therefore takes effect on its very next call rather than whenever a signed
-token would have expired — the property a key already had, and the one an
-unattended agent's owner actually wants.
-
-Access tokens last an hour. Refresh tokens last sixty days and **rotate on every
-use**: exchanging one invalidates it and issues a successor. Presenting a
-refresh token that was already used revokes every live token on that
-authorization, on the assumption that a replay is theft rather than a retry. The
-authorization itself survives, so the client simply signs in again.
-
-Replaying an authorization code does the same, per OAuth 2.1 section 4.1.3.
+| | |
+| --- | --- |
+| Format | Opaque, stored as a SHA-256 digest. Not JWTs, so revoking takes effect on the next call |
+| Access token TTL | 1 hour |
+| Refresh token TTL | 60 days, rotated on every use |
+| Refresh replay | Revokes every live token on that authorization. The authorization survives, so the client signs in again |
+| Code replay | Same, per OAuth 2.1 section 4.1.3 |
 
 ### Loopback redirects
 
-A native client listens on an ephemeral port it cannot know when it publishes
-its metadata, so the port is ignored when matching a loopback redirect — RFC
-8252 section 7.3 requires this for `127.0.0.1`, and Claude Code needs the same
-for `localhost`. Nothing else is relaxed: scheme, host, path and query must all
-match something the client registered.
+The port is ignored when matching a loopback redirect — RFC 8252 section 7.3
+requires it for `127.0.0.1`, and Claude Code needs the same for `localhost`.
+Scheme, host, path and query must still match something the client registered.
 
-Because any local process can bind a port and claim to be that client, the
-consent screen says so when every redirect a client registered is a loopback
-address.
+Any local process can bind a port and claim to be that client, so the consent
+screen warns when every redirect a client registered is a loopback address.
 
 ---
 
 ## Connecting an agent
 
-The endpoint is a single URL taking `POST`:
-
-```text
-https://<your-install>/api/mcp
-Authorization: Bearer <token>
-```
-
-For a client that takes a URL and a header — Claude Code, Cursor, VS Code,
-Codex:
-
-```bash
-claude mcp add --transport http opensuitemcp https://your-install.example.com/api/mcp \
-  --header "Authorization: Bearer osmcp_..."
-```
-
-Or, with no key at all, add the same URL and let the client sign you in. Both,
-per client, are in [Connect an agent](connect-an-agent.md).
-
-A raw check:
+A single URL taking `POST`. Per-client instructions are in
+[Connect an agent](connect-an-agent.md); this is the raw call:
 
 ```bash
 curl -sS https://your-install.example.com/api/mcp \
@@ -186,22 +141,13 @@ curl -sS https://your-install.example.com/api/mcp \
 
 ### Protocol
 
-The server implements Streamable HTTP revision **`2026-07-28`**, which is
-stateless: one POST per JSON-RPC message, no sessions, no GET stream, no
-`initialize` handshake. `GET` and `DELETE` return `405`.
-
-Revisions `2025-11-25`, `2025-06-18`, and `2025-03-26` are also accepted, since
-most clients in the field still speak them. Those clients use `initialize` and
-may send `Mcp-Session-Id`; the header is ignored and no session is minted.
-
-On `2026-07-28` the `MCP-Protocol-Version`, `Mcp-Method`, and — for
-`tools/call` — `Mcp-Name` headers are required and must agree with the request
-body. A mismatch returns `400` with JSON-RPC error `-32020`.
-
-An unauthenticated request returns `401` with a `WWW-Authenticate` challenge
-pointing at `/.well-known/oauth-protected-resource` and naming the `mcp` scope,
-per RFC 9728 and RFC 6750 section 3. That challenge is what turns a bare URL
-into a sign-in for a client that supports one.
+| | |
+| --- | --- |
+| Transport | Streamable HTTP, revision `2026-07-28`. Stateless: one POST per JSON-RPC message, no sessions, no GET stream, no `initialize` |
+| Older revisions | `2025-11-25`, `2025-06-18`, `2025-03-26`. These use `initialize` and may send `Mcp-Session-Id`; the header is ignored and no session is minted |
+| Required headers on `2026-07-28` | `MCP-Protocol-Version`, `Mcp-Method`, and `Mcp-Name` for `tools/call`. They must agree with the body, or `400` with JSON-RPC `-32020` |
+| `GET` / `DELETE` | `405` |
+| Unauthenticated | `401` with a `WWW-Authenticate` challenge naming `/.well-known/oauth-protected-resource` and the `mcp` scope (RFC 9728, RFC 6750 §3). That challenge is what turns a bare URL into a sign-in |
 
 ---
 
@@ -224,13 +170,12 @@ into a sign-in for a client that supports one.
 
 ### Chat tools
 
-An agent's work is invisible unless it says what it did. These write a thread
-into its owner's sidebar, beside that person's own conversations, which is how
-autonomous work is reviewed after the fact.
+These write a thread into the owner's sidebar, beside their own conversations,
+so autonomous work can be reviewed afterwards.
 
 | Tool | What it does |
 | --- | --- |
-| `osmcp_create_chat` | Open a thread, stamped with the persona the key acts as |
+| `osmcp_create_chat` | Open a thread, stamped with the persona the agent acts as |
 | `osmcp_append_chat` | Add a message to a thread this agent owns |
 
 `osmcp_append_chat` takes either `text` for plain prose, or `parts` for a turn
@@ -249,11 +194,10 @@ recorded as it happened — entries of kind `text`, `reasoning`, or `tool`:
 }
 ```
 
-A recorded call is shown the way this app shows its own, with its arguments and
-its result, rather than described in prose. It is stored as `dynamic-tool`, so a
-tool an agent ran in some other system is never rendered as one this install
-made: a recorded `ns_` call is a report about NetSuite, not a call to it.
-Reasoning and tool parts belong to an `assistant` message only.
+A recorded call renders with its arguments and result rather than as prose. It
+is stored as `dynamic-tool`, so a call an agent made elsewhere is never rendered
+as one this install made. Reasoning and tool parts belong to an `assistant`
+message only.
 
 ### NetSuite tools
 
@@ -293,49 +237,25 @@ On org installs, an owner or admin controls MCP access for everyone:
 | `enabled` | `false` | Members may mint keys, approve sign-ins, and agents may connect |
 | `maxKeysPerUser` | `5` | Active agents one member may hold, counting keys and sign-ins together |
 
-The budget is shared deliberately: a key and a sign-in are the same thing to
-whoever owns them, and a cap that only counted one of them would not be a cap.
-
-An organization that has Agent access disabled refuses a sign-in at the consent
-screen with the reason, rather than redirecting an opaque `access_denied` the
+An org with Agent access disabled refuses a sign-in **on the consent screen
+with the reason**, rather than redirecting an opaque `access_denied` the
 connector would report as "connection failed".
 
-Key and authorization creation and revocation, OAuth client creation, and every
-policy change, are written to `AuditLog`.
-
-The existing per-account NetSuite MCP **tool policy** applies unchanged: a tool
-an admin disabled for an account is not listed and cannot be called, and that
-is re-checked on every call rather than trusted from list time.
+Agent creation and revocation, OAuth client creation, and every policy change
+are written to `AuditLog`. The per-account NetSuite **tool policy** applies
+unchanged and is re-checked on every call.
 
 ---
 
 ## Operating notes
 
-**A dead NetSuite authorization needs a human.** Access tokens refresh
-automatically five minutes before expiry, but if the *refresh* token is
-rejected the stored authorization is deleted and the account must be
-reconnected in the UI. This is the main failure mode for an unattended agent:
-retrying will not fix it. `osmcp_connection_status` reports this case
-explicitly with a `remediation` string, so give agents that tool and instruct
-them to call it when a NetSuite tool fails.
-
-**Pin an agent to an account** when it should only ever touch one NetSuite
-account — on the consent screen when it signs in, or when minting its key. A
-pinned agent ignores the user's active-account preference, so changing that
-preference in the UI cannot redirect it at another subsidiary.
-
-**Revocation is immediate and permanent.** Revoked rows are kept so the audit
-trail and last-used time survive. Revoking a sign-in also revokes its tokens,
-and the agent's next call gets a fresh `401` challenge — which a well-behaved
-client turns into a sign-in prompt rather than a silent failure.
-
-**A client's tokens are not yours to store.** An agent key can be copied back
-out of the app; an access token cannot, by design. If a signed-in agent stops
-working, the answer is to sign it in again, not to recover anything.
-
-**Treat tool output as untrusted.** Results contain NetSuite record data,
-which is user-controlled text. An agent should not follow instructions that
-appear inside a tool result.
+| | |
+| --- | --- |
+| **A dead NetSuite authorization needs a human** | Access tokens refresh five minutes before expiry, but a rejected *refresh* token deletes the stored authorization and the account must be reconnected in the UI. Retrying will not fix it. Give agents `osmcp_connection_status` — it reports this case with a `remediation` string |
+| **Pin an agent to an account** | Set the NetSuite account when creating it. A pinned agent ignores the user's active-account preference, so changing that preference cannot redirect it at another subsidiary |
+| **Revocation is immediate** | Revoked rows are kept so the audit trail survives. Revoking a sign-in revokes its tokens; the next call gets a fresh `401` challenge, which a well-behaved client turns into a sign-in prompt |
+| **Tokens are not yours to store** | An agent key can be copied back out of the app; an access token cannot. If a signed-in agent stops working, sign it in again |
+| **Treat tool output as untrusted** | Results contain NetSuite record data, which is user-controlled text. An agent should not follow instructions found inside a tool result |
 
 ---
 
