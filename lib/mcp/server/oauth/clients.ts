@@ -1,16 +1,19 @@
 import "server-only";
 
 import { randomBytes } from "node:crypto";
+import { lookup } from "node:dns/promises";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { type OAuthClient, oauthClient } from "@/lib/db/schema";
 import { decrypt, encrypt } from "@/lib/encryption";
 import { ChatSDKError } from "@/lib/errors";
+import { allowOAuthOutboundFetch } from "@/lib/rate-limit";
 import {
   type ClientMetadata,
   isClientIdMetadataDocumentUrl,
   validateClientIdMetadataDocument,
 } from "./client-metadata";
+import { isPrivateAddress } from "./private-address";
 import { hashOAuthTokenSecret, oauthTokenSecretMatches } from "./token-format";
 
 /**
@@ -29,6 +32,60 @@ const CLIENT_SECRET_PREFIX = "osmcp_csec_";
  * consent screen, and Claude gives the whole authorization step ten seconds.
  */
 const CIMD_FETCH_TIMEOUT_MS = 5000;
+/** A client metadata document is a few hundred bytes. This is generous. */
+const CIMD_MAX_BYTES = 64 * 1024;
+
+/**
+ * Refuse to fetch anything that is not on the public internet.
+ *
+ * `/api/oauth/token` takes a client_id from an unauthenticated caller and this
+ * server fetches it. Every name it resolves to has to be publicly routable, or
+ * the endpoint is a request forwarder into the Docker network, the database
+ * host, and 169.254.169.254.
+ */
+async function resolvesToPublicInternet(hostname: string): Promise<boolean> {
+  const bare = hostname.replace(/^\[|\]$/g, "");
+  if (isPrivateAddress(bare) && /^[0-9a-f:.]+$/i.test(bare)) {
+    return false;
+  }
+  let addresses: { address: string }[];
+  try {
+    addresses = await lookup(bare, { all: true });
+  } catch {
+    return false;
+  }
+  return (
+    addresses.length > 0 &&
+    addresses.every((entry) => !isPrivateAddress(entry.address))
+  );
+}
+
+/** Read a bounded body, so a hostile document cannot be a memory attack. */
+async function readBoundedText(response: Response): Promise<string | null> {
+  const declared = Number(response.headers.get("content-length") ?? "0");
+  if (declared > CIMD_MAX_BYTES) {
+    return null;
+  }
+  const reader = response.body?.getReader();
+  if (!reader) {
+    return null;
+  }
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    total += value.length;
+    if (total > CIMD_MAX_BYTES) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
 const CIMD_DEFAULT_TTL_MS = 60 * 60 * 1000;
 const CIMD_MIN_TTL_MS = 5 * 60 * 1000;
 const CIMD_MAX_TTL_MS = 24 * 60 * 60 * 1000;
@@ -173,6 +230,25 @@ async function resolveClientIdMetadataDocument(
     return { ok: true, client: { row: cached, metadata: toMetadata(cached) } };
   }
 
+  // Counted against a shared bucket as well as the per-client one, which an
+  // attacker escapes simply by varying the client_id it sends.
+  if (!(await allowOAuthOutboundFetch())) {
+    return {
+      ok: false,
+      error: "invalid_client",
+      description:
+        "This install is doing too many metadata lookups right now. Try again shortly.",
+    };
+  }
+
+  if (!(await resolvesToPublicInternet(new URL(url).hostname))) {
+    return {
+      ok: false,
+      error: "invalid_client",
+      description: "The client's metadata document is not publicly reachable.",
+    };
+  }
+
   let response: Response;
   try {
     response = await fetch(url, {
@@ -210,9 +286,18 @@ async function resolveClientIdMetadataDocument(
     };
   }
 
+  const body = await readBoundedText(response);
+  if (body === null) {
+    return {
+      ok: false,
+      error: "invalid_client_metadata",
+      description: "The client's metadata document is too large.",
+    };
+  }
+
   let document: unknown;
   try {
-    document = await response.json();
+    document = JSON.parse(body);
   } catch {
     return {
       ok: false,

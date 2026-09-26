@@ -127,17 +127,9 @@ screen warns when every redirect a client registered is a loopback address.
 
 ## Connecting an agent
 
-A single URL taking `POST`. Per-client instructions are in
-[Connect an agent](connect-an-agent.md); this is the raw call:
-
-```bash
-curl -sS https://your-install.example.com/api/mcp \
-  -H "Authorization: Bearer osmcp_..." \
-  -H "Content-Type: application/json" \
-  -H "MCP-Protocol-Version: 2026-07-28" \
-  -H "Mcp-Method: tools/list" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
-```
+A single URL taking `POST`. The runnable calls live in one place so they cannot
+drift: [Connect an agent → Anything else](connect-an-agent.md#anything-else)
+for the raw `curl`, and per-client instructions above it.
 
 ### Protocol
 

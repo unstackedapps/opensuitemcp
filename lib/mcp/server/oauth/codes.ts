@@ -13,7 +13,7 @@ import {
   oauthTokenSecretMatches,
   parseOAuthToken,
 } from "./token-format";
-import { revokeTokensForGrant } from "./tokens";
+import { resetOAuthGrantToPending, revokeTokensForGrant } from "./tokens";
 
 /**
  * Authorization codes.
@@ -116,15 +116,7 @@ export async function consumeAuthorizationCode(params: {
     };
   }
 
-  if (row.consumedAt) {
-    await revokeTokensForGrant(row.grantId);
-    return {
-      ok: false,
-      description:
-        "This authorization code was already used. Anything it issued has been revoked; sign in again.",
-    };
-  }
-  if (row.expiresAt.getTime() <= Date.now()) {
+  if (row.expiresAt.getTime() <= Date.now() && !row.consumedAt) {
     return { ok: false, description: "The authorization code has expired." };
   }
 
@@ -147,6 +139,25 @@ export async function consumeAuthorizationCode(params: {
       ok: false,
       description: "The code verifier does not match the code challenge.",
     };
+  }
+
+  // Only now, with the caller having proved possession of the verifier, is a
+  // second presentation treated as theft. Revoking before this point let
+  // anyone holding a leaked code — and a client_id, which is public — destroy
+  // the victim's live tokens without proving anything at all.
+  if (row.consumedAt) {
+    await revokeTokensForGrant(row.grantId);
+    // The client is told to sign in again, so the agent has to be waiting for
+    // it when it does.
+    await resetOAuthGrantToPending(row.grantId);
+    return {
+      ok: false,
+      description:
+        "This authorization code was already used. Anything it issued has been revoked; sign in again.",
+    };
+  }
+  if (row.expiresAt.getTime() <= Date.now()) {
+    return { ok: false, description: "The authorization code has expired." };
   }
 
   let claimed: OAuthAuthorizationCode[];
