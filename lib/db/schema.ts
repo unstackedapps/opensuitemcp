@@ -772,3 +772,192 @@ export const orgMcpServerPolicy = pgTable(
 );
 
 export type OrgMcpServerPolicy = InferSelectModel<typeof orgMcpServerPolicy>;
+
+/**
+ * An OAuth client that may ask for access to this install.
+ *
+ * Three things end up in this table, and they differ only in how the row got
+ * here:
+ *
+ *   - `dcr` — the client registered itself at /api/oauth/register. Deprecated
+ *     by MCP revision 2026-07-28, still what several shipping clients do.
+ *   - `cimd` — a cached Client ID Metadata Document. `clientId` is the https
+ *     URL we fetched it from, and the row is a cache of that document rather
+ *     than a registration; it is refreshed when `metadataExpiresAt` passes.
+ *   - `manual` — a person created it in the App Portal, to paste into a
+ *     connector that asks for a client id and secret rather than discovering
+ *     one.
+ */
+export const oauthClient = pgTable(
+  "OAuthClient",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    /** Public identifier. An issued `osmcp_client_…`, or a CIMD URL. */
+    clientId: varchar("clientId", { length: 512 }).notNull(),
+    /** SHA-256 of the secret half. Null for a public client. */
+    clientSecretHash: text("clientSecretHash"),
+    /**
+     * The secret, AES-256-GCM under ENCRYPTION_KEY, so the person who made a
+     * manual client can copy it again instead of losing it to a dismissed
+     * dialog. Never set for a client that registered itself — nothing would
+     * read it back.
+     */
+    clientSecretCipher: text("clientSecretCipher"),
+    clientName: varchar("clientName", { length: 128 }).notNull(),
+    clientUri: text("clientUri"),
+    logoUri: text("logoUri"),
+    redirectUris: jsonb("redirectUris").$type<string[]>().notNull(),
+    grantTypes: jsonb("grantTypes").$type<string[]>().notNull(),
+    tokenEndpointAuthMethod: varchar("tokenEndpointAuthMethod", { length: 32 })
+      .$type<"none" | "client_secret_post" | "client_secret_basic">()
+      .notNull(),
+    registrationKind: varchar("registrationKind", { length: 16 })
+      .$type<"dcr" | "cimd" | "manual">()
+      .notNull(),
+    softwareId: varchar("softwareId", { length: 128 }),
+    /** Who created a manual client. Null for dcr and cimd rows. */
+    createdByUserId: uuid("createdByUserId").references(() => user.id),
+    orgId: uuid("orgId").references(() => org.id),
+    /** CIMD cache bookkeeping; null on every other kind. */
+    metadataFetchedAt: timestamp("metadataFetchedAt"),
+    metadataExpiresAt: timestamp("metadataExpiresAt"),
+    lastUsedAt: timestamp("lastUsedAt"),
+    disabledAt: timestamp("disabledAt"),
+    createdAt: timestamp("createdAt").notNull(),
+  },
+  (table) => ({
+    clientIdIdx: uniqueIndex("OAuthClient_clientId_key").on(table.clientId),
+    createdByIdx: index("OAuthClient_createdByUserId_idx").on(
+      table.createdByUserId,
+    ),
+  }),
+);
+
+export type OAuthClient = InferSelectModel<typeof oauthClient>;
+
+/**
+ * One authorization code, in flight between the consent screen and the token
+ * endpoint.
+ *
+ * Short-lived and single-use: `consumedAt` is stamped on the first exchange, and
+ * a second attempt is treated as theft rather than as a retry. The consent the
+ * person gave travels on the row, so the grant is created from what they
+ * actually approved rather than from whatever the token request claims.
+ */
+export const oauthAuthorizationCode = pgTable(
+  "OAuthAuthorizationCode",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    tokenId: varchar("tokenId", { length: 32 }).notNull(),
+    tokenHash: text("tokenHash").notNull(),
+    clientId: varchar("clientId", { length: 512 }).notNull(),
+    userId: uuid("userId")
+      .notNull()
+      .references(() => user.id),
+    orgId: uuid("orgId").references(() => org.id),
+    redirectUri: text("redirectUri").notNull(),
+    codeChallenge: varchar("codeChallenge", { length: 128 }).notNull(),
+    scope: text("scope").notNull(),
+    /** RFC 8707 audience this code may be exchanged for. */
+    resource: text("resource").notNull(),
+    /** What the person chose on the consent screen. */
+    agentName: varchar("agentName", { length: 128 }).notNull(),
+    personaId: varchar("personaId", { length: 128 }),
+    netsuiteAccountId: varchar("netsuiteAccountId", { length: 64 }),
+    expiresAt: timestamp("expiresAt").notNull(),
+    consumedAt: timestamp("consumedAt"),
+    /**
+     * The grant this code created, recorded on the exchange. OAuth 2.1 asks an
+     * authorization server to revoke what a replayed code already produced, and
+     * without this there is nothing to point at.
+     */
+    grantId: uuid("grantId"),
+    createdAt: timestamp("createdAt").notNull(),
+  },
+  (table) => ({
+    tokenIdIdx: uniqueIndex("OAuthAuthorizationCode_tokenId_key").on(
+      table.tokenId,
+    ),
+    expiresIdx: index("OAuthAuthorizationCode_expiresAt_idx").on(
+      table.expiresAt,
+    ),
+  }),
+);
+
+export type OAuthAuthorizationCode = InferSelectModel<
+  typeof oauthAuthorizationCode
+>;
+
+/**
+ * A standing consent: this person let this client act as them.
+ *
+ * The row is the OAuth counterpart of an McpApiKey, and carries the same three
+ * choices — a name, an optional persona, an optional pinned NetSuite account —
+ * so an agent that signed in is managed beside one that was handed a key, in
+ * one list, with one revoke button. Access tokens come and go against it;
+ * revoking the grant ends all of them at once.
+ */
+export const oauthGrant = pgTable(
+  "OAuthGrant",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    userId: uuid("userId")
+      .notNull()
+      .references(() => user.id),
+    orgId: uuid("orgId").references(() => org.id),
+    clientId: varchar("clientId", { length: 512 }).notNull(),
+    name: varchar("name", { length: 128 }).notNull(),
+    /** Pins the grant to one NetSuite account; null follows the active one. */
+    netsuiteAccountId: varchar("netsuiteAccountId", { length: 64 }),
+    personaId: varchar("personaId", { length: 128 }),
+    scope: text("scope").notNull(),
+    lastUsedAt: timestamp("lastUsedAt"),
+    revokedAt: timestamp("revokedAt"),
+    createdAt: timestamp("createdAt").notNull(),
+  },
+  (table) => ({
+    userIdIdx: index("OAuthGrant_userId_idx").on(table.userId),
+    clientIdIdx: index("OAuthGrant_clientId_idx").on(table.clientId),
+  }),
+);
+
+export type OAuthGrant = InferSelectModel<typeof oauthGrant>;
+
+/**
+ * An access or refresh token issued against a grant.
+ *
+ * Opaque and hashed, like McpApiKey, so revocation takes effect on the next
+ * call rather than whenever a JWT would have expired.
+ *
+ * Refresh tokens rotate: exchanging one stamps `consumedAt` and issues a
+ * successor carrying `rotatedFromId`. Presenting a consumed refresh token means
+ * either a replay or a client that lost the response, and neither is safe to
+ * serve, so it revokes the whole grant.
+ */
+export const oauthToken = pgTable(
+  "OAuthToken",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    grantId: uuid("grantId")
+      .notNull()
+      .references(() => oauthGrant.id),
+    kind: varchar("kind", { length: 16 })
+      .$type<"access" | "refresh">()
+      .notNull(),
+    tokenId: varchar("tokenId", { length: 32 }).notNull(),
+    tokenHash: text("tokenHash").notNull(),
+    /** The refresh token this one replaced, for reuse detection. */
+    rotatedFromId: uuid("rotatedFromId"),
+    expiresAt: timestamp("expiresAt").notNull(),
+    consumedAt: timestamp("consumedAt"),
+    revokedAt: timestamp("revokedAt"),
+    createdAt: timestamp("createdAt").notNull(),
+  },
+  (table) => ({
+    tokenIdIdx: uniqueIndex("OAuthToken_tokenId_key").on(table.tokenId),
+    grantIdx: index("OAuthToken_grantId_idx").on(table.grantId),
+    expiresIdx: index("OAuthToken_expiresAt_idx").on(table.expiresAt),
+  }),
+);
+
+export type OAuthToken = InferSelectModel<typeof oauthToken>;

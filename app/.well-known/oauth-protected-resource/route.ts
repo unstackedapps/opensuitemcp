@@ -3,6 +3,11 @@ import {
   getMcpResourceIdentifier,
   getMcpServerUrl,
 } from "@/lib/mcp/server/config";
+import { buildProtectedResourceMetadata } from "@/lib/mcp/server/oauth/metadata";
+import {
+  discoveryJson,
+  discoveryOptions,
+} from "@/lib/mcp/server/oauth/responses";
 
 export const dynamic = "force-dynamic";
 
@@ -11,38 +16,19 @@ export const dynamic = "force-dynamic";
  *
  * A spec-compliant client that receives a 401 from the MCP endpoint reads the
  * `resource_metadata` pointer in the challenge and fetches this document to
- * learn how to authenticate. Advertising bearer tokens here is what makes the
- * API-key flow discoverable rather than something a user has to be told about.
+ * learn how to authenticate. `authorization_servers` is the field that turns
+ * that into a sign-in rather than a dead end.
  */
 export function GET(request: Request) {
-  const origin = getPublicAppOrigin(request);
-
-  return Response.json(
-    {
+  return discoveryJson(
+    buildProtectedResourceMetadata({
+      origin: getPublicAppOrigin(request),
       resource: getMcpResourceIdentifier(request),
-      resource_name: "OpenSuiteMCP",
-      resource_documentation: `${origin}/docs/mcp-server`,
-      scopes_supported: ["read", "write"],
-      bearer_methods_supported: ["header"],
-      mcp_endpoint: getMcpServerUrl(request),
-    },
-    {
-      headers: {
-        "Cache-Control": "public, max-age=300",
-        "Access-Control-Allow-Origin": "*",
-      },
-    },
+      mcpEndpoint: getMcpServerUrl(request),
+    }),
   );
 }
 
-/** Clients probe this document from a browser context, so preflight must pass. */
 export function OPTIONS() {
-  return new Response(null, {
-    status: 204,
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, OPTIONS",
-      "Access-Control-Allow-Headers": "mcp-protocol-version",
-    },
-  });
+  return discoveryOptions();
 }

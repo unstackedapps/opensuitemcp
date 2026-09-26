@@ -17,16 +17,25 @@ function isDocsPath(pathname: string): boolean {
 }
 
 /**
- * The MCP server authenticates with a bearer API key in its own route handler.
- * It must bypass the cookie gate below, or a client handshake is answered with
- * a redirect to /login instead of a protocol response.
+ * The MCP server and its authorization server authenticate in their own route
+ * handlers — a bearer credential, or a client id and secret. They must bypass
+ * the cookie gate below, or a client handshake is answered with a redirect to
+ * /login instead of a protocol response.
+ *
+ * `/oauth/authorize` is deliberately *not* here. It is the one OAuth surface a
+ * person uses directly, and it needs the gate: an unauthenticated visitor
+ * should be bounced to login and returned to the consent screen afterwards.
  */
 function isMcpServerPath(pathname: string): boolean {
   return (
     pathname === "/api/mcp" ||
     pathname.startsWith("/api/mcp/") ||
+    pathname.startsWith("/api/oauth/") ||
     pathname === "/.well-known/oauth-protected-resource" ||
-    pathname.startsWith("/.well-known/oauth-protected-resource/")
+    pathname.startsWith("/.well-known/oauth-protected-resource/") ||
+    pathname === "/.well-known/oauth-authorization-server" ||
+    pathname.startsWith("/.well-known/oauth-authorization-server/") ||
+    pathname === "/.well-known/openid-configuration"
   );
 }
 

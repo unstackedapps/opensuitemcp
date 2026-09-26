@@ -18,7 +18,7 @@ _Main chat UI._
 
 ## What’s in 5.3
 
-- **Agent access** — hand an external AI agent a key and your install's URL and it works in your NetSuite workspace as you, with your permissions and your tool policy
+- **Agent access** — an external AI agent signs in with your install's URL, or is handed a key, and works in your NetSuite workspace as you, with your permissions and your tool policy
 - **Agent-readable skills and personas** — an agent can list and read the instruction packs and specialist playbooks this workspace has enabled, and switch the active NetSuite account
 - **Org control** — **Admin → Agent access** turns it on for an organization and can narrow it to named members
 
@@ -99,17 +99,33 @@ OpenSuiteMCP can also be an **MCP server**, so an external AI agent works
 inside a user's NetSuite workspace as that user — their connected account,
 their permissions, their tool policy.
 
-Mint a key under **App Portal → Agent access**:
+**Sign in.** Every install is its own OAuth 2.1 authorization server, so most
+clients need nothing but the URL. Add it as a custom connector in Claude, or:
+
+```bash
+claude mcp add --transport http opensuitemcp https://your-install.example.com/api/mcp
+```
+
+Then approve the agent on the consent screen. Cursor, VS Code, Gemini CLI and
+ChatGPT work the same way — **App Portal → Agent access → How to connect** has
+the exact thing to paste for each.
+
+**Or hand it a key**, for an agent with no person behind it, a client with no
+OAuth support, or an install that is not on HTTPS:
 
 ```bash
 claude mcp add --transport http opensuitemcp https://your-install.example.com/api/mcp \
   --header "Authorization: Bearer osmcp_..."
 ```
 
-Keys are per user, shown once, and revocable. An agent reaches exactly what you
-have enabled in the app — the key adds no gate of its own.
-The server URL derives from your install's public address, so self-hosted and
-hosted installs each have their own. Full guide: [MCP server](docs/mcp-server.md).
+Either way the agent reaches exactly what you have enabled in the app — the
+credential adds no gate of its own — and both appear in one list you can rename,
+re-role and revoke. The server URL derives from your install's public address,
+so self-hosted, sandbox and hosted installs each have their own and none of them
+depend on the others.
+
+Full guides: [Connect an agent](docs/connect-an-agent.md) ·
+[MCP server](docs/mcp-server.md).
 
 ## Prerequisites
 
