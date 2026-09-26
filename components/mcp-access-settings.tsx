@@ -11,7 +11,6 @@ import {
 } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import useSWR from "swr";
-import { AgentConnectGuide } from "@/components/agent-connect-guide";
 import {
   type AgentAccountOption,
   AgentDialog,
@@ -27,6 +26,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AVA_PERSONA_ID } from "@/lib/ai/personas/ids";
+import { CONNECT_AGENT_DOCS_URL } from "@/lib/constants";
 import type { ConnectPreflight } from "@/lib/mcp/server/oauth/preflight";
 import { fetcher } from "@/lib/utils";
 import { toast } from "./toast";
@@ -428,7 +428,17 @@ export function McpAccessPanel({
             </Button>
           </div>
           <p className="text-muted-foreground text-xs">
-            This install's public address. Every agent here connects through it.
+            This install's public address. Every agent here connects through it
+            —{" "}
+            <a
+              className="underline underline-offset-2 hover:text-foreground"
+              href={CONNECT_AGENT_DOCS_URL}
+              rel="noreferrer"
+              target="_blank"
+            >
+              how to connect each AI
+            </a>
+            .
           </p>
         </section>
 
@@ -439,10 +449,9 @@ export function McpAccessPanel({
         ) : null}
 
         {/*
-          Surfaced above the tabs, and only when something is wrong. A
-          misconfigured address breaks sign-in for every client at once and
-          explains itself nowhere else — but a healthy install does not need
-          telling, and the full reading lives under How to connect.
+          Only when something is wrong. A misconfigured address breaks sign-in
+          for every client at once and explains itself nowhere else — but a
+          healthy install does not need telling.
         */}
         {data.connect.preflight.status === "ready" ? null : (
           <p className="flex gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-amber-700 text-xs leading-relaxed dark:text-amber-400">
@@ -459,7 +468,6 @@ export function McpAccessPanel({
         <Tabs defaultValue="agents">
           <TabsList>
             <TabsTrigger value="agents">Agents</TabsTrigger>
-            <TabsTrigger value="connect">How to connect</TabsTrigger>
             <TabsTrigger value="clients">OAuth clients</TabsTrigger>
           </TabsList>
 
@@ -600,13 +608,6 @@ export function McpAccessPanel({
                 </ul>
               )}
             </section>
-          </TabsContent>
-
-          <TabsContent className="mt-4" value="connect">
-            <AgentConnectGuide
-              preflight={data.connect.preflight}
-              serverUrl={data.serverUrl}
-            />
           </TabsContent>
 
           <TabsContent className="mt-4" value="clients">
