@@ -2,10 +2,10 @@ import "server-only";
 
 import { randomBytes } from "node:crypto";
 import { lookup } from "node:dns/promises";
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { type OAuthClient, oauthClient } from "@/lib/db/schema";
-import { decrypt, encrypt } from "@/lib/encryption";
+import { encrypt } from "@/lib/encryption";
 import { ChatSDKError } from "@/lib/errors";
 import { allowOAuthOutboundFetch } from "@/lib/rate-limit";
 import {
@@ -467,81 +467,6 @@ export async function createManualOAuthClient(params: {
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to create the OAuth client",
-    );
-  }
-}
-
-export async function listManualOAuthClients(
-  userId: string,
-): Promise<OAuthClientSummary[]> {
-  try {
-    const rows = await db
-      .select()
-      .from(oauthClient)
-      .where(
-        and(
-          eq(oauthClient.createdByUserId, userId),
-          eq(oauthClient.registrationKind, "manual"),
-          isNull(oauthClient.disabledAt),
-        ),
-      )
-      .orderBy(asc(oauthClient.createdAt));
-    return rows.map(toOAuthClientSummary);
-  } catch (_error) {
-    throw new ChatSDKError(
-      "bad_request:database",
-      "Failed to list OAuth clients",
-    );
-  }
-}
-
-export async function revealManualOAuthClientSecret(params: {
-  userId: string;
-  id: string;
-}): Promise<string | null> {
-  try {
-    const [row] = await db
-      .select({ cipher: oauthClient.clientSecretCipher })
-      .from(oauthClient)
-      .where(
-        and(
-          eq(oauthClient.id, params.id),
-          eq(oauthClient.createdByUserId, params.userId),
-          isNull(oauthClient.disabledAt),
-        ),
-      )
-      .limit(1);
-    return row?.cipher ? decrypt(row.cipher) : null;
-  } catch (_error) {
-    throw new ChatSDKError(
-      "bad_request:database",
-      "Failed to read the OAuth client secret",
-    );
-  }
-}
-
-/** Disabling keeps the row, so a grant made with it still names its client. */
-export async function disableManualOAuthClient(params: {
-  userId: string;
-  id: string;
-}): Promise<boolean> {
-  try {
-    const updated = await db
-      .update(oauthClient)
-      .set({ disabledAt: new Date() })
-      .where(
-        and(
-          eq(oauthClient.id, params.id),
-          eq(oauthClient.createdByUserId, params.userId),
-          isNull(oauthClient.disabledAt),
-        ),
-      )
-      .returning({ id: oauthClient.id });
-    return updated.length > 0;
-  } catch (_error) {
-    throw new ChatSDKError(
-      "bad_request:database",
-      "Failed to remove the OAuth client",
     );
   }
 }

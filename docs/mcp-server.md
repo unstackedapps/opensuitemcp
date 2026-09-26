@@ -102,7 +102,7 @@ with `S256` is required in every case; `plain` was removed in OAuth 2.1.
 | --- | --- | --- |
 | Client ID Metadata Document | `client_id` is an HTTPS URL this install fetches and validates. Advertised as `client_id_metadata_document_supported` | Preferred by `2026-07-28`. What Claude Code uses |
 | Dynamic Client Registration | Client POSTs its metadata to `/api/oauth/register` | Deprecated by that revision, still widely used |
-| Pre-registration | A person creates a client under **Agent access → OAuth clients** and pastes the id and secret into a connector | For connectors that demand them up front |
+| Pre-registration | The agent app issues an ID and secret when it is created, bound to that app | For connectors that demand them up front, such as Gemini |
 
 ### What the tokens are
 

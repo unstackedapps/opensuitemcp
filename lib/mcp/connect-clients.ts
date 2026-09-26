@@ -237,7 +237,7 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
           location: "Remote MCP server URL",
           code: serverUrl,
         },
-        note: "Leave Advanced settings blank unless the dialog demands a client ID and secret — then make one under OAuth clients. On Team or Enterprise, only an Owner can add a connector.",
+        note: "Leave Advanced settings blank unless the dialog demands a client ID and secret — if it does, tick that box when creating the agent app and it issues you one. On Team or Enterprise, only an Owner can add a connector.",
       },
       agentKey: {
         heading: "Use an agent key instead",
