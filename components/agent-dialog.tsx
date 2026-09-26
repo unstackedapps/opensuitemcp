@@ -1,6 +1,8 @@
 "use client";
 
+import { Copy, Eye, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -52,6 +54,22 @@ export type AgentDraft = {
   callbackUrl: string;
 };
 
+/** What an existing app holds, for the half of the dialog it can fill. */
+export type AgentAppState = {
+  kind: "key" | "grant";
+  connectionLabel: string;
+  hasClientCredentials: boolean;
+  /** Masked token, or how it signed in. */
+  credential: string;
+  copyable: boolean;
+};
+
+export type AgentCredentials = {
+  clientId: string;
+  clientSecret: string | null;
+  redirectUris: string[];
+};
+
 type AgentDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -62,18 +80,33 @@ type AgentDialogProps = {
   initial?: AgentDraft;
   saving: boolean;
   onSubmit: (draft: AgentDraft) => void;
+  serverUrl: string;
+  /** Edit mode: everything the app already has. */
+  app?: AgentAppState | null;
+  credentials?: AgentCredentials | null;
+  busy?: boolean;
+  onCopy?: (value: string, what: string) => void;
+  onCopyKey?: () => void;
+  onReplaceKey?: () => void;
+  onRevealCredentials?: () => void;
+  onRotateSecret?: () => void;
+  onSaveCallback?: (url: string) => void;
+  onRevoke?: () => void;
 };
 
 /**
- * The one place an agent app is created.
+ * One app, one dialog.
  *
- * Two columns and no descriptions. The people using this configure NetSuite
- * for a living; "Bearer auth" and "OAuth 2.1" are their words already, and a
- * sentence under each one only makes the dialog taller than the screen.
+ * What it is called, what it acts as and what it connects with are all facts
+ * about the same thing, so splitting them across an edit dialog and a
+ * credentials dialog made a person open two windows to answer one question.
+ * Two columns and no descriptions: the people using this configure NetSuite
+ * for a living, and "Bearer auth" is already their word.
  */
 
 /** Radix refuses an empty `value`, so "follow my active account" needs one. */
 const FOLLOW_ACTIVE_ACCOUNT = "__any__";
+const MASK = "••••••••••••";
 
 const EMPTY: AgentDraft = {
   name: "",
@@ -94,8 +127,20 @@ export function AgentDialog({
   initial,
   saving,
   onSubmit,
+  serverUrl,
+  app,
+  credentials,
+  busy,
+  onCopy,
+  onCopyKey,
+  onReplaceKey,
+  onRevealCredentials,
+  onRotateSecret,
+  onSaveCallback,
+  onRevoke,
 }: AgentDialogProps) {
   const [draft, setDraft] = useState<AgentDraft>(initial ?? EMPTY);
+  const [callback, setCallback] = useState("");
 
   // Reopening must not show the last app's details, and an edit starts from
   // what the app currently holds rather than whatever was typed last.
@@ -104,6 +149,10 @@ export function AgentDialog({
       setDraft(initial ?? EMPTY);
     }
   }, [open, initial]);
+
+  useEffect(() => {
+    setCallback(credentials?.redirectUris[0] ?? "");
+  }, [credentials]);
 
   const creating = mode === "create";
   const trimmed = draft.name.trim();
@@ -114,8 +163,11 @@ export function AgentDialog({
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>
-            {creating ? "New agent app" : "Edit agent app"}
+          <DialogTitle className="flex items-center gap-2">
+            {creating ? "New agent app" : trimmed || "Agent app"}
+            {app ? (
+              <Badge variant="outline">{app.connectionLabel}</Badge>
+            ) : null}
           </DialogTitle>
         </DialogHeader>
 
@@ -264,35 +316,168 @@ export function AgentDialog({
                       {entry.label}
                     </Button>
                   ))}
+                  <Button
+                    className="shrink-0"
+                    onClick={() =>
+                      setDraft((d) => ({ ...d, callbackUrl: "" }))
+                    }
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    Custom
+                  </Button>
                 </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {app ? (
+            <div className="space-y-3 border-border/60 border-t pt-3 sm:col-span-2">
+              <Row
+                label="Server URL"
+                onCopy={() => onCopy?.(serverUrl, "Server URL")}
+                value={serverUrl}
+              />
+
+              {app.kind === "key" ? (
+                <Row
+                  action={
+                    <Button
+                      onClick={onReplaceKey}
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                    >
+                      <RefreshCw className="size-3.5" />
+                      Replace
+                    </Button>
+                  }
+                  label="Token"
+                  onCopy={app.copyable ? onCopyKey : undefined}
+                  value={app.credential}
+                />
+              ) : null}
+
+              {app.hasClientCredentials ? (
+                <>
+                  <Row
+                    action={
+                      <div className="flex gap-2">
+                        <Button
+                          disabled={busy}
+                          onClick={onRevealCredentials}
+                          size="sm"
+                          type="button"
+                          variant="outline"
+                        >
+                          <Eye className="size-3.5" />
+                          Reveal
+                        </Button>
+                        <Button
+                          disabled={busy}
+                          onClick={onRotateSecret}
+                          size="sm"
+                          type="button"
+                          variant="outline"
+                        >
+                          <RefreshCw className="size-3.5" />
+                          New secret
+                        </Button>
+                      </div>
+                    }
+                    label="Client ID"
+                    onCopy={
+                      credentials
+                        ? () => onCopy?.(credentials.clientId, "Client ID")
+                        : undefined
+                    }
+                    value={credentials?.clientId ?? MASK}
+                  />
+                  <Row
+                    label="Client secret"
+                    onCopy={
+                      credentials?.clientSecret
+                        ? () =>
+                            onCopy?.(
+                              credentials.clientSecret ?? "",
+                              "Client secret",
+                            )
+                        : undefined
+                    }
+                    value={credentials?.clientSecret ?? MASK}
+                  />
+                  {credentials ? (
+                    <Row
+                      action={
+                        <Button
+                          disabled={busy || !callback.trim()}
+                          onClick={() => onSaveCallback?.(callback.trim())}
+                          size="sm"
+                          type="button"
+                          variant="outline"
+                        >
+                          Save
+                        </Button>
+                      }
+                      editable
+                      label="Callback URL"
+                      onChange={setCallback}
+                      value={callback}
+                    />
+                  ) : null}
+                </>
+              ) : null}
+
+              {app.kind === "grant" && !app.hasClientCredentials ? (
+                <p className="text-muted-foreground text-xs">
+                  {app.credential} — no secret to copy.
+                </p>
               ) : null}
             </div>
           ) : null}
         </div>
 
-        <DialogFooter>
-          <Button
-            onClick={() => onOpenChange(false)}
-            type="button"
-            variant="ghost"
-          >
-            Cancel
-          </Button>
-          <Button
-            disabled={
-              !trimmed || saving || (needsCallback && !draft.callbackUrl.trim())
-            }
-            onClick={() =>
-              onSubmit({
-                ...draft,
-                name: trimmed,
-                description: draft.description.trim(),
-              })
-            }
-            type="button"
-          >
-            {saving ? "Saving…" : creating ? "Create app" : "Save"}
-          </Button>
+        <DialogFooter className="sm:justify-between">
+          {app ? (
+            <Button
+              className="text-destructive hover:text-destructive"
+              onClick={onRevoke}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              Revoke
+            </Button>
+          ) : (
+            <span />
+          )}
+          <div className="flex gap-2">
+            <Button
+              onClick={() => onOpenChange(false)}
+              type="button"
+              variant="ghost"
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={
+                !trimmed ||
+                saving ||
+                (needsCallback && !draft.callbackUrl.trim())
+              }
+              onClick={() =>
+                onSubmit({
+                  ...draft,
+                  name: trimmed,
+                  description: draft.description.trim(),
+                })
+              }
+              type="button"
+            >
+              {saving ? "Saving…" : creating ? "Create app" : "Save"}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -314,6 +499,48 @@ function Field({
         {label}
       </Label>
       {children}
+    </div>
+  );
+}
+
+function Row({
+  label,
+  value,
+  onCopy,
+  onChange,
+  editable,
+  action,
+}: {
+  label: string;
+  value: string;
+  onCopy?: () => void;
+  onChange?: (value: string) => void;
+  editable?: boolean;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <Label className="w-28 shrink-0 text-muted-foreground text-xs">
+        {label}
+      </Label>
+      <Input
+        className="font-mono text-xs"
+        onChange={(event) => onChange?.(event.target.value)}
+        readOnly={!editable}
+        value={value}
+      />
+      {onCopy ? (
+        <Button
+          className="size-9 shrink-0 p-0"
+          onClick={onCopy}
+          type="button"
+          variant="outline"
+        >
+          <Copy className="size-3.5" />
+          <span className="sr-only">Copy the {label}</span>
+        </Button>
+      ) : null}
+      {action}
     </div>
   );
 }

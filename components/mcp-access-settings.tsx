@@ -3,19 +3,17 @@
 import {
   AlertTriangle,
   ArrowUpDown,
-  Ban,
   Copy,
-  Eye,
   KeyRound,
   Pencil,
   Plus,
-  RefreshCw,
   Trash2,
 } from "lucide-react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import useSWR from "swr";
 import {
   type AgentAccountOption,
+  type AgentCredentials,
   AgentDialog,
   type AgentDraft,
   type AgentPersonaOption,
@@ -199,7 +197,8 @@ export function McpAccessPanel({
    * registering themselves, and they belong to the app they were issued from:
    * they can connect that one and no other.
    */
-  const [viewing, setViewing] = useState<AgentRow | null>(null);
+  const [credentials, setCredentials] = useState<AgentCredentials | null>(null);
+  const [credentialsBusy, setCredentialsBusy] = useState(false);
   const [pendingPurge, setPendingPurge] = useState<AgentRow | null>(null);
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<"recent" | "name" | "used">("recent");
@@ -374,6 +373,71 @@ export function McpAccessPanel({
     },
     [copy, mutate],
   );
+
+  /** Opening an app clears whatever the last one revealed. */
+  const openApp = useCallback((row: AgentRow) => {
+    setCredentials(null);
+    setEditing(row);
+  }, []);
+
+  const loadCredentials = useCallback(
+    async (row: AgentRow, rotate: boolean) => {
+      setCredentialsBusy(true);
+      try {
+        const response = await fetch(
+          `${GRANTS_ENDPOINT}/${row.id}/credentials`,
+          { method: rotate ? "POST" : "GET" },
+        );
+        const payload = await response.json();
+        if (!response.ok) {
+          toast({
+            type: "error",
+            description: payload.error ?? "Could not read the credentials.",
+          });
+          return;
+        }
+        setCredentials(payload);
+        if (rotate) {
+          toast({
+            type: "success",
+            description: "New secret issued. The client ID is unchanged.",
+          });
+        }
+      } catch {
+        toast({
+          type: "error",
+          description: "Could not read the credentials.",
+        });
+      } finally {
+        setCredentialsBusy(false);
+      }
+    },
+    [],
+  );
+
+  const saveCallback = useCallback(async (row: AgentRow, url: string) => {
+    setCredentialsBusy(true);
+    try {
+      const response = await fetch(`${GRANTS_ENDPOINT}/${row.id}/credentials`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ redirectUris: [url] }),
+      });
+      const payload = await response.json();
+      toast(
+        response.ok
+          ? { type: "success", description: "Callback URL saved." }
+          : {
+              type: "error",
+              description: payload.error ?? "Could not save the callback URL.",
+            },
+      );
+    } catch {
+      toast({ type: "error", description: "Could not save the callback URL." });
+    } finally {
+      setCredentialsBusy(false);
+    }
+  }, []);
 
   const purgeAgent = useCallback(
     async (row: AgentRow) => {
@@ -707,37 +771,15 @@ export function McpAccessPanel({
                         </span>
                       </Button>
                     ) : (
-                      <>
-                        <Button
-                          onClick={() => setViewing(row)}
-                          size="sm"
-                          type="button"
-                          variant="ghost"
-                        >
-                          <KeyRound className="size-3.5" />
-                          <span className="sr-only">
-                            Credentials for {row.name}
-                          </span>
-                        </Button>
-                        <Button
-                          onClick={() => setEditing(row)}
-                          size="sm"
-                          type="button"
-                          variant="ghost"
-                        >
-                          <Pencil className="size-3.5" />
-                          <span className="sr-only">Edit {row.name}</span>
-                        </Button>
-                        <Button
-                          onClick={() => setPendingRevoke(row)}
-                          size="sm"
-                          type="button"
-                          variant="ghost"
-                        >
-                          <Ban className="size-3.5" />
-                          <span className="sr-only">Revoke {row.name}</span>
-                        </Button>
-                      </>
+                      <Button
+                        onClick={() => openApp(row)}
+                        size="sm"
+                        type="button"
+                        variant="ghost"
+                      >
+                        <Pencil className="size-3.5" />
+                        <span className="sr-only">Open {row.name}</span>
+                      </Button>
                     )}
                   </div>
                 </li>
@@ -746,20 +788,6 @@ export function McpAccessPanel({
           )}
         </section>
       </div>
-
-      <AppDetailsDialog
-        connectionLabel={
-          viewing ? CONNECTION_LABEL[viewing.connectionKind] : ""
-        }
-        onClose={() => setViewing(null)}
-        onCopyKey={copyKey}
-        onRotateKey={(row) => {
-          setViewing(null);
-          setPendingRotate(row);
-        }}
-        row={viewing}
-        serverUrl={data.serverUrl}
-      />
 
       <ConfirmDestructiveDialog
         confirmLabel="Delete permanently"
@@ -793,6 +821,7 @@ export function McpAccessPanel({
         open={creatingOpen}
         personas={personas}
         saving={saving}
+        serverUrl={data.serverUrl}
       />
 
       <AgentDialog
@@ -809,9 +838,41 @@ export function McpAccessPanel({
           }
         }}
         accounts={accounts}
+        app={
+          editing
+            ? {
+                kind: editing.kind,
+                connectionLabel: CONNECTION_LABEL[editing.connectionKind],
+                hasClientCredentials:
+                  editing.connectionKind === "oauth-client-key",
+                credential: editing.credential,
+                copyable: editing.copyable,
+              }
+            : null
+        }
+        busy={credentialsBusy}
+        credentials={credentials}
+        onCopy={copy}
+        onCopyKey={() => editing && copyKey(editing)}
+        onReplaceKey={() => {
+          if (editing) {
+            setPendingRotate(editing);
+            setEditing(null);
+          }
+        }}
+        onRevealCredentials={() => editing && loadCredentials(editing, false)}
+        onRevoke={() => {
+          if (editing) {
+            setPendingRevoke(editing);
+            setEditing(null);
+          }
+        }}
+        onRotateSecret={() => editing && loadCredentials(editing, true)}
+        onSaveCallback={(url) => editing && saveCallback(editing, url)}
         open={Boolean(editing)}
         personas={personas}
         saving={saving}
+        serverUrl={data.serverUrl}
       />
 
       <ConfirmDestructiveDialog
@@ -950,240 +1011,5 @@ function Field({
         ) : null}
       </div>
     </div>
-  );
-}
-
-/**
- * Everything about one app, and the two things its credential supports.
- *
- * Needing a fresh secret should never mean deleting the app: it would take the
- * name, the note, the persona, the pinned account and the history with it. So
- * both credential kinds can be copied again and replaced in place, which is
- * what the key always allowed and what a sign-in app had lost.
- */
-function AppDetailsDialog({
-  row,
-  serverUrl,
-  connectionLabel,
-  onClose,
-  onCopyKey,
-  onRotateKey,
-}: {
-  row: AgentRow | null;
-  serverUrl: string;
-  connectionLabel: string;
-  onClose: () => void;
-  onCopyKey: (row: AgentRow) => void;
-  onRotateKey: (row: AgentRow) => void;
-}) {
-  const [secret, setSecret] = useState<{
-    clientId: string;
-    clientSecret: string | null;
-    redirectUris: string[];
-  } | null>(null);
-  const [callback, setCallback] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  // A different app's credentials must never be left on screen.
-  const open = Boolean(row);
-  const shownFor = useRef<string | null>(null);
-  if (open && shownFor.current !== row?.id) {
-    shownFor.current = row?.id ?? null;
-    if (secret) {
-      setSecret(null);
-    }
-  }
-
-  const copy = async (value: string, what: string) => {
-    try {
-      await navigator.clipboard.writeText(value);
-      toast({ type: "success", description: `${what} copied.` });
-    } catch {
-      toast({ type: "error", description: `Could not copy the ${what}.` });
-    }
-  };
-
-  const load = async (rotate: boolean) => {
-    if (!row) {
-      return;
-    }
-    setBusy(true);
-    try {
-      const response = await fetch(`${GRANTS_ENDPOINT}/${row.id}/credentials`, {
-        method: rotate ? "POST" : "GET",
-      });
-      const payload = await response.json();
-      if (!response.ok) {
-        toast({
-          type: "error",
-          description: payload.error ?? "Could not read the credentials.",
-        });
-        return;
-      }
-      setSecret(payload);
-      setCallback((payload.redirectUris ?? [])[0] ?? "");
-      if (rotate) {
-        toast({
-          type: "success",
-          description: "New secret issued. The client ID is unchanged.",
-        });
-      }
-    } catch {
-      toast({ type: "error", description: "Could not read the credentials." });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const saveCallback = async () => {
-    if (!row) {
-      return;
-    }
-    setBusy(true);
-    try {
-      const response = await fetch(`${GRANTS_ENDPOINT}/${row.id}/credentials`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ redirectUris: [callback.trim()] }),
-      });
-      const payload = await response.json();
-      toast(
-        response.ok
-          ? { type: "success", description: "Callback URL saved." }
-          : {
-              type: "error",
-              description: payload.error ?? "Could not save the callback URL.",
-            },
-      );
-    } catch {
-      toast({ type: "error", description: "Could not save the callback URL." });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const isClientKey = row?.connectionKind === "oauth-client-key";
-
-  return (
-    <Dialog onOpenChange={(next) => !next && onClose()} open={open}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{row?.name}</DialogTitle>
-          <DialogDescription>
-            {row?.description || connectionLabel}
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-3 py-1">
-          <Field
-            label="Server URL"
-            onCopy={() => copy(serverUrl, "Server URL")}
-            value={serverUrl}
-          />
-
-          {row?.kind === "key" ? (
-            <>
-              <Field
-                label="Bearer auth"
-                onCopy={row.copyable ? () => onCopyKey(row) : undefined}
-                value={row.credential}
-              />
-            </>
-          ) : null}
-
-          {isClientKey ? (
-            <>
-              <Field
-                label="Client ID"
-                onCopy={
-                  secret ? () => copy(secret.clientId, "Client ID") : undefined
-                }
-                value={secret?.clientId ?? "••••••••••••"}
-              />
-              <Field
-                label="Client secret"
-                onCopy={
-                  secret?.clientSecret
-                    ? () => copy(secret.clientSecret ?? "", "Client secret")
-                    : undefined
-                }
-                value={secret?.clientSecret ?? "••••••••••••"}
-              />
-              {secret ? (
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Callback URL</Label>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      className="font-mono text-xs"
-                      onChange={(event) => setCallback(event.target.value)}
-                      value={callback}
-                    />
-                    <Button
-                      className="shrink-0"
-                      disabled={busy || !callback.trim()}
-                      onClick={() => saveCallback()}
-                      size="sm"
-                      type="button"
-                      variant="outline"
-                    >
-                      Save
-                    </Button>
-                  </div>
-                </div>
-              ) : null}
-            </>
-          ) : null}
-
-          {row?.kind === "grant" && !isClientKey ? (
-            <p className="text-muted-foreground text-xs">
-              This app's client registered itself — no secret to copy.
-            </p>
-          ) : null}
-        </div>
-
-        <DialogFooter className="sm:justify-between">
-          <div className="flex gap-2">
-            {isClientKey ? (
-              <>
-                <Button
-                  disabled={busy}
-                  onClick={() => load(false)}
-                  size="sm"
-                  type="button"
-                  variant="outline"
-                >
-                  <Eye className="size-3.5" />
-                  Reveal
-                </Button>
-                <Button
-                  disabled={busy}
-                  onClick={() => load(true)}
-                  size="sm"
-                  type="button"
-                  variant="outline"
-                >
-                  <RefreshCw className="size-3.5" />
-                  New secret
-                </Button>
-              </>
-            ) : null}
-            {row?.kind === "key" ? (
-              <Button
-                onClick={() => onRotateKey(row)}
-                size="sm"
-                type="button"
-                variant="outline"
-              >
-                <RefreshCw className="size-3.5" />
-                Replace key
-              </Button>
-            ) : null}
-          </div>
-          <Button onClick={onClose} size="sm" type="button">
-            Done
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }
