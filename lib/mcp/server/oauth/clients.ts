@@ -594,7 +594,11 @@ export async function setClientCallbacksForGrant(params: {
 export async function rotateClientSecretForGrant(params: {
   userId: string;
   grantId: string;
-}): Promise<{ clientId: string; clientSecret: string } | null> {
+}): Promise<{
+  clientId: string;
+  clientSecret: string;
+  redirectUris: string[];
+} | null> {
   const clientSecret = `${CLIENT_SECRET_PREFIX}${randomBytes(32).toString("base64url")}`;
   try {
     const [row] = await db
@@ -611,7 +615,18 @@ export async function rotateClientSecretForGrant(params: {
         ),
       )
       .returning();
-    return row ? { clientId: row.clientId, clientSecret } : null;
+    // Same shape as readClientCredentialsForGrant: the dialog renders one
+    // object from either call, and a missing redirectUris took the whole app
+    // down with it.
+    return row
+      ? {
+          clientId: row.clientId,
+          clientSecret,
+          redirectUris: Array.isArray(row.redirectUris)
+            ? (row.redirectUris as string[])
+            : [],
+        }
+      : null;
   } catch (_error) {
     throw new ChatSDKError(
       "bad_request:database",

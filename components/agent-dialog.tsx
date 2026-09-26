@@ -153,7 +153,7 @@ export function AgentDialog({
     if (credentials) {
       setDraft((d) => ({
         ...d,
-        callbackUrl: credentials.redirectUris[0] ?? "",
+        callbackUrl: credentials.redirectUris?.[0] ?? "",
       }));
     }
   }, [credentials]);
