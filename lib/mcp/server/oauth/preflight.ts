@@ -39,7 +39,7 @@ export function evaluateConnectPreflight(params: {
   } catch {
     return {
       status: "configure",
-      title: "Sign-in connect is not available",
+      title: "OAuth 2.1 is not available",
       detail:
         "This install's public address could not be determined. Set AUTH_URL to the URL people reach it on.",
     };
@@ -49,8 +49,8 @@ export function evaluateConnectPreflight(params: {
   if (parsed.protocol !== "https:" && !loopback) {
     return {
       status: "insecure",
-      title: "Sign-in connect needs HTTPS",
-      detail: `Served over ${parsed.protocol}//. Use an agent key, which works over any transport.`,
+      title: "OAuth 2.1 needs HTTPS",
+      detail: `Served over ${parsed.protocol}//. Use a bearer token, which works over any transport.`,
     };
   }
 
@@ -64,7 +64,7 @@ export function evaluateConnectPreflight(params: {
 
   return {
     status: "ready",
-    title: "Sign-in connect is ready",
+    title: "OAuth 2.1 is ready",
     detail: `Agents can sign in at ${params.origin}.`,
   };
 }

@@ -102,10 +102,10 @@ their permissions, their tool policy.
 Create the agent under **App Portal → Agent access → New agent**, choosing how
 it connects:
 
-- **Sign-in** — every install is its own OAuth 2.1 authorization server, so the
+- **OAuth 2.1** — every install is its own OAuth 2.1 authorization server, so the
   client needs nothing but the URL. It sends you here to approve the agent, then
   refreshes its own token.
-- **Agent key** — a secret in a header, for an agent with no person behind it, a
+- **Bearer auth** — a secret in a header, for an agent with no person behind it, a
   client with no OAuth support, or an install that is not on HTTPS.
 
 Either way the agent reaches exactly what you have enabled in the app — the

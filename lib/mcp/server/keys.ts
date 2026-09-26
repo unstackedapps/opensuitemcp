@@ -279,7 +279,7 @@ export async function revokeMcpApiKey(params: {
 }
 
 /**
- * Assign or clear the persona an agent key is meant to act as.
+ * Assign or clear the persona a bearer token is meant to act as.
  *
  * Scoped to the owning user and to live keys: a revoked key keeps whatever it
  * had, so the audit trail still says what it was doing.

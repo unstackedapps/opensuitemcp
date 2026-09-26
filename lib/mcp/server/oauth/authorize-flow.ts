@@ -175,7 +175,7 @@ export async function prepareAuthorization(params: {
     return {
       kind: "blocked",
       title: "Nothing is waiting to connect",
-      description: `${context.client.name} asked to connect, but you have no agent set up for sign-in. Create one under App Portal → Agent apps, choose Sign-in as its connection method, then add this connector again.`,
+      description: `${context.client.name} asked to connect, but you have no agent set up for sign-in. Create one under App Portal → Agent apps, choose OAuth 2.1 as its connection method, then add this connector again.`,
       context,
       openAgentAccess: true,
     };

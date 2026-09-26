@@ -31,8 +31,8 @@ account. One field decides how it authenticates.
 
 | Connects by | The client holds | Created state |
 | --- | --- | --- |
-| **Sign-in** | A token it refreshes itself, after approving a consent screen | *Awaiting connection* until a client completes the flow |
-| **Agent key** | A secret pasted into an `Authorization` header | Active immediately; the key is shown once |
+| **OAuth 2.1** | A token it refreshes itself, after approving a consent screen | *Awaiting connection* until a client completes the flow |
+| **Bearer auth** | A secret pasted into an `Authorization` header | Active immediately; the key is shown once |
 
 Both are re-checked against the org's policy on every call, so an administrator
 turning Agent access off stops an agent that signed in yesterday just as it
@@ -246,7 +246,7 @@ unchanged and is re-checked on every call.
 | **A dead NetSuite authorization needs a human** | Access tokens refresh five minutes before expiry, but a rejected *refresh* token deletes the stored authorization and the account must be reconnected in the UI. Retrying will not fix it. Give agents `osmcp_connection_status` — it reports this case with a `remediation` string |
 | **Pin an agent to an account** | Set the NetSuite account when creating it. A pinned agent ignores the user's active-account preference, so changing that preference cannot redirect it at another subsidiary |
 | **Revocation is immediate** | Revoked rows are kept so the audit trail survives. Revoking a sign-in revokes its tokens; the next call gets a fresh `401` challenge, which a well-behaved client turns into a sign-in prompt |
-| **Tokens are not yours to store** | An agent key can be copied back out of the app; an access token cannot. If a signed-in agent stops working, sign it in again |
+| **Tokens are not yours to store** | An bearer token can be copied back out of the app; an access token cannot. If a signed-in agent stops working, sign it in again |
 | **Treat tool output as untrusted** | Results contain NetSuite record data, which is user-controlled text. An agent should not follow instructions found inside a tool result |
 
 ---
@@ -263,7 +263,7 @@ unchanged and is re-checked on every call.
 | A NetSuite tool is missing | Disabled by tool policy for that account |
 | `invalid_grant` from `/api/oauth/token` | The code or refresh token was already used, expired, or belongs to another client. The client should start a new sign-in |
 | `invalid_client` from `/api/oauth/token` | Unknown `client_id`, or a confidential client presented the wrong secret |
-| Sign-in fails immediately, every time | The issuer does not match. Set `AUTH_URL` to the address people actually use |
+| OAuth 2.1 fails immediately, every time | The issuer does not match. Set `AUTH_URL` to the address people actually use |
 
 More, including what each client needs and what a self-hosted install must get
 right, is in [Connect an agent](connect-an-agent.md).

@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AVA_PERSONA_ID } from "@/lib/ai/personas/ids";
+import { KNOWN_CALLBACK_URLS, METHOD_NAMES } from "@/lib/mcp/connect-clients";
 
 export type AgentPersonaOption = {
   id: string;
@@ -47,8 +48,10 @@ export type AgentDraft = {
   /** Null follows whichever account is active at the time of the call. */
   netsuiteAccountId: string | null;
   method: AgentConnectionMethod;
-  /** Sign-in only: the connector wants an ID and secret, not to self-register. */
+  /** OAuth only: the connector wants an ID and secret, not to self-register. */
   issueClientCredentials: boolean;
+  /** Where that connector expects to be sent back. Required with credentials. */
+  callbackUrl: string;
 };
 
 type AgentDialogProps = {
@@ -86,6 +89,7 @@ const EMPTY: AgentDraft = {
   netsuiteAccountId: null,
   method: "key",
   issueClientCredentials: false,
+  callbackUrl: KNOWN_CALLBACK_URLS[0].url,
 };
 
 export function AgentDialog({
@@ -241,15 +245,13 @@ export function AgentDialog({
                 value={draft.method}
               >
                 <MethodOption
-                  description="Paste a secret into the app. Works anywhere, including without HTTPS."
-                  label="Agent key"
-                  suffix="bearer token"
+                  description="Paste a token into the app. Works anywhere, including without HTTPS."
+                  label={METHOD_NAMES.agentKey}
                   value="key"
                 />
                 <MethodOption
                   description="The app sends you here to approve it, then refreshes its own access."
-                  label="Sign-in"
-                  suffix="OAuth 2.1"
+                  label={METHOD_NAMES.signIn}
                   value="signin"
                 />
               </RadioGroup>
@@ -275,11 +277,56 @@ export function AgentDialog({
                       This connector asks for a client ID and secret
                     </span>
                     <span className="block text-muted-foreground text-xs leading-relaxed">
-                      Gemini does. Most — Claude, Cursor, VS Code — register
-                      themselves and need nothing here.
+                      Gemini and Claude's custom connector do. Claude Code,
+                      Cursor and VS Code register themselves.
                     </span>
                   </span>
                 </label>
+              ) : null}
+
+              {draft.method === "signin" && draft.issueClientCredentials ? (
+                <div className="space-y-1.5 pl-6">
+                  <Label className="text-xs" htmlFor="agent-callback">
+                    Callback URL
+                  </Label>
+                  <Input
+                    className="font-mono text-xs"
+                    id="agent-callback"
+                    onChange={(event) =>
+                      setDraft((current) => ({
+                        ...current,
+                        callbackUrl: event.target.value,
+                      }))
+                    }
+                    value={draft.callbackUrl}
+                  />
+                  <p className="text-muted-foreground text-xs leading-relaxed">
+                    Where that connector sends you back.{" "}
+                    {KNOWN_CALLBACK_URLS.map((entry) => entry.label).join(
+                      " and ",
+                    )}{" "}
+                    are pre-filled below; anything else, copy it from the
+                    connector.
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {KNOWN_CALLBACK_URLS.map((entry) => (
+                      <Button
+                        key={entry.url}
+                        onClick={() =>
+                          setDraft((current) => ({
+                            ...current,
+                            callbackUrl: entry.url,
+                          }))
+                        }
+                        size="sm"
+                        type="button"
+                        variant="outline"
+                      >
+                        {entry.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
               ) : null}
             </div>
           ) : null}
@@ -294,7 +341,14 @@ export function AgentDialog({
             Cancel
           </Button>
           <Button
-            disabled={!trimmed || saving}
+            disabled={
+              !trimmed ||
+              saving ||
+              (creating &&
+                draft.method === "signin" &&
+                draft.issueClientCredentials &&
+                !draft.callbackUrl.trim())
+            }
             onClick={() =>
               onSubmit({
                 ...draft,
@@ -321,13 +375,10 @@ export function AgentDialog({
 function MethodOption({
   value,
   label,
-  suffix,
   description,
 }: {
   value: AgentConnectionMethod;
   label: string;
-  /** The protocol name, for matching what a connector's own dialog says. */
-  suffix: string;
   description: string;
 }) {
   return (
@@ -341,12 +392,7 @@ function MethodOption({
         value={value}
       />
       <span>
-        <span className="block font-medium text-sm">
-          {label}{" "}
-          <span className="font-normal text-muted-foreground text-xs">
-            {suffix}
-          </span>
-        </span>
+        <span className="block font-medium text-sm">{label}</span>
         <span className="block text-muted-foreground text-xs leading-relaxed">
           {description}
         </span>

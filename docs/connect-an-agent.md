@@ -22,11 +22,11 @@ Open **App Portal → Agent access**, copy the **Server URL**, then click
 | Name | What you will see in the agent list |
 | Persona | The NetSuite specialist it acts as |
 | NetSuite account | Pins it to one account, or follows your active one |
-| Connects by | Agent key or Sign-in — see below |
+| Connects by | Bearer auth or OAuth 2.1 — see below |
 
 The two connection methods:
 
-|  | **Sign-in** | **Agent key** |
+|  | **OAuth 2.1** | **Bearer auth** |
 | --- | --- | --- |
 | What you paste into the AI | The server URL | The server URL and a key |
 | Needs HTTPS | Yes | No |
@@ -34,9 +34,24 @@ The two connection methods:
 | Credential lifetime | The client refreshes it | Until you replace it |
 | After creating it | Marked Awaiting connection until a client signs in | Active immediately; the key is shown once |
 
-A person is setting this up, and the install is on HTTPS.
+**OAuth 2.1** — A person is setting this up, and the install is on HTTPS.
 
-A scheduled job, CI, a client with no OAuth support, or no HTTPS.
+**Bearer auth** — A scheduled job, CI, a client with no OAuth support, or no HTTPS.
+
+### If the connector asks for a client ID and secret
+
+Some connectors — Claude's custom connector, Gemini — will not register
+themselves. Tick **This connector asks for a client ID and secret** when
+creating the app, and give it the connector's **callback URL**:
+
+| Connector | Callback URL |
+| --- | --- |
+| Claude | `https://claude.ai/api/mcp/auth_callback` |
+| ChatGPT | `https://chatgpt.com/connector_platform_oauth_redirect` |
+
+The app then hands you a client ID and secret, shown once and readable
+again from its details. Without a callback URL the first sign-in is
+refused with *that callback address is not registered*.
 
 ---
 
@@ -48,7 +63,7 @@ Replace `https://your-install.example.com/api/mcp` with your Server URL, and `os
 
 **Add it as a custom connector**
 
-1. In App Portal → Agent apps, create an agent and choose Sign-in. It waits there until you finish below.
+1. In App Portal → Agent apps, create an app and choose OAuth 2.1. It waits there until you finish below.
 2. In Claude, open Settings → Connectors → Add custom connector.
 3. Paste the server URL below and add the connector.
 4. Claude opens this install. Approve the agent you just created.
@@ -61,9 +76,9 @@ https://your-install.example.com/api/mcp
 
 ⚠️ Leave Advanced settings blank unless the dialog demands a client ID and secret — if it does, tick that box when creating the agent app and it issues you one. On Team or Enterprise, only an Owner can add a connector.
 
-**Use an agent key instead**
+**Use a bearer token instead**
 
-1. In App Portal → Agent apps, create an agent and choose Agent key. The key is copied to your clipboard once.
+1. In App Portal → Agent apps, create an app and choose Bearer auth. The token is copied to your clipboard once.
 2. Add the key as a request header on the connector.
 
 `Request header`
@@ -78,7 +93,7 @@ Authorization: Bearer osmcp_…
 
 **Add the server, then sign in**
 
-1. In App Portal → Agent apps, create an agent and choose Sign-in. It waits there until you finish below.
+1. In App Portal → Agent apps, create an app and choose OAuth 2.1. It waits there until you finish below.
 2. Run the command below.
 3. Run /mcp, choose opensuitemcp, and authenticate.
 4. Approve the agent in the browser window that opens.
@@ -87,9 +102,9 @@ Authorization: Bearer osmcp_…
 claude mcp add --transport http opensuitemcp https://your-install.example.com/api/mcp
 ```
 
-**Use an agent key instead**
+**Use a bearer token instead**
 
-1. In App Portal → Agent apps, create an agent and choose Agent key. The key is copied to your clipboard once.
+1. In App Portal → Agent apps, create an app and choose Bearer auth. The token is copied to your clipboard once.
 2. Pass the key as a header when adding the server.
 
 ```bash
@@ -101,7 +116,7 @@ claude mcp add --transport http opensuitemcp https://your-install.example.com/ap
 
 **Add it to mcp.json**
 
-1. In App Portal → Agent apps, create an agent and choose Sign-in. It waits there until you finish below.
+1. In App Portal → Agent apps, create an app and choose OAuth 2.1. It waits there until you finish below.
 2. Put this in .cursor/mcp.json for one project, or ~/.cursor/mcp.json for all of them.
 3. Cursor opens the sign-in. Approve the agent you just created.
 
@@ -117,9 +132,9 @@ claude mcp add --transport http opensuitemcp https://your-install.example.com/ap
 }
 ```
 
-**Use an agent key instead**
+**Use a bearer token instead**
 
-1. In App Portal → Agent apps, create an agent and choose Agent key. The key is copied to your clipboard once.
+1. In App Portal → Agent apps, create an app and choose Bearer auth. The token is copied to your clipboard once.
 2. Add the key as a header.
 
 `.cursor/mcp.json`
@@ -141,7 +156,7 @@ claude mcp add --transport http opensuitemcp https://your-install.example.com/ap
 
 **Add it to .vscode/mcp.json**
 
-1. In App Portal → Agent apps, create an agent and choose Sign-in. It waits there until you finish below.
+1. In App Portal → Agent apps, create an app and choose OAuth 2.1. It waits there until you finish below.
 2. Put this in .vscode/mcp.json, or run MCP: Open User Configuration for every workspace.
 3. Start the server from the editor, then approve the agent when prompted.
 
@@ -160,9 +175,9 @@ claude mcp add --transport http opensuitemcp https://your-install.example.com/ap
 
 ⚠️ VS Code's workspace file uses "servers"; the portable .mcp.json format uses "mcpServers" instead.
 
-**Use an agent key instead**
+**Use a bearer token instead**
 
-1. In App Portal → Agent apps, create an agent and choose Agent key. The key is copied to your clipboard once.
+1. In App Portal → Agent apps, create an app and choose Bearer auth. The token is copied to your clipboard once.
 2. Add the key as a header.
 
 `.vscode/mcp.json`
@@ -185,7 +200,7 @@ claude mcp add --transport http opensuitemcp https://your-install.example.com/ap
 
 **Add it to settings.json**
 
-1. In App Portal → Agent apps, create an agent and choose Sign-in. It waits there until you finish below.
+1. In App Portal → Agent apps, create an app and choose OAuth 2.1. It waits there until you finish below.
 2. Put this in ~/.gemini/settings.json.
 3. Run /mcp auth opensuitemcp, then approve the agent.
 
@@ -204,9 +219,9 @@ claude mcp add --transport http opensuitemcp https://your-install.example.com/ap
 
 ⚠️ Use "httpUrl", not "url". In Gemini CLI "url" means an SSE endpoint, and this server does not serve one.
 
-**Use an agent key instead**
+**Use a bearer token instead**
 
-1. In App Portal → Agent apps, create an agent and choose Agent key. The key is copied to your clipboard once.
+1. In App Portal → Agent apps, create an app and choose Bearer auth. The token is copied to your clipboard once.
 2. Add the key as a header.
 
 `~/.gemini/settings.json`
@@ -228,7 +243,7 @@ claude mcp add --transport http opensuitemcp https://your-install.example.com/ap
 
 **Add it as a connector**
 
-1. In App Portal → Agent apps, create an agent and choose Sign-in. It waits there until you finish below.
+1. In App Portal → Agent apps, create an app and choose OAuth 2.1. It waits there until you finish below.
 2. Add a custom connector and paste the server URL below.
 3. Approve the agent when prompted.
 
@@ -238,9 +253,9 @@ claude mcp add --transport http opensuitemcp https://your-install.example.com/ap
 https://your-install.example.com/api/mcp
 ```
 
-**Use an agent key instead**
+**Use a bearer token instead**
 
-1. In App Portal → Agent apps, create an agent and choose Agent key. The key is copied to your clipboard once.
+1. In App Portal → Agent apps, create an app and choose Bearer auth. The token is copied to your clipboard once.
 2. In the Responses API, pass the key on the MCP tool definition.
 
 ```json
@@ -256,7 +271,7 @@ https://your-install.example.com/api/mcp
 
 **Point it at the server URL**
 
-1. In App Portal → Agent apps, create an agent and choose Sign-in. It waits there until you finish below.
+1. In App Portal → Agent apps, create an app and choose OAuth 2.1. It waits there until you finish below.
 2. Give it the server URL. It reads the 401, finds this install's authorization server, and opens the sign-in.
 3. Check what it discovers with the command below.
 
@@ -264,9 +279,9 @@ https://your-install.example.com/api/mcp
 curl -sS https://your-install.example.com/.well-known/oauth-protected-resource
 ```
 
-**Use an agent key instead**
+**Use a bearer token instead**
 
-1. In App Portal → Agent apps, create an agent and choose Agent key. The key is copied to your clipboard once.
+1. In App Portal → Agent apps, create an app and choose Bearer auth. The token is copied to your clipboard once.
 2. Send the key as a bearer token on every request.
 
 ```bash
@@ -299,7 +314,7 @@ its own authorization server. Two things have to be true, and **App Portal
 → Agent access** warns you when they are not:
 
 1. AUTH_URL is set to the address people actually use. Unset, it is guessed from forwarded headers — often correctly, which is worse.
-2. The install is served over HTTPS. OAuth 2.1 permits plain HTTP only on loopback; agent keys have no such requirement.
+2. The install is served over HTTPS. OAuth 2.1 permits plain HTTP only on loopback; bearer tokens have no such requirement.
 
 ---
 
@@ -307,8 +322,8 @@ its own authorization server. Two things have to be true, and **App Portal
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| "Nothing is waiting to connect" | No agent is set to Sign-in | Create one, then retry from the AI |
-| Sign-in unavailable in the app | The install is not on HTTPS, or AUTH_URL is unset | Set AUTH_URL to the public URL. Use an agent key meanwhile |
+| "Nothing is waiting to connect" | No agent is set to OAuth 2.1 | Create one, then retry from the AI |
+| OAuth 2.1 unavailable in the app | The install is not on HTTPS, or AUTH_URL is unset | Set AUTH_URL to the public URL. Use a bearer token meanwhile |
 | The client loops back to sign-in | AUTH_URL disagrees with the URL the client used | Make them match exactly, including scheme and port |
 | 401 on every call | The credential was revoked, or Agent apps are off | Check Agent apps → Agents, or ask an administrator |
 | Connects but lists no tools (Gemini CLI) | url was used instead of httpUrl | Change the key to httpUrl |

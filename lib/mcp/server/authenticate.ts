@@ -78,7 +78,7 @@ export function mcpAuthChallengeHeader(request?: Request): string {
 /**
  * Authenticate an inbound MCP request.
  *
- * Two credentials reach this endpoint: an `osmcp_` agent key someone pasted,
+ * Two credentials reach this endpoint: an `osmcp_` bearer token someone pasted,
  * and an `osmcp_at_` access token a client obtained by signing its user in.
  * They resolve to the same principal and are then subject to the same org
  * policy, which is re-read here on every call rather than trusted from the

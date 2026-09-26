@@ -17,12 +17,29 @@
  * the panel that first step describes.
  */
 
+/**
+ * Where each client expects to be sent back after approving.
+ *
+ * A client that registers itself declares this and nothing here is used. One
+ * that demands a client ID and secret cannot declare anything, so the callback
+ * has to be registered on this end — and an agent app issued with no callback
+ * at all is refused at the first authorization with "that callback address is
+ * not registered", which is accurate and unhelpful.
+ */
+export const KNOWN_CALLBACK_URLS: { label: string; url: string }[] = [
+  { label: "Claude", url: "https://claude.ai/api/mcp/auth_callback" },
+  {
+    label: "ChatGPT",
+    url: "https://chatgpt.com/connector_platform_oauth_redirect",
+  },
+];
+
 /** Step one, whichever client and whichever method. */
 export const PREREQUISITE: Record<"signIn" | "agentKey", string> = {
   signIn:
-    "In App Portal → Agent apps, create an agent and choose Sign-in. It waits there until you finish below.",
+    "In App Portal → Agent apps, create an app and choose OAuth 2.1. It waits there until you finish below.",
   agentKey:
-    "In App Portal → Agent apps, create an agent and choose Agent key. The key is copied to your clipboard once.",
+    "In App Portal → Agent apps, create an app and choose Bearer auth. The token is copied to your clipboard once.",
 };
 
 /**
@@ -72,7 +89,7 @@ export const AGENT_FIELDS: { field: string; does: string }[] = [
     field: "NetSuite account",
     does: "Pins it to one account, or follows your active one",
   },
-  { field: "Connects by", does: "Agent key or Sign-in — see below" },
+  { field: "Connects by", does: "Bearer auth or OAuth 2.1 — see below" },
 ];
 
 export type ComparisonRow = {
@@ -80,6 +97,12 @@ export type ComparisonRow = {
   signIn: string;
   agentKey: string;
 };
+
+/** The two names, used verbatim everywhere a person reads them. */
+export const METHOD_NAMES = {
+  signIn: "OAuth 2.1",
+  agentKey: "Bearer auth",
+} as const;
 
 export const METHOD_COMPARISON: ComparisonRow[] = [
   {
@@ -137,13 +160,13 @@ export type TroubleshootingRow = {
 export const CONNECT_TROUBLESHOOTING: TroubleshootingRow[] = [
   {
     symptom: '"Nothing is waiting to connect"',
-    cause: "No agent is set to Sign-in",
+    cause: "No agent is set to OAuth 2.1",
     fix: "Create one, then retry from the AI",
   },
   {
-    symptom: "Sign-in unavailable in the app",
+    symptom: "OAuth 2.1 unavailable in the app",
     cause: "The install is not on HTTPS, or AUTH_URL is unset",
-    fix: "Set AUTH_URL to the public URL. Use an agent key meanwhile",
+    fix: "Set AUTH_URL to the public URL. Use a bearer token meanwhile",
   },
   {
     symptom: "The client loops back to sign-in",
@@ -174,7 +197,7 @@ export const CONNECT_TROUBLESHOOTING: TroubleshootingRow[] = [
 
 export const SELF_HOST_REQUIREMENTS = [
   "AUTH_URL is set to the address people actually use. Unset, it is guessed from forwarded headers — often correctly, which is worse.",
-  "The install is served over HTTPS. OAuth 2.1 permits plain HTTP only on loopback; agent keys have no such requirement.",
+  "The install is served over HTTPS. OAuth 2.1 permits plain HTTP only on loopback; bearer tokens have no such requirement.",
 ];
 
 export type ConnectClientId =
@@ -240,7 +263,7 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
         note: "Leave Advanced settings blank unless the dialog demands a client ID and secret — if it does, tick that box when creating the agent app and it issues you one. On Team or Enterprise, only an Owner can add a connector.",
       },
       agentKey: {
-        heading: "Use an agent key instead",
+        heading: "Use a bearer token instead",
         steps: ["Add the key as a request header on the connector."],
         snippet: {
           language: "text",
@@ -268,7 +291,7 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
         },
       },
       agentKey: {
-        heading: "Use an agent key instead",
+        heading: "Use a bearer token instead",
         steps: ["Pass the key as a header when adding the server."],
         snippet: {
           language: "bash",
@@ -298,7 +321,7 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
         },
       },
       agentKey: {
-        heading: "Use an agent key instead",
+        heading: "Use a bearer token instead",
         steps: ["Add the key as a header."],
         snippet: {
           language: "json",
@@ -341,7 +364,7 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
         note: 'VS Code\'s workspace file uses "servers"; the portable .mcp.json format uses "mcpServers" instead.',
       },
       agentKey: {
-        heading: "Use an agent key instead",
+        heading: "Use a bearer token instead",
         steps: ["Add the key as a header."],
         snippet: {
           language: "json",
@@ -392,7 +415,7 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
         note: 'Use "httpUrl", not "url". In Gemini CLI "url" means an SSE endpoint, and this server does not serve one.',
       },
       agentKey: {
-        heading: "Use an agent key instead",
+        heading: "Use a bearer token instead",
         steps: ["Add the key as a header."],
         snippet: {
           language: "json",
@@ -430,7 +453,7 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
         },
       },
       agentKey: {
-        heading: "Use an agent key instead",
+        heading: "Use a bearer token instead",
         steps: [
           "In the Responses API, pass the key on the MCP tool definition.",
         ],
@@ -466,7 +489,7 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
         },
       },
       agentKey: {
-        heading: "Use an agent key instead",
+        heading: "Use a bearer token instead",
         steps: ["Send the key as a bearer token on every request."],
         snippet: {
           language: "bash",
