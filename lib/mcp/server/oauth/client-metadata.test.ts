@@ -230,3 +230,55 @@ describe("client id metadata documents", () => {
     assert.equal(result.error, "invalid_redirect_uri");
   });
 });
+
+describe("grant and response types a client cannot use here", () => {
+  it("registers Claude, which advertises jwt-bearer it will never use here", () => {
+    const result = parseClientMetadata({
+      client_name: "Claude",
+      redirect_uris: ["https://claude.ai/api/mcp/auth_callback"],
+      grant_types: [
+        "authorization_code",
+        "refresh_token",
+        "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      ],
+      response_types: ["code"],
+    });
+    assert.ok(result.ok);
+    assert.deepEqual(result.metadata.grantTypes, [
+      "authorization_code",
+      "refresh_token",
+    ]);
+  });
+
+  it("drops an extra response type rather than refusing the client", () => {
+    const result = parseClientMetadata({
+      client_name: "Implicit-curious",
+      redirect_uris: ["https://implicit.test/cb"],
+      response_types: ["code", "token"],
+    });
+    assert.ok(result.ok);
+    assert.deepEqual(result.metadata.responseTypes, ["code"]);
+  });
+
+  it("still refuses a client that asked for nothing this server issues", () => {
+    const result = expectFailure(
+      parseClientMetadata({
+        client_name: "Machine",
+        redirect_uris: ["https://machine.test/cb"],
+        grant_types: ["client_credentials"],
+      }),
+    );
+    assert.match(result.description, /client_credentials/);
+  });
+
+  it("refuses a client that can only do implicit", () => {
+    const result = expectFailure(
+      parseClientMetadata({
+        client_name: "Implicit-only",
+        redirect_uris: ["https://implicit.test/cb"],
+        response_types: ["token"],
+      }),
+    );
+    assert.match(result.description, /code/);
+  });
+});

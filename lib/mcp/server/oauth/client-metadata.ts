@@ -161,13 +161,18 @@ export function parseClientMetadata(
       "grant_types must be an array of strings.",
     );
   }
-  const unsupportedGrant = grantTypes.find(
-    (grant) => !SUPPORTED_GRANT_TYPES.includes(grant),
+  // A client advertises every grant it can do, not every grant it needs here.
+  // Claude lists jwt-bearer alongside authorization_code; rejecting the whole
+  // registration over an extra it will never use locks it out for nothing.
+  // RFC 7591 3.2.1 lets the server substitute values, and /register echoes
+  // grant_types back, so the client learns what it actually got.
+  const usableGrants = grantTypes.filter((grant) =>
+    SUPPORTED_GRANT_TYPES.includes(grant),
   );
-  if (unsupportedGrant) {
+  if (usableGrants.length === 0) {
     return fail(
       "invalid_client_metadata",
-      `Grant type ${unsupportedGrant} is not supported. This server issues ${SUPPORTED_GRANT_TYPES.join(" and ")} only.`,
+      `None of the requested grant types (${grantTypes.join(", ")}) are supported. This server issues ${SUPPORTED_GRANT_TYPES.join(" and ")} only.`,
     );
   }
 
@@ -175,13 +180,15 @@ export function parseClientMetadata(
     doc.response_types === undefined
       ? ["code"]
       : readStringArray(doc.response_types);
-  if (
-    !responseTypes ||
-    responseTypes.some((t) => !SUPPORTED_RESPONSE_TYPES.includes(t))
-  ) {
+  // Same reasoning as the grants above: keep what we support, refuse only a
+  // client that has asked for nothing we can do.
+  const usableResponseTypes = responseTypes?.filter((t) =>
+    SUPPORTED_RESPONSE_TYPES.includes(t),
+  );
+  if (!usableResponseTypes || usableResponseTypes.length === 0) {
     return fail(
       "invalid_client_metadata",
-      'response_types must be ["code"]; this server supports the authorization code flow only.',
+      'response_types must include "code"; this server supports the authorization code flow only.',
     );
   }
 
@@ -210,8 +217,8 @@ export function parseClientMetadata(
       // A client that asks only for authorization_code still gets refresh
       // tokens offered; withholding them would force a fresh consent every
       // hour, and the client is free to ignore one it did not ask for.
-      grantTypes: Array.from(new Set([...grantTypes, "refresh_token"])),
-      responseTypes,
+      grantTypes: Array.from(new Set([...usableGrants, "refresh_token"])),
+      responseTypes: usableResponseTypes,
       tokenEndpointAuthMethod:
         tokenEndpointAuthMethod as TokenEndpointAuthMethod,
       scope: readString(doc.scope, MAX_NAME_LENGTH),
