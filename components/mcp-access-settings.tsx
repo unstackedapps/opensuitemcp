@@ -892,9 +892,7 @@ function CredentialsDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{issued?.name} is ready to connect</DialogTitle>
-          <DialogDescription>
-            Paste these three into your connector. The secret is shown once.
-          </DialogDescription>
+          <DialogDescription>The secret is shown once.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3 py-1">
@@ -1090,11 +1088,6 @@ function AppDetailsDialog({
                 onCopy={row.copyable ? () => onCopyKey(row) : undefined}
                 value={row.credential}
               />
-              <p className="text-muted-foreground text-xs leading-relaxed">
-                {row.copyable
-                  ? "Copy it from the list, or replace it below."
-                  : "This key predates copy-back, so it can only be replaced."}
-              </p>
             </>
           ) : null}
 
@@ -1136,19 +1129,14 @@ function AppDetailsDialog({
                       Save
                     </Button>
                   </div>
-                  <p className="text-muted-foreground text-xs leading-relaxed">
-                    Must match where the connector sends you back, or the
-                    sign-in is refused as an unregistered callback.
-                  </p>
                 </div>
               ) : null}
             </>
           ) : null}
 
           {row?.kind === "grant" && !isClientKey ? (
-            <p className="text-muted-foreground text-xs leading-relaxed">
-              This app's client registered itself, so there is no secret here to
-              copy. Revoking the app ends its access immediately.
+            <p className="text-muted-foreground text-xs">
+              This app's client registered itself — no secret to copy.
             </p>
           ) : null}
         </div>

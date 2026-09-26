@@ -6,7 +6,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -42,11 +41,10 @@ export type AgentConnectionMethod = "key" | "signin";
 
 export type AgentDraft = {
   name: string;
-  /** Free text: which laptop, which account, whose Claude. */
   description: string;
-  personaId: string;
   /** Null follows whichever account is active at the time of the call. */
   netsuiteAccountId: string | null;
+  personaId: string;
   method: AgentConnectionMethod;
   /** OAuth only: the connector wants an ID and secret, not to self-register. */
   issueClientCredentials: boolean;
@@ -69,24 +67,19 @@ type AgentDialogProps = {
 /**
  * The one place an agent app is created.
  *
- * An agent app is the application: it holds the name, the persona, the account
- * and whichever credential connects it. Everything it needs is issued from
- * here — including a client ID and secret, which used to be a separate object
- * in a peer tab and read as a second thing to build. It was never that; it is
- * a property of an app whose connector happens to demand one.
+ * Two columns and no descriptions. The people using this configure NetSuite
+ * for a living; "Bearer auth" and "OAuth 2.1" are their words already, and a
+ * sentence under each one only makes the dialog taller than the screen.
  */
 
-/**
- * Radix refuses an empty `value` on a Select item, so "follow my active
- * account" needs a sentinel. It is mapped back to null on submit.
- */
+/** Radix refuses an empty `value`, so "follow my active account" needs one. */
 const FOLLOW_ACTIVE_ACCOUNT = "__any__";
 
 const EMPTY: AgentDraft = {
   name: "",
   description: "",
-  personaId: AVA_PERSONA_ID,
   netsuiteAccountId: null,
+  personaId: AVA_PERSONA_ID,
   method: "key",
   issueClientCredentials: false,
   callbackUrl: KNOWN_CALLBACK_URLS[0].url,
@@ -104,9 +97,8 @@ export function AgentDialog({
 }: AgentDialogProps) {
   const [draft, setDraft] = useState<AgentDraft>(initial ?? EMPTY);
 
-  // Reopening must not show the last agent's details, and an edit must start
-  // from what the agent currently holds rather than from whatever was typed
-  // last.
+  // Reopening must not show the last app's details, and an edit starts from
+  // what the app currently holds rather than whatever was typed last.
   useEffect(() => {
     if (open) {
       setDraft(initial ?? EMPTY);
@@ -115,66 +107,48 @@ export function AgentDialog({
 
   const creating = mode === "create";
   const trimmed = draft.name.trim();
+  const needsCallback =
+    creating && draft.method === "signin" && draft.issueClientCredentials;
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>
             {creating ? "New agent app" : "Edit agent app"}
           </DialogTitle>
-          <DialogDescription>
-            {creating
-              ? "Name it, pick the specialist it acts as, and choose how it connects."
-              : "Rename it and update what it acts as."}
-          </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-1">
-          <div className="space-y-1.5">
-            <Label className="text-xs" htmlFor="agent-name">
-              Name
-            </Label>
+        <div className="grid gap-3 py-1 sm:grid-cols-2">
+          <Field htmlFor="agent-name" label="Name">
             <Input
               autoFocus
               id="agent-name"
               maxLength={128}
               onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  name: event.target.value,
-                }))
+                setDraft((d) => ({ ...d, name: event.target.value }))
               }
-              placeholder="e.g. AP review agent"
+              placeholder="AP review agent"
               value={draft.name}
             />
-          </div>
+          </Field>
 
-          <div className="space-y-1.5">
-            <Label className="text-xs" htmlFor="agent-description">
-              Note <span className="text-muted-foreground">(optional)</span>
-            </Label>
+          <Field htmlFor="agent-description" label="Note">
             <Input
               id="agent-description"
               maxLength={256}
               onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  description: event.target.value,
-                }))
+                setDraft((d) => ({ ...d, description: event.target.value }))
               }
-              placeholder="e.g. My personal Claude account"
+              placeholder="My personal Claude account"
               value={draft.description}
             />
-          </div>
+          </Field>
 
-          <div className="space-y-1.5">
-            <Label className="text-xs" htmlFor="agent-persona">
-              Persona
-            </Label>
+          <Field htmlFor="agent-persona" label="Persona">
             <Select
               onValueChange={(personaId) =>
-                setDraft((current) => ({ ...current, personaId }))
+                setDraft((d) => ({ ...d, personaId }))
               }
               value={draft.personaId}
             >
@@ -185,24 +159,18 @@ export function AgentDialog({
                 {personas.map((persona) => (
                   <SelectItem key={persona.id} value={persona.id}>
                     {persona.name}
-                    {persona.authoredBy === "agent"
-                      ? " · written by an agent"
-                      : ""}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-          </div>
+          </Field>
 
           {accounts.length > 0 ? (
-            <div className="space-y-1.5">
-              <Label className="text-xs" htmlFor="agent-account">
-                NetSuite account
-              </Label>
+            <Field htmlFor="agent-account" label="NetSuite account">
               <Select
                 onValueChange={(value) =>
-                  setDraft((current) => ({
-                    ...current,
+                  setDraft((d) => ({
+                    ...d,
                     netsuiteAccountId:
                       value === FOLLOW_ACTIVE_ACCOUNT ? null : value,
                   }))
@@ -224,108 +192,78 @@ export function AgentDialog({
                       {account.label === account.accountId
                         ? account.accountId
                         : `${account.label} · ${account.accountId}`}
-                      {account.connected ? "" : " · not connected"}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-            </div>
+            </Field>
           ) : null}
 
           {creating ? (
-            <div className="space-y-2">
+            <div className="space-y-2 sm:col-span-2">
               <Label className="text-xs">Connects by</Label>
               <RadioGroup
+                className="grid-cols-2"
                 onValueChange={(value) =>
-                  setDraft((current) => ({
-                    ...current,
+                  setDraft((d) => ({
+                    ...d,
                     method: value as AgentConnectionMethod,
                   }))
                 }
                 value={draft.method}
               >
-                <MethodOption
-                  description="Paste a token into the app. Works anywhere, including without HTTPS."
-                  label={METHOD_NAMES.agentKey}
-                  value="key"
-                />
-                <MethodOption
-                  description="The app sends you here to approve it, then refreshes its own access."
-                  label={METHOD_NAMES.signIn}
-                  value="signin"
-                />
+                <MethodOption label={METHOD_NAMES.agentKey} value="key" />
+                <MethodOption label={METHOD_NAMES.signIn} value="signin" />
               </RadioGroup>
+            </div>
+          ) : null}
 
-              {draft.method === "signin" ? (
-                <label
-                  className="flex cursor-pointer items-start gap-2.5 pt-0.5"
-                  htmlFor="agent-client-credentials"
-                >
-                  <Checkbox
-                    checked={draft.issueClientCredentials}
-                    className="mt-0.5"
-                    id="agent-client-credentials"
-                    onCheckedChange={(checked) =>
-                      setDraft((current) => ({
-                        ...current,
-                        issueClientCredentials: checked === true,
-                      }))
-                    }
-                  />
-                  <span>
-                    <span className="block text-xs">
-                      This connector asks for a client ID and secret
-                    </span>
-                    <span className="block text-muted-foreground text-xs leading-relaxed">
-                      Gemini and Claude's custom connector do. Claude Code,
-                      Cursor and VS Code register themselves.
-                    </span>
-                  </span>
-                </label>
-              ) : null}
+          {creating && draft.method === "signin" ? (
+            <div className="space-y-2 sm:col-span-2">
+              <label
+                className="flex cursor-pointer items-center gap-2.5 text-xs"
+                htmlFor="agent-client-credentials"
+              >
+                <Checkbox
+                  checked={draft.issueClientCredentials}
+                  id="agent-client-credentials"
+                  onCheckedChange={(checked) =>
+                    setDraft((d) => ({
+                      ...d,
+                      issueClientCredentials: checked === true,
+                    }))
+                  }
+                />
+                Connector needs a client ID and secret
+              </label>
 
-              {draft.method === "signin" && draft.issueClientCredentials ? (
-                <div className="space-y-1.5 pl-6">
-                  <Label className="text-xs" htmlFor="agent-callback">
-                    Callback URL
-                  </Label>
+              {draft.issueClientCredentials ? (
+                <div className="flex items-center gap-2">
                   <Input
                     className="font-mono text-xs"
-                    id="agent-callback"
                     onChange={(event) =>
-                      setDraft((current) => ({
-                        ...current,
+                      setDraft((d) => ({
+                        ...d,
                         callbackUrl: event.target.value,
                       }))
                     }
+                    placeholder="Callback URL"
                     value={draft.callbackUrl}
                   />
-                  <p className="text-muted-foreground text-xs leading-relaxed">
-                    Where that connector sends you back.{" "}
-                    {KNOWN_CALLBACK_URLS.map((entry) => entry.label).join(
-                      " and ",
-                    )}{" "}
-                    are pre-filled below; anything else, copy it from the
-                    connector.
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {KNOWN_CALLBACK_URLS.map((entry) => (
-                      <Button
-                        key={entry.url}
-                        onClick={() =>
-                          setDraft((current) => ({
-                            ...current,
-                            callbackUrl: entry.url,
-                          }))
-                        }
-                        size="sm"
-                        type="button"
-                        variant="outline"
-                      >
-                        {entry.label}
-                      </Button>
-                    ))}
-                  </div>
+                  {KNOWN_CALLBACK_URLS.map((entry) => (
+                    <Button
+                      className="shrink-0"
+                      key={entry.url}
+                      onClick={() =>
+                        setDraft((d) => ({ ...d, callbackUrl: entry.url }))
+                      }
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                    >
+                      {entry.label}
+                    </Button>
+                  ))}
                 </div>
               ) : null}
             </div>
@@ -342,12 +280,7 @@ export function AgentDialog({
           </Button>
           <Button
             disabled={
-              !trimmed ||
-              saving ||
-              (creating &&
-                draft.method === "signin" &&
-                draft.issueClientCredentials &&
-                !draft.callbackUrl.trim())
+              !trimmed || saving || (needsCallback && !draft.callbackUrl.trim())
             }
             onClick={() =>
               onSubmit({
@@ -358,13 +291,7 @@ export function AgentDialog({
             }
             type="button"
           >
-            {saving
-              ? creating
-                ? "Creating…"
-                : "Saving…"
-              : creating
-                ? "Create app"
-                : "Save"}
+            {saving ? "Saving…" : creating ? "Create app" : "Save"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -372,31 +299,39 @@ export function AgentDialog({
   );
 }
 
+function Field({
+  label,
+  htmlFor,
+  children,
+}: {
+  label: string;
+  htmlFor: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs" htmlFor={htmlFor}>
+        {label}
+      </Label>
+      {children}
+    </div>
+  );
+}
+
 function MethodOption({
   value,
   label,
-  description,
 }: {
   value: AgentConnectionMethod;
   label: string;
-  description: string;
 }) {
   return (
     <Label
-      className="flex cursor-pointer items-start gap-3 rounded-md border px-3 py-2.5 has-[:checked]:border-primary/60 has-[:checked]:bg-muted/50"
+      className="flex cursor-pointer items-center gap-2.5 rounded-md border px-3 py-2.5 text-sm has-[:checked]:border-primary/60 has-[:checked]:bg-muted/50"
       htmlFor={`agent-method-${value}`}
     >
-      <RadioGroupItem
-        className="mt-0.5"
-        id={`agent-method-${value}`}
-        value={value}
-      />
-      <span>
-        <span className="block font-medium text-sm">{label}</span>
-        <span className="block text-muted-foreground text-xs leading-relaxed">
-          {description}
-        </span>
-      </span>
+      <RadioGroupItem id={`agent-method-${value}`} value={value} />
+      {label}
     </Label>
   );
 }
