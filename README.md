@@ -115,8 +115,7 @@ so self-hosted, sandbox and hosted installs each have their own and none of them
 depend on the others.
 
 The exact thing to paste, per client, is in
-[Connect an agent](docs/connect-an-agent.md) and in the app under
-**Agent access → How to connect**. Protocol and tool reference:
+[Connect an agent](docs/connect-an-agent.md). Protocol and tool reference:
 [MCP server](docs/mcp-server.md).
 
 ## Prerequisites

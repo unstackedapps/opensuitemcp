@@ -12,7 +12,9 @@
  * the last step — approving a sign-in, or pasting a key into a header.
  *
  * The shared first step lives in PREREQUISITE below rather than at the top of
- * every client, so there is one copy of it to keep true.
+ * every client, so there is one copy of it to keep true. The app itself no
+ * longer renders any of this: somebody reading it there is already standing in
+ * the panel that first step describes.
  */
 
 /** Step one, whichever client and whichever method. */
@@ -26,9 +28,9 @@ export const PREREQUISITE: Record<"signIn" | "agentKey", string> = {
 /**
  * Everything around the per-client snippets that all three renderings need.
  *
- * The in-app guide, the public docs page and docs/connect-an-agent.md are three
- * views of this file. Writing the same table into all three is how a JSON key
- * goes stale in two of them, so none of them holds its own copy of anything.
+ * The public docs page and docs/connect-an-agent.md are both views of this
+ * file. Writing the same table into both is how a JSON key goes stale in one
+ * of them, so neither holds its own copy of anything.
  */
 
 /**
@@ -109,10 +111,6 @@ export type ReachabilityRow = {
   runsOn: string;
   lanOnly: string;
 };
-
-/** Shown against a vendor-hosted client, where it decides whether any of this works. */
-export const VENDOR_REACHABILITY_NOTE =
-  "Runs on its vendor's servers, so this install must be reachable from the internet.";
 
 export const REACHABILITY: ReachabilityRow[] = [
   {
