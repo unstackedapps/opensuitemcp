@@ -868,7 +868,9 @@ export const oauthAuthorizationCode = pgTable(
      * gives OAuth 2.1's replay rule something to revoke, since a replayed code
      * already points at the grant it produced.
      */
-    grantId: uuid("grantId").notNull(),
+    grantId: uuid("grantId")
+      .notNull()
+      .references(() => oauthGrant.id, { onDelete: "cascade" }),
     createdAt: timestamp("createdAt").notNull(),
   },
   (table) => ({
