@@ -176,10 +176,11 @@ function render(): string {
     "",
     "**App Portal → Agent apps** lists every app, whichever way it connects.",
     "Open one to rename it, change its persona, copy or replace its credential,",
-    "or revoke it. Revoking is immediate: the next call gets `401`.",
+    "or revoke it.",
     "",
-    "Self-hosting details and the protocol reference are in",
-    "[MCP server](mcp-server.md).",
+    "What each credential is, what an app reaches and what the endpoint returns",
+    "are in [MCP server](mcp-server.md).",
+    "",
     "",
   );
 
