@@ -1,3 +1,4 @@
+import { getPublicAppOrigin } from "@/lib/http/public-origin";
 import {
   authenticateMcpRequest,
   mcpAuthChallengeHeader,
@@ -91,6 +92,7 @@ export async function POST(request: Request) {
     request: parsed,
     principal: auth.principal,
     protocolVersion: headerCheck.protocolVersion,
+    origin: getPublicAppOrigin(request),
   });
 
   if (!outcome.response) {
