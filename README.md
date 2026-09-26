@@ -99,24 +99,14 @@ OpenSuiteMCP can also be an **MCP server**, so an external AI agent works
 inside a user's NetSuite workspace as that user — their connected account,
 their permissions, their tool policy.
 
-**Sign in.** Every install is its own OAuth 2.1 authorization server, so most
-clients need nothing but the URL. Add it as a custom connector in Claude, or:
+Create the agent under **App Portal → Agent access → New agent**, choosing how
+it connects:
 
-```bash
-claude mcp add --transport http opensuitemcp https://your-install.example.com/api/mcp
-```
-
-Then approve the agent on the consent screen. Cursor, VS Code, Gemini CLI and
-ChatGPT work the same way — **App Portal → Agent access → How to connect** has
-the exact thing to paste for each.
-
-**Or hand it a key**, for an agent with no person behind it, a client with no
-OAuth support, or an install that is not on HTTPS:
-
-```bash
-claude mcp add --transport http opensuitemcp https://your-install.example.com/api/mcp \
-  --header "Authorization: Bearer osmcp_..."
-```
+- **Sign-in** — every install is its own OAuth 2.1 authorization server, so the
+  client needs nothing but the URL. It sends you here to approve the agent, then
+  refreshes its own token.
+- **Agent key** — a secret in a header, for an agent with no person behind it, a
+  client with no OAuth support, or an install that is not on HTTPS.
 
 Either way the agent reaches exactly what you have enabled in the app — the
 credential adds no gate of its own — and both appear in one list you can rename,
@@ -124,7 +114,9 @@ re-role and revoke. The server URL derives from your install's public address,
 so self-hosted, sandbox and hosted installs each have their own and none of them
 depend on the others.
 
-Full guides: [Connect an agent](docs/connect-an-agent.md) ·
+The exact thing to paste, per client, is in
+[Connect an agent](docs/connect-an-agent.md) and in the app under
+**Agent access → How to connect**. Protocol and tool reference:
 [MCP server](docs/mcp-server.md).
 
 ## Prerequisites

@@ -149,6 +149,41 @@ export async function allowMcpCallBurst(keyId: string): Promise<boolean> {
  * when OAUTH_ATTEMPT_LIMIT_PER_MINUTE is unset/0, or Redis is unavailable
  * (fail-open so self-host without Redis still works).
  */
+/**
+ * A second, coarser budget that the caller cannot escape by varying its key.
+ *
+ * `allowOAuthAttempt` is keyed on the client_id, which an attacker supplies.
+ * For anything that costs this server real work on an unauthenticated request
+ * — fetching a client metadata document, say — a fresh key per request means
+ * no limit at all, so that work is also counted against one shared bucket.
+ */
+export async function allowOAuthOutboundFetch(): Promise<boolean> {
+  const limit = envPositiveInt("OAUTH_OUTBOUND_FETCH_LIMIT_PER_MINUTE", 120);
+  if (limit <= 0) {
+    return true;
+  }
+
+  const client = await getClient();
+  if (!client) {
+    return true;
+  }
+
+  const key = "ratelimit:oauth:outbound";
+  try {
+    const count = await client.incr(key);
+    if (count === 1) {
+      await client.expire(key, 60);
+    }
+    return count <= limit;
+  } catch (error) {
+    console.warn(
+      "[RateLimit] oauth outbound check failed:",
+      error instanceof Error ? error.message : String(error),
+    );
+    return true;
+  }
+}
+
 export async function allowOAuthAttempt(scope: string): Promise<boolean> {
   const limit = envPositiveInt("OAUTH_ATTEMPT_LIMIT_PER_MINUTE", 0);
   if (limit <= 0) {

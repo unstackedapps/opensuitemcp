@@ -51,6 +51,15 @@ export async function authorizeAgentCreation(params: {
 
   // One budget for both kinds. An agent waiting for a client to sign in counts
   // the same as one already running: it is a slot its owner has spent.
+  //
+  // Known race: counting and then inserting means a person firing several
+  // creates at once from one session can land a couple over the cap. It is a
+  // soft quota on their own account rather than a boundary, and the obvious
+  // fix is worse — serializing on a per-user advisory lock deadlocks as soon
+  // as concurrent creates reach the connection-pool size, because each
+  // transaction then holds a connection while waiting for one. Measured: fine
+  // at 8 concurrent, wedged at 10 on a pool of 10. Left as it is, which is
+  // also how key creation has always behaved.
   const [keyCount, grantCount] = await Promise.all([
     countActiveMcpApiKeys(user.id),
     countActiveOAuthGrants(user.id),

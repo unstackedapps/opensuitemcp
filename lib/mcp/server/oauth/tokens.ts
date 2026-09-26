@@ -123,7 +123,16 @@ export async function authenticateOAuthAccessToken(
       .from(oauthToken)
       .innerJoin(oauthGrant, eq(oauthGrant.id, oauthToken.grantId))
       .innerJoin(user, eq(user.id, oauthGrant.userId))
-      .where(eq(oauthToken.tokenId, parsed.tokenId))
+      // Constrained on the stored kind, not the presented prefix. Both kinds
+      // share this table and one tokenId namespace, so matching on tokenId
+      // alone let a caller re-label a refresh token `osmcp_at_` and have it
+      // authenticate — for sixty days, and past its own rotation.
+      .where(
+        and(
+          eq(oauthToken.tokenId, parsed.tokenId),
+          eq(oauthToken.kind, "access"),
+        ),
+      )
       .limit(1);
     row = rows[0];
   } catch (_error) {
@@ -195,7 +204,12 @@ export async function rotateRefreshToken(params: {
       .select({ token: oauthToken, grant: oauthGrant })
       .from(oauthToken)
       .innerJoin(oauthGrant, eq(oauthGrant.id, oauthToken.grantId))
-      .where(eq(oauthToken.tokenId, parsed.tokenId))
+      .where(
+        and(
+          eq(oauthToken.tokenId, parsed.tokenId),
+          eq(oauthToken.kind, "refresh"),
+        ),
+      )
       .limit(1);
     row = rows[0];
   } catch (_error) {
@@ -220,6 +234,9 @@ export async function rotateRefreshToken(params: {
 
   if (row.token.consumedAt) {
     await revokeTokensForGrant(row.grant.id);
+    // Signing in again has to actually work, and the consent screen only
+    // offers agents with no client bound. See resetOAuthGrantToPending.
+    await resetOAuthGrantToPending(row.grant.id);
     return {
       ok: false,
       description:
@@ -259,6 +276,33 @@ export async function rotateRefreshToken(params: {
 }
 
 /** Revoke every live token on a grant. Used by revocation and reuse detection. */
+/**
+ * Put a connected agent back in the waiting state.
+ *
+ * Called when a replayed code or a reused refresh token forces every token on
+ * the grant to be revoked. Without this the agent is stranded: the consent
+ * screen only offers rows with no client, so the client's next sign-in finds
+ * nothing waiting, while the portal still lists the agent as active. The owner
+ * would have to delete it and rebuild its name, persona and pinned account by
+ * hand — for what is usually a retried request, not an attack.
+ *
+ * The row keeps everything except the binding, so signing in again reconnects
+ * the same agent.
+ */
+export async function resetOAuthGrantToPending(grantId: string): Promise<void> {
+  try {
+    await db
+      .update(oauthGrant)
+      .set({ clientId: null, connectedAt: null })
+      .where(and(eq(oauthGrant.id, grantId), isNull(oauthGrant.revokedAt)));
+  } catch (error) {
+    console.warn(
+      "[MCP OAuth] Failed to return an authorization to the waiting state:",
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+}
+
 export async function revokeTokensForGrant(grantId: string): Promise<void> {
   try {
     await db
@@ -299,7 +343,12 @@ export async function revokeTokenByValue(params: {
       .select({ token: oauthToken, grant: oauthGrant })
       .from(oauthToken)
       .innerJoin(oauthGrant, eq(oauthGrant.id, oauthToken.grantId))
-      .where(eq(oauthToken.tokenId, parsed.tokenId))
+      .where(
+        and(
+          eq(oauthToken.tokenId, parsed.tokenId),
+          eq(oauthToken.kind, parsed.kind),
+        ),
+      )
       .limit(1);
     row = rows[0];
   } catch (_error) {
@@ -318,7 +367,7 @@ export async function revokeTokenByValue(params: {
     return;
   }
 
-  if (parsed.kind === "refresh") {
+  if (row.token.kind === "refresh") {
     await revokeTokensForGrant(row.grant.id);
     return;
   }
