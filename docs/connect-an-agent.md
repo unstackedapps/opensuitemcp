@@ -309,9 +309,8 @@ allowlist than publish.
 
 ## Self-hosting
 
-Sign-in works on every install with no extra configuration — each one is
-its own authorization server. Two things have to be true, and **App Portal
-→ Agent apps** warns you when they are not:
+Every install is its own authorization server. Two things have to be true,
+and **App Portal → Agent apps** warns you when they are not:
 
 1. AUTH_URL is set to the address people actually use. Unset, it is guessed from forwarded headers — often correctly, which is worse.
 2. The install is served over HTTPS. OAuth 2.1 permits plain HTTP only on loopback; bearer tokens have no such requirement.
