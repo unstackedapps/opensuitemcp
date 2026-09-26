@@ -511,7 +511,7 @@ export function McpAccessPanel({
   const blocked = !(data.policy.enabled && data.policy.memberAllowed);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="shrink-0 space-y-1 border-border/60 border-b px-4 py-3 sm:px-5">
         <p className="flex items-center gap-1.5 font-medium text-sm">
           <KeyRound className="size-3.5 text-muted-foreground" />
@@ -523,7 +523,7 @@ export function McpAccessPanel({
         </p>
       </div>
 
-      <div className="space-y-5 p-4 sm:p-5">
+      <div className="shrink-0 space-y-5 p-4 pb-0 sm:p-5 sm:pb-0">
         <section className="space-y-2">
           <Label className="text-xs">Server URL</Label>
           <div className="flex items-center gap-2">
@@ -639,10 +639,14 @@ export function McpAccessPanel({
           {atLimit ? (
             <p className="text-muted-foreground text-xs">
               You have reached the limit of {data.policy.maxKeysPerUser} active
-              agents. Revoke one to create another.
+              agent apps. Revoke one to create another.
             </p>
           ) : null}
+        </section>
+      </div>
 
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-2 pb-4 sm:px-5 sm:pb-5">
+        <section className="space-y-2">
           {visibleRows.length === 0 ? (
             <p className="text-muted-foreground text-xs">
               {activeRows.length === 0
@@ -671,6 +675,9 @@ export function McpAccessPanel({
                               : "Archived"}
                         </Badge>
                       )}
+                      <Badge variant="outline">
+                        {CONNECTION_LABEL[row.connectionKind]}
+                      </Badge>
                       <Badge variant="secondary">
                         {personaLabel(row.personaId, personas)}
                       </Badge>
