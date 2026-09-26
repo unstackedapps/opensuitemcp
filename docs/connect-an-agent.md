@@ -59,7 +59,7 @@ Replace `https://your-install.example.com/api/mcp` with your Server URL, and `os
 https://your-install.example.com/api/mcp
 ```
 
-⚠️ Leave Advanced settings blank unless the dialog demands a client ID and secret — then make one under OAuth clients. On Team or Enterprise, only an Owner can add a connector.
+⚠️ Leave Advanced settings blank unless the dialog demands a client ID and secret — if it does, tick that box when creating the agent app and it issues you one. On Team or Enterprise, only an Owner can add a connector.
 
 **Use an agent key instead**
 
