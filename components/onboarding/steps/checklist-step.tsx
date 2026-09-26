@@ -48,38 +48,30 @@ export function OnboardingChecklistStep({
     <div className="space-y-5">
       <header className="space-y-2">
         <h1 className="font-semibold text-base leading-snug md:text-lg">
-          {canComplete ? "You're all set!" : "Almost there!"}
+          {canComplete ? "Setup complete" : "Setup incomplete"}
         </h1>
-        <p className="text-muted-foreground text-sm leading-relaxed">
-          {canComplete
-            ? "Required setup is complete. Open the app when you're ready."
-            : "Complete the required items below, then return here to finish."}
-        </p>
+        {canComplete ? null : (
+          <p className="text-muted-foreground text-sm leading-relaxed">
+            Complete the required items below, then return here to finish.
+          </p>
+        )}
       </header>
 
       {canComplete ? (
-        <>
-          {skippedOptional.length > 0 ? (
-            <div className="space-y-2">
-              <p className="text-sm">
-                {mode === "org"
-                  ? "You skipped these optional items — you can set them up anytime:"
-                  : "Set these up in the app whenever you want them — none are required:"}
-              </p>
-              <ul className="list-disc space-y-1 pl-5 text-muted-foreground text-sm">
-                {skippedOptional.map((label) => (
-                  <li key={label}>{label}</li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-          {mode === "org" ? (
-            <p className="text-muted-foreground text-sm leading-relaxed">
-              You can change org settings, users, and integrations anytime in
-              the admin area.
+        skippedOptional.length > 0 ? (
+          <div className="space-y-2">
+            <p className="text-sm">
+              {mode === "org"
+                ? "Optional items you skipped:"
+                : "Optional items, set up in the app:"}
             </p>
-          ) : null}
-        </>
+            <ul className="list-disc space-y-1 pl-5 text-muted-foreground text-sm">
+              {skippedOptional.map((label) => (
+                <li key={label}>{label}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null
       ) : (
         <div className="space-y-2">
           <p className="text-sm">Still required:</p>
