@@ -48,6 +48,7 @@ async function main() {
     name: "poc",
     personaId: null,
     netsuiteAccountId: null,
+    description: null,
     scope: "mcp",
   });
   const pair = await issueTokenPair({ grantId: grant.id });

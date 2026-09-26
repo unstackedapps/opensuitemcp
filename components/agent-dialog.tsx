@@ -41,6 +41,8 @@ export type AgentConnectionMethod = "key" | "signin";
 
 export type AgentDraft = {
   name: string;
+  /** Free text: which laptop, which account, whose Claude. */
+  description: string;
   personaId: string;
   /** Null follows whichever account is active at the time of the call. */
   netsuiteAccountId: string | null;
@@ -79,6 +81,7 @@ const FOLLOW_ACTIVE_ACCOUNT = "__any__";
 
 const EMPTY: AgentDraft = {
   name: "",
+  description: "",
   personaId: AVA_PERSONA_ID,
   netsuiteAccountId: null,
   method: "key",
@@ -144,6 +147,24 @@ export function AgentDialog({
           </div>
 
           <div className="space-y-1.5">
+            <Label className="text-xs" htmlFor="agent-description">
+              Note <span className="text-muted-foreground">(optional)</span>
+            </Label>
+            <Input
+              id="agent-description"
+              maxLength={256}
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  description: event.target.value,
+                }))
+              }
+              placeholder="e.g. My personal Claude account"
+              value={draft.description}
+            />
+          </div>
+
+          <div className="space-y-1.5">
             <Label className="text-xs" htmlFor="agent-persona">
               Persona
             </Label>
@@ -196,7 +217,9 @@ export function AgentDialog({
                       key={account.accountId}
                       value={account.accountId}
                     >
-                      {account.label}
+                      {account.label === account.accountId
+                        ? account.accountId
+                        : `${account.label} · ${account.accountId}`}
                       {account.connected ? "" : " · not connected"}
                     </SelectItem>
                   ))}
@@ -272,7 +295,13 @@ export function AgentDialog({
           </Button>
           <Button
             disabled={!trimmed || saving}
-            onClick={() => onSubmit({ ...draft, name: trimmed })}
+            onClick={() =>
+              onSubmit({
+                ...draft,
+                name: trimmed,
+                description: draft.description.trim(),
+              })
+            }
             type="button"
           >
             {saving
@@ -280,7 +309,7 @@ export function AgentDialog({
                 ? "Creating…"
                 : "Saving…"
               : creating
-                ? "Create agent"
+                ? "Create app"
                 : "Save"}
           </Button>
         </DialogFooter>

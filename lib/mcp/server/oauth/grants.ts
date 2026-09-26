@@ -1,12 +1,13 @@
 import "server-only";
 
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import {
   type OAuthAuthorizationCode,
   type OAuthGrant,
   oauthClient,
   oauthGrant,
+  oauthToken,
 } from "@/lib/db/schema";
 import { ChatSDKError } from "@/lib/errors";
 import { revokeTokensForGrant } from "./tokens";
@@ -24,9 +25,24 @@ import { revokeTokensForGrant } from "./tokens";
  * fields on it. Nothing is ever created from the authorization request.
  */
 
+/**
+ * How the app authenticates, for a badge its owner can read at a glance.
+ *
+ * `oauth-pending` is an app set to sign in that no client has reached yet — it
+ * has no registration to report, and calling it DCR would be a guess.
+ */
+export type AgentConnectionKind =
+  | "bearer"
+  | "oauth-pending"
+  | "oauth-dcr"
+  | "oauth-cimd"
+  | "oauth-client-key";
+
 export type OAuthGrantSummary = {
   id: string;
   name: string;
+  description: string | null;
+  connectionKind: AgentConnectionKind;
   /** Null until a client has connected. */
   clientId: string | null;
   /** The client's own name, once one has connected. */
@@ -43,15 +59,41 @@ export type OAuthGrantSummary = {
   status: "pending" | "active" | "revoked";
 };
 
+function connectionKind(params: {
+  issuedClientId: string | null;
+  registrationKind: string | null;
+  connected: boolean;
+}): AgentConnectionKind {
+  // Credentials issued from the app, or a client registered by hand, are both
+  // "somebody pasted an id and secret" from the owner's point of view.
+  if (params.issuedClientId || params.registrationKind === "manual") {
+    return "oauth-client-key";
+  }
+  if (params.registrationKind === "cimd") {
+    return "oauth-cimd";
+  }
+  if (params.registrationKind === "dcr") {
+    return "oauth-dcr";
+  }
+  return params.connected ? "oauth-dcr" : "oauth-pending";
+}
+
 function toSummary(
   row: OAuthGrant,
   clientName: string | null,
   clientUri: string | null,
   issuedClientId: string | null = null,
+  registrationKind: string | null = null,
 ): OAuthGrantSummary {
   return {
     id: row.id,
     name: row.name,
+    description: row.description,
+    connectionKind: connectionKind({
+      issuedClientId,
+      registrationKind,
+      connected: Boolean(row.connectedAt),
+    }),
     clientId: row.clientId,
     clientName: row.clientId ? (clientName ?? row.clientId) : null,
     clientUri,
@@ -78,6 +120,7 @@ export async function createPendingOAuthGrant(params: {
   name: string;
   personaId: string | null;
   netsuiteAccountId: string | null;
+  description: string | null;
   scope: string;
 }): Promise<OAuthGrantSummary> {
   try {
@@ -88,6 +131,7 @@ export async function createPendingOAuthGrant(params: {
         orgId: params.orgId,
         clientId: null,
         name: params.name.trim().slice(0, 128),
+        description: params.description?.trim().slice(0, 256) || null,
         personaId: params.personaId,
         netsuiteAccountId: params.netsuiteAccountId,
         scope: params.scope,
@@ -199,6 +243,7 @@ export async function listOAuthGrants(
         row.client?.clientName ?? null,
         row.client?.clientUri ?? null,
         issuedByGrant.get(row.grant.id) ?? null,
+        row.client?.registrationKind ?? null,
       ),
     );
   } catch (_error) {
@@ -235,16 +280,21 @@ export async function updateOAuthGrant(params: {
   userId: string;
   grantId: string;
   name?: string;
+  description?: string | null;
   personaId?: string | null;
   netsuiteAccountId?: string | null;
 }): Promise<OAuthGrantSummary | null> {
   const patch: {
     name?: string;
+    description?: string | null;
     personaId?: string | null;
     netsuiteAccountId?: string | null;
   } = {};
   if (params.name !== undefined) {
     patch.name = params.name.trim();
+  }
+  if (params.description !== undefined) {
+    patch.description = params.description?.trim().slice(0, 256) || null;
   }
   if (params.personaId !== undefined) {
     patch.personaId = params.personaId?.trim() || null;
@@ -326,6 +376,38 @@ export async function touchOAuthGrant(grantId: string): Promise<void> {
     console.warn(
       "[MCP OAuth] Failed to record authorization usage:",
       error instanceof Error ? error.message : String(error),
+    );
+  }
+}
+
+/**
+ * Delete a revoked app for good.
+ *
+ * Only a revoked one: the row is kept after revocation so the audit trail and
+ * last-used time survive, and that is right until its owner says otherwise.
+ * The tokens and any issued client cascade with it.
+ */
+export async function deleteRevokedOAuthGrant(params: {
+  userId: string;
+  grantId: string;
+}): Promise<boolean> {
+  try {
+    await db.delete(oauthToken).where(eq(oauthToken.grantId, params.grantId));
+    const deleted = await db
+      .delete(oauthGrant)
+      .where(
+        and(
+          eq(oauthGrant.id, params.grantId),
+          eq(oauthGrant.userId, params.userId),
+          isNotNull(oauthGrant.revokedAt),
+        ),
+      )
+      .returning({ id: oauthGrant.id });
+    return deleted.length > 0;
+  } catch (_error) {
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to delete the agent app",
     );
   }
 }

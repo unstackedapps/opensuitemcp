@@ -21,6 +21,7 @@ const createSchema = z.object({
   name: z.string().trim().min(1).max(128),
   netsuiteAccountId: z.string().trim().max(64).optional().nullable(),
   personaId: z.string().trim().max(128).optional().nullable(),
+  description: z.string().trim().max(256).optional().nullable(),
   expiresInDays: z.number().int().min(1).max(3650).optional().nullable(),
 });
 

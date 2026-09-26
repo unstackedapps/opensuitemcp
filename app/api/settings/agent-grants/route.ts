@@ -20,6 +20,7 @@ const createSchema = z.object({
   name: z.string().trim().min(1).max(128),
   netsuiteAccountId: z.string().trim().max(64).optional().nullable(),
   personaId: z.string().trim().max(128).optional().nullable(),
+  description: z.string().trim().max(256).optional().nullable(),
   /** For a connector that demands an ID and secret rather than registering. */
   issueClientCredentials: z.boolean().optional(),
 });
@@ -51,6 +52,7 @@ export async function POST(request: Request) {
       name: parsed.name,
       personaId: requestedPersonaId,
       netsuiteAccountId: parsed.netsuiteAccountId ?? null,
+      description: parsed.description ?? null,
       scope: MCP_SCOPE,
     });
 
