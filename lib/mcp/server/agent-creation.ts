@@ -34,7 +34,7 @@ export async function authorizeAgentCreation(params: {
       denial: {
         status: 403,
         error:
-          "Agent access is disabled for this organization. Ask an administrator to enable it.",
+          "Agent apps are disabled for this organization. Ask an administrator to enable it.",
       },
     };
   }
@@ -44,7 +44,7 @@ export async function authorizeAgentCreation(params: {
       denial: {
         status: 403,
         error:
-          "Agent access is limited to selected members of this organization. Ask an administrator to add you.",
+          "Agent apps are limited to selected members of this organization. Ask an administrator to add you.",
       },
     };
   }
@@ -70,7 +70,7 @@ export async function authorizeAgentCreation(params: {
       ok: false,
       denial: {
         status: 409,
-        error: `You already have ${activeCount} active agents. Revoke one before creating another.`,
+        error: `You already have ${activeCount} active agent apps. Revoke one before creating another.`,
       },
     };
   }

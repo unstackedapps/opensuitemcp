@@ -20,9 +20,9 @@
 /** Step one, whichever client and whichever method. */
 export const PREREQUISITE: Record<"signIn" | "agentKey", string> = {
   signIn:
-    "In App Portal → Agent access, create an agent and choose Sign-in. It waits there until you finish below.",
+    "In App Portal → Agent apps, create an agent and choose Sign-in. It waits there until you finish below.",
   agentKey:
-    "In App Portal → Agent access, create an agent and choose Agent key. The key is copied to your clipboard once.",
+    "In App Portal → Agent apps, create an agent and choose Agent key. The key is copied to your clipboard once.",
 };
 
 /**
@@ -152,8 +152,8 @@ export const CONNECT_TROUBLESHOOTING: TroubleshootingRow[] = [
   },
   {
     symptom: "401 on every call",
-    cause: "The credential was revoked, or Agent access is off",
-    fix: "Check Agent access → Agents, or ask an administrator",
+    cause: "The credential was revoked, or Agent apps are off",
+    fix: "Check Agent apps → Agents, or ask an administrator",
   },
   {
     symptom: "Connects but lists no tools (Gemini CLI)",

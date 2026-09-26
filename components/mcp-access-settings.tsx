@@ -18,13 +18,19 @@ import {
   type AgentPersonaOption,
 } from "@/components/agent-dialog";
 import { ConfirmDestructiveDialog } from "@/components/confirm-destructive-dialog";
-import { OAuthClientsPanel } from "@/components/oauth-clients-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AVA_PERSONA_ID } from "@/lib/ai/personas/ids";
 import { CONNECT_AGENT_DOCS_URL } from "@/lib/constants";
 import type { ConnectPreflight } from "@/lib/mcp/server/oauth/preflight";
@@ -61,6 +67,7 @@ type McpGrantSummary = {
   lastUsedAt: string | null;
   revokedAt: string | null;
   connectedAt: string | null;
+  issuedClientId: string | null;
   createdAt: string;
   status: "pending" | "active" | "revoked";
 };
@@ -103,6 +110,8 @@ type AgentRow = {
   rotatedAt: string | null;
   status: "pending" | "active" | "revoked" | "expired";
   copyable: boolean;
+  /** Set when this app issued a client ID for a connector that wanted one. */
+  issuedClientId: string | null;
 };
 
 const GRANTS_ENDPOINT = "/api/settings/agent-grants";
@@ -111,9 +120,9 @@ const ENDPOINT = "/api/settings/mcp-keys";
 
 function blockedReason(data: McpKeysResponse): string {
   if (!data.policy.enabled) {
-    return "Agent access is turned off for your organization. Ask an administrator to enable it.";
+    return "Agent apps are turned off for your organization. Ask an administrator to enable it.";
   }
-  return "Agent access is limited to selected members of your organization. Ask an administrator to add you.";
+  return "Agent apps are limited to selected members of your organization. Ask an administrator to add you.";
 }
 
 /**
@@ -157,6 +166,18 @@ export function McpAccessPanel({
   );
   const [saving, setSaving] = useState(false);
   const [creatingOpen, setCreatingOpen] = useState(false);
+  /**
+   * Credentials are shown once, on creation, like the key.
+   *
+   * They exist only for connectors that demand an ID and secret instead of
+   * registering themselves, and they belong to the app they were issued from:
+   * they can connect that one and no other.
+   */
+  const [issued, setIssued] = useState<{
+    name: string;
+    clientId: string;
+    clientSecret: string;
+  } | null>(null);
   const [editing, setEditing] = useState<AgentRow | null>(null);
   const [pendingRotate, setPendingRotate] = useState<AgentRow | null>(null);
   const [pendingRevoke, setPendingRevoke] = useState<AgentRow | null>(null);
@@ -218,6 +239,7 @@ export function McpAccessPanel({
             name: draft.name,
             personaId: draft.personaId,
             netsuiteAccountId: draft.netsuiteAccountId,
+            issueClientCredentials: signingIn && draft.issueClientCredentials,
           }),
         });
         const payload = await response.json();
@@ -234,9 +256,17 @@ export function McpAccessPanel({
         await onChanged?.();
 
         if (signingIn) {
+          if (payload.clientSecret) {
+            setIssued({
+              name: draft.name,
+              clientId: payload.clientId,
+              clientSecret: payload.clientSecret,
+            });
+            return;
+          }
           toast({
             type: "success",
-            description: `${draft.name} is waiting. Add this server to your AI client and approve it.`,
+            description: `${draft.name} is waiting. Paste the server URL into your AI and approve it.`,
           });
           return;
         }
@@ -335,6 +365,7 @@ export function McpAccessPanel({
             name: editing.name,
             personaId: editing.personaId ?? AVA_PERSONA_ID,
             netsuiteAccountId: editing.netsuiteAccountId,
+            issueClientCredentials: false,
             // Settled at creation and not offered again, but the dialog's draft
             // is one shape either way.
             method: editing.kind === "grant" ? "signin" : "key",
@@ -366,6 +397,7 @@ export function McpAccessPanel({
       rotatedAt: key.rotatedAt,
       status: key.status,
       copyable: key.copyable,
+      issuedClientId: null,
     })),
     ...(data.grants ?? []).map((grant) => ({
       id: grant.id,
@@ -373,7 +405,8 @@ export function McpAccessPanel({
       name: grant.name,
       credential: grant.clientName
         ? `Signed in · ${grant.clientName}`
-        : "Waiting for a client to sign in",
+        : "Waiting for an app to sign in",
+      issuedClientId: grant.issuedClientId,
       personaId: grant.personaId,
       netsuiteAccountId: grant.netsuiteAccountId,
       lastUsedAt: grant.lastUsedAt,
@@ -400,11 +433,11 @@ export function McpAccessPanel({
       <div className="shrink-0 space-y-1 border-border/60 border-b px-4 py-3 sm:px-5">
         <p className="flex items-center gap-1.5 font-medium text-sm">
           <KeyRound className="size-3.5 text-muted-foreground" />
-          Agent access
+          Agent apps
         </p>
         <p className="text-muted-foreground text-xs leading-relaxed">
-          An agent acts as you over MCP, reaching exactly what you have enabled
-          in OpenSuiteMCP — nothing more.
+          An agent app acts as you over MCP, reaching exactly what you have
+          enabled in OpenSuiteMCP — nothing more.
         </p>
       </div>
 
@@ -465,156 +498,150 @@ export function McpAccessPanel({
           </p>
         )}
 
-        <Tabs defaultValue="agents">
-          <TabsList>
-            <TabsTrigger value="agents">Agents</TabsTrigger>
-            <TabsTrigger value="clients">OAuth clients</TabsTrigger>
-          </TabsList>
+        <section className="space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <Label className="text-xs">Your agent apps</Label>
+            <div className="flex items-center gap-3">
+              {archivedRows.length > 0 ? (
+                <div className="flex items-center gap-2">
+                  <Label
+                    className="text-muted-foreground text-xs"
+                    htmlFor="show-archived-agents"
+                  >
+                    Show archived
+                  </Label>
+                  <Switch
+                    checked={showArchived}
+                    id="show-archived-agents"
+                    onCheckedChange={setShowArchived}
+                  />
+                </div>
+              ) : null}
+              <Button
+                disabled={blocked || atLimit}
+                onClick={() => setCreatingOpen(true)}
+                size="sm"
+                type="button"
+              >
+                <Plus className="size-3.5" />
+                New agent
+              </Button>
+            </div>
+          </div>
 
-          <TabsContent className="mt-4" value="agents">
-            <section className="space-y-2">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <Label className="text-xs">Your agents</Label>
-                <div className="flex items-center gap-3">
-                  {archivedRows.length > 0 ? (
-                    <div className="flex items-center gap-2">
-                      <Label
-                        className="text-muted-foreground text-xs"
-                        htmlFor="show-archived-agents"
+          {atLimit ? (
+            <p className="text-muted-foreground text-xs">
+              You have reached the limit of {data.policy.maxKeysPerUser} active
+              agents. Revoke one to create another.
+            </p>
+          ) : null}
+
+          {visibleRows.length === 0 ? (
+            <p className="text-muted-foreground text-xs">
+              {activeRows.length === 0
+                ? "No agent apps yet. Create one, then point your AI client at the server URL above."
+                : "No agent apps to show."}
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {visibleRows.map((row) => (
+                <li
+                  className="flex items-start justify-between gap-3 rounded-md border border-border/60 p-3"
+                  key={`${row.kind}-${row.id}`}
+                >
+                  <div className="min-w-0 space-y-1">
+                    <p className="truncate font-medium text-sm">{row.name}</p>
+                    <p className="truncate font-mono text-muted-foreground text-xs">
+                      {row.credential}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {row.status === "active" ? null : (
+                        <Badge variant="outline">
+                          {row.status === "pending"
+                            ? "Awaiting connection"
+                            : row.status === "expired"
+                              ? "Expired"
+                              : "Archived"}
+                        </Badge>
+                      )}
+                      <Badge variant="secondary">
+                        {personaLabel(row.personaId, personas)}
+                      </Badge>
+                      <span className="text-muted-foreground text-xs">
+                        {row.lastUsedAt
+                          ? `Last used ${formatDate(row.lastUsedAt)}`
+                          : "Never used"}
+                      </span>
+                      {row.rotatedAt ? (
+                        <span className="text-muted-foreground text-xs">
+                          {`Key replaced ${formatDate(row.rotatedAt)}`}
+                        </span>
+                      ) : null}
+                      {row.issuedClientId ? (
+                        <Badge variant="outline">Client ID issued</Badge>
+                      ) : null}
+                    </div>
+                  </div>
+                  {row.status === "active" || row.status === "pending" ? (
+                    <div className="flex shrink-0 items-center gap-1">
+                      {row.kind === "key" ? (
+                        <Button
+                          onClick={() => copyKey(row)}
+                          size="sm"
+                          type="button"
+                          variant="ghost"
+                        >
+                          <Copy className="size-3.5" />
+                          <span className="sr-only">
+                            Copy the key for {row.name}
+                          </span>
+                        </Button>
+                      ) : null}
+                      <Button
+                        onClick={() => setEditing(row)}
+                        size="sm"
+                        type="button"
+                        variant="ghost"
                       >
-                        Show archived
-                      </Label>
-                      <Switch
-                        checked={showArchived}
-                        id="show-archived-agents"
-                        onCheckedChange={setShowArchived}
-                      />
+                        <Pencil className="size-3.5" />
+                        <span className="sr-only">Edit {row.name}</span>
+                      </Button>
+                      {row.kind === "key" ? (
+                        <Button
+                          onClick={() => setPendingRotate(row)}
+                          size="sm"
+                          type="button"
+                          variant="ghost"
+                        >
+                          <RefreshCw className="size-3.5" />
+                          <span className="sr-only">
+                            Replace the key for {row.name}
+                          </span>
+                        </Button>
+                      ) : null}
+                      <Button
+                        onClick={() => setPendingRevoke(row)}
+                        size="sm"
+                        type="button"
+                        variant="ghost"
+                      >
+                        <Trash2 className="size-3.5" />
+                        <span className="sr-only">Revoke {row.name}</span>
+                      </Button>
                     </div>
                   ) : null}
-                  <Button
-                    disabled={blocked || atLimit}
-                    onClick={() => setCreatingOpen(true)}
-                    size="sm"
-                    type="button"
-                  >
-                    <Plus className="size-3.5" />
-                    New agent
-                  </Button>
-                </div>
-              </div>
-
-              {atLimit ? (
-                <p className="text-muted-foreground text-xs">
-                  You have reached the limit of {data.policy.maxKeysPerUser}{" "}
-                  active agents. Revoke one to create another.
-                </p>
-              ) : null}
-
-              {visibleRows.length === 0 ? (
-                <p className="text-muted-foreground text-xs">
-                  {activeRows.length === 0
-                    ? "No agents yet. Create one, then point your AI client at the server URL above."
-                    : "No agents to show."}
-                </p>
-              ) : (
-                <ul className="space-y-2">
-                  {visibleRows.map((row) => (
-                    <li
-                      className="flex items-start justify-between gap-3 rounded-md border border-border/60 p-3"
-                      key={`${row.kind}-${row.id}`}
-                    >
-                      <div className="min-w-0 space-y-1">
-                        <p className="truncate font-medium text-sm">
-                          {row.name}
-                        </p>
-                        <p className="truncate font-mono text-muted-foreground text-xs">
-                          {row.credential}
-                        </p>
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          {row.status === "active" ? null : (
-                            <Badge variant="outline">
-                              {row.status === "pending"
-                                ? "Awaiting connection"
-                                : row.status === "expired"
-                                  ? "Expired"
-                                  : "Archived"}
-                            </Badge>
-                          )}
-                          <Badge variant="secondary">
-                            {personaLabel(row.personaId, personas)}
-                          </Badge>
-                          <span className="text-muted-foreground text-xs">
-                            {row.lastUsedAt
-                              ? `Last used ${formatDate(row.lastUsedAt)}`
-                              : "Never used"}
-                          </span>
-                          {row.rotatedAt ? (
-                            <span className="text-muted-foreground text-xs">
-                              {`Key replaced ${formatDate(row.rotatedAt)}`}
-                            </span>
-                          ) : null}
-                        </div>
-                      </div>
-                      {row.status === "active" || row.status === "pending" ? (
-                        <div className="flex shrink-0 items-center gap-1">
-                          {row.kind === "key" ? (
-                            <Button
-                              onClick={() => copyKey(row)}
-                              size="sm"
-                              type="button"
-                              variant="ghost"
-                            >
-                              <Copy className="size-3.5" />
-                              <span className="sr-only">
-                                Copy the key for {row.name}
-                              </span>
-                            </Button>
-                          ) : null}
-                          <Button
-                            onClick={() => setEditing(row)}
-                            size="sm"
-                            type="button"
-                            variant="ghost"
-                          >
-                            <Pencil className="size-3.5" />
-                            <span className="sr-only">Edit {row.name}</span>
-                          </Button>
-                          {row.kind === "key" ? (
-                            <Button
-                              onClick={() => setPendingRotate(row)}
-                              size="sm"
-                              type="button"
-                              variant="ghost"
-                            >
-                              <RefreshCw className="size-3.5" />
-                              <span className="sr-only">
-                                Replace the key for {row.name}
-                              </span>
-                            </Button>
-                          ) : null}
-                          <Button
-                            onClick={() => setPendingRevoke(row)}
-                            size="sm"
-                            type="button"
-                            variant="ghost"
-                          >
-                            <Trash2 className="size-3.5" />
-                            <span className="sr-only">Revoke {row.name}</span>
-                          </Button>
-                        </div>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-          </TabsContent>
-
-          <TabsContent className="mt-4" value="clients">
-            <OAuthClientsPanel active={active} />
-          </TabsContent>
-        </Tabs>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       </div>
+
+      <CredentialsDialog
+        issued={issued}
+        onClose={() => setIssued(null)}
+        serverUrl={data.serverUrl}
+      />
 
       <AgentDialog
         accounts={accounts}
@@ -688,6 +715,98 @@ export function McpAccessPanel({
         open={Boolean(pendingRotate)}
         title="Replace this agent's key?"
       />
+    </div>
+  );
+}
+
+/**
+ * The client ID and secret, shown once.
+ *
+ * Same bargain the agent key makes, for the same reason: the secret is stored
+ * only as a hash after this. It names the app it belongs to because that is
+ * the whole point of the binding — these credentials connect that app and no
+ * other, so pasting them into a second connector will not work.
+ */
+function CredentialsDialog({
+  issued,
+  onClose,
+  serverUrl,
+}: {
+  issued: { name: string; clientId: string; clientSecret: string } | null;
+  onClose: () => void;
+  serverUrl: string;
+}) {
+  const copy = async (value: string, what: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast({ type: "success", description: `${what} copied.` });
+    } catch {
+      toast({ type: "error", description: `Could not copy the ${what}.` });
+    }
+  };
+
+  return (
+    <Dialog onOpenChange={(open) => !open && onClose()} open={Boolean(issued)}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{issued?.name} is ready to connect</DialogTitle>
+          <DialogDescription>
+            Paste these three into your connector. The secret is shown once.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3 py-1">
+          <Field
+            label="Server URL"
+            onCopy={() => copy(serverUrl, "Server URL")}
+            value={serverUrl}
+          />
+          <Field
+            label="Client ID"
+            onCopy={() => copy(issued?.clientId ?? "", "Client ID")}
+            value={issued?.clientId ?? ""}
+          />
+          <Field
+            label="Client secret"
+            onCopy={() => copy(issued?.clientSecret ?? "", "Client secret")}
+            value={issued?.clientSecret ?? ""}
+          />
+        </div>
+
+        <DialogFooter>
+          <Button onClick={onClose} type="button">
+            Done
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function Field({
+  label,
+  value,
+  onCopy,
+}: {
+  label: string;
+  value: string;
+  onCopy: () => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs">{label}</Label>
+      <div className="flex items-center gap-2">
+        <Input className="font-mono text-xs" readOnly value={value} />
+        <Button
+          className="size-9 shrink-0 p-0"
+          onClick={onCopy}
+          type="button"
+          variant="outline"
+        >
+          <Copy className="size-3.5" />
+          <span className="sr-only">Copy the {label}</span>
+        </Button>
+      </div>
     </div>
   );
 }

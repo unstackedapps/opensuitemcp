@@ -115,7 +115,7 @@ export async function authenticateMcpRequest(
         status: 403,
         error: "access_denied",
         description:
-          "Agent access is disabled for this organization. Ask an administrator to enable it.",
+          "Agent apps are disabled for this organization. Ask an administrator to enable it.",
       },
     };
   }
@@ -127,7 +127,7 @@ export async function authenticateMcpRequest(
         status: 403,
         error: "access_denied",
         description:
-          "Agent access is limited to selected members of this organization, and this account is not one of them. Ask an administrator.",
+          "Agent apps are limited to selected members of this organization, and this account is not one of them. Ask an administrator.",
       },
     };
   }

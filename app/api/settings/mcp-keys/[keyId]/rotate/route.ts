@@ -29,7 +29,7 @@ export async function POST(
     return NextResponse.json(
       {
         error:
-          "Agent access is not available to you. Ask an administrator to enable it.",
+          "Agent apps are not available to you. Ask an administrator to enable it.",
       },
       { status: 403 },
     );

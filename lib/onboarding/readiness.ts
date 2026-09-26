@@ -113,7 +113,7 @@ function stepMeta(
       };
     case "agent-access":
       return {
-        label: "Agent access",
+        label: "Agent apps",
         description: "Let an external AI agent work in this workspace",
         required: false,
         optional: true,
@@ -291,7 +291,7 @@ async function getOrgReadiness(
     },
     {
       id: "agent-access",
-      label: "Agent access",
+      label: "Agent apps",
       description: agentAccessPolicy.enabled
         ? "Members can connect an external AI agent"
         : "Off — turn it on if members should connect AI agents",
@@ -436,9 +436,9 @@ function buildSoloChecklist(
   const inApp: OnboardingChecklistItem[] = [
     {
       id: "agent-access",
-      label: "Agent access",
+      label: "Agent apps",
       description:
-        "Connect an external AI agent to this workspace — App Portal → Agent access",
+        "Connect an external AI agent to this workspace — App Portal → Agent apps",
       complete: Boolean(flags.agentAccessComplete),
       optional: true,
     },

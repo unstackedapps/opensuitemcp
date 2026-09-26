@@ -35,6 +35,8 @@ export type OAuthGrantSummary = {
   personaId: string | null;
   netsuiteAccountId: string | null;
   connectedAt: Date | null;
+  /** Credentials issued from this app, for a connector that demands them. */
+  issuedClientId: string | null;
   lastUsedAt: Date | null;
   revokedAt: Date | null;
   createdAt: Date;
@@ -45,6 +47,7 @@ function toSummary(
   row: OAuthGrant,
   clientName: string | null,
   clientUri: string | null,
+  issuedClientId: string | null = null,
 ): OAuthGrantSummary {
   return {
     id: row.id,
@@ -55,6 +58,7 @@ function toSummary(
     personaId: row.personaId,
     netsuiteAccountId: row.netsuiteAccountId,
     connectedAt: row.connectedAt,
+    issuedClientId,
     lastUsedAt: row.lastUsedAt,
     revokedAt: row.revokedAt,
     createdAt: row.createdAt,
@@ -170,11 +174,31 @@ export async function listOAuthGrants(
       .leftJoin(oauthClient, eq(oauthClient.clientId, oauthGrant.clientId))
       .where(eq(oauthGrant.userId, userId))
       .orderBy(asc(oauthGrant.createdAt));
+
+    // A second pass rather than a second join: credentials issued *from* an app
+    // point at it, while the client that *connected* is found through the
+    // grant's own clientId. Joining both in one statement reads as a bug.
+    const issued = await db
+      .select({ grantId: oauthClient.grantId, clientId: oauthClient.clientId })
+      .from(oauthClient)
+      .where(
+        and(
+          eq(oauthClient.createdByUserId, userId),
+          isNull(oauthClient.disabledAt),
+        ),
+      );
+    const issuedByGrant = new Map(
+      issued
+        .filter((row) => row.grantId)
+        .map((row) => [row.grantId as string, row.clientId]),
+    );
+
     return rows.map((row) =>
       toSummary(
         row.grant,
         row.client?.clientName ?? null,
         row.client?.clientUri ?? null,
+        issuedByGrant.get(row.grant.id) ?? null,
       ),
     );
   } catch (_error) {

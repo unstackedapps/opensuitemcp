@@ -35,7 +35,7 @@ export const PORTAL_NAV: PortalNavItem[] = [
   { id: "prompts", label: "Prompts", group: "Customize" },
   { id: "provider", label: "AI Provider", group: "Settings" },
   { id: "netsuite", label: "NetSuite", group: "Settings" },
-  { id: "agent-access", label: "Agent access", group: "Settings" },
+  { id: "agent-access", label: "Agent apps", group: "Settings" },
   { id: "search", label: "Web Search", group: "Settings" },
   { id: "timezone", label: "Timezone", group: "Preferences" },
   { id: "account", label: "Account", group: "Preferences" },

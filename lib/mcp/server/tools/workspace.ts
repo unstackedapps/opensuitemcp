@@ -525,7 +525,7 @@ const setNetSuiteAccount: McpToolDefinition = {
   execute: async (args, principal) => {
     if (principal.pinnedNetSuiteAccountId) {
       return toolError(
-        `This API key is pinned to ${principal.pinnedNetSuiteAccountId} and cannot switch accounts. A person can mint an unpinned key in OpenSuiteMCP under App Portal -> Agent access.`,
+        `This API key is pinned to ${principal.pinnedNetSuiteAccountId} and cannot switch accounts. A person can mint an unpinned key in OpenSuiteMCP under App Portal -> Agent apps.`,
       );
     }
 

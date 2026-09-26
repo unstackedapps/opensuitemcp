@@ -48,7 +48,7 @@ Replace `https://your-install.example.com/api/mcp` with your Server URL, and `os
 
 **Add it as a custom connector**
 
-1. In App Portal → Agent access, create an agent and choose Sign-in. It waits there until you finish below.
+1. In App Portal → Agent apps, create an agent and choose Sign-in. It waits there until you finish below.
 2. In Claude, open Settings → Connectors → Add custom connector.
 3. Paste the server URL below and add the connector.
 4. Claude opens this install. Approve the agent you just created.
@@ -63,7 +63,7 @@ https://your-install.example.com/api/mcp
 
 **Use an agent key instead**
 
-1. In App Portal → Agent access, create an agent and choose Agent key. The key is copied to your clipboard once.
+1. In App Portal → Agent apps, create an agent and choose Agent key. The key is copied to your clipboard once.
 2. Add the key as a request header on the connector.
 
 `Request header`
@@ -78,7 +78,7 @@ Authorization: Bearer osmcp_…
 
 **Add the server, then sign in**
 
-1. In App Portal → Agent access, create an agent and choose Sign-in. It waits there until you finish below.
+1. In App Portal → Agent apps, create an agent and choose Sign-in. It waits there until you finish below.
 2. Run the command below.
 3. Run /mcp, choose opensuitemcp, and authenticate.
 4. Approve the agent in the browser window that opens.
@@ -89,7 +89,7 @@ claude mcp add --transport http opensuitemcp https://your-install.example.com/ap
 
 **Use an agent key instead**
 
-1. In App Portal → Agent access, create an agent and choose Agent key. The key is copied to your clipboard once.
+1. In App Portal → Agent apps, create an agent and choose Agent key. The key is copied to your clipboard once.
 2. Pass the key as a header when adding the server.
 
 ```bash
@@ -101,7 +101,7 @@ claude mcp add --transport http opensuitemcp https://your-install.example.com/ap
 
 **Add it to mcp.json**
 
-1. In App Portal → Agent access, create an agent and choose Sign-in. It waits there until you finish below.
+1. In App Portal → Agent apps, create an agent and choose Sign-in. It waits there until you finish below.
 2. Put this in .cursor/mcp.json for one project, or ~/.cursor/mcp.json for all of them.
 3. Cursor opens the sign-in. Approve the agent you just created.
 
@@ -119,7 +119,7 @@ claude mcp add --transport http opensuitemcp https://your-install.example.com/ap
 
 **Use an agent key instead**
 
-1. In App Portal → Agent access, create an agent and choose Agent key. The key is copied to your clipboard once.
+1. In App Portal → Agent apps, create an agent and choose Agent key. The key is copied to your clipboard once.
 2. Add the key as a header.
 
 `.cursor/mcp.json`
@@ -141,7 +141,7 @@ claude mcp add --transport http opensuitemcp https://your-install.example.com/ap
 
 **Add it to .vscode/mcp.json**
 
-1. In App Portal → Agent access, create an agent and choose Sign-in. It waits there until you finish below.
+1. In App Portal → Agent apps, create an agent and choose Sign-in. It waits there until you finish below.
 2. Put this in .vscode/mcp.json, or run MCP: Open User Configuration for every workspace.
 3. Start the server from the editor, then approve the agent when prompted.
 
@@ -162,7 +162,7 @@ claude mcp add --transport http opensuitemcp https://your-install.example.com/ap
 
 **Use an agent key instead**
 
-1. In App Portal → Agent access, create an agent and choose Agent key. The key is copied to your clipboard once.
+1. In App Portal → Agent apps, create an agent and choose Agent key. The key is copied to your clipboard once.
 2. Add the key as a header.
 
 `.vscode/mcp.json`
@@ -185,7 +185,7 @@ claude mcp add --transport http opensuitemcp https://your-install.example.com/ap
 
 **Add it to settings.json**
 
-1. In App Portal → Agent access, create an agent and choose Sign-in. It waits there until you finish below.
+1. In App Portal → Agent apps, create an agent and choose Sign-in. It waits there until you finish below.
 2. Put this in ~/.gemini/settings.json.
 3. Run /mcp auth opensuitemcp, then approve the agent.
 
@@ -206,7 +206,7 @@ claude mcp add --transport http opensuitemcp https://your-install.example.com/ap
 
 **Use an agent key instead**
 
-1. In App Portal → Agent access, create an agent and choose Agent key. The key is copied to your clipboard once.
+1. In App Portal → Agent apps, create an agent and choose Agent key. The key is copied to your clipboard once.
 2. Add the key as a header.
 
 `~/.gemini/settings.json`
@@ -228,7 +228,7 @@ claude mcp add --transport http opensuitemcp https://your-install.example.com/ap
 
 **Add it as a connector**
 
-1. In App Portal → Agent access, create an agent and choose Sign-in. It waits there until you finish below.
+1. In App Portal → Agent apps, create an agent and choose Sign-in. It waits there until you finish below.
 2. Add a custom connector and paste the server URL below.
 3. Approve the agent when prompted.
 
@@ -240,7 +240,7 @@ https://your-install.example.com/api/mcp
 
 **Use an agent key instead**
 
-1. In App Portal → Agent access, create an agent and choose Agent key. The key is copied to your clipboard once.
+1. In App Portal → Agent apps, create an agent and choose Agent key. The key is copied to your clipboard once.
 2. In the Responses API, pass the key on the MCP tool definition.
 
 ```json
@@ -256,7 +256,7 @@ https://your-install.example.com/api/mcp
 
 **Point it at the server URL**
 
-1. In App Portal → Agent access, create an agent and choose Sign-in. It waits there until you finish below.
+1. In App Portal → Agent apps, create an agent and choose Sign-in. It waits there until you finish below.
 2. Give it the server URL. It reads the 401, finds this install's authorization server, and opens the sign-in.
 3. Check what it discovers with the command below.
 
@@ -266,7 +266,7 @@ curl -sS https://your-install.example.com/.well-known/oauth-protected-resource
 
 **Use an agent key instead**
 
-1. In App Portal → Agent access, create an agent and choose Agent key. The key is copied to your clipboard once.
+1. In App Portal → Agent apps, create an agent and choose Agent key. The key is copied to your clipboard once.
 2. Send the key as a bearer token on every request.
 
 ```bash
@@ -310,7 +310,7 @@ its own authorization server. Two things have to be true, and **App Portal
 | "Nothing is waiting to connect" | No agent is set to Sign-in | Create one, then retry from the AI |
 | Sign-in unavailable in the app | The install is not on HTTPS, or AUTH_URL is unset | Set AUTH_URL to the public URL. Use an agent key meanwhile |
 | The client loops back to sign-in | AUTH_URL disagrees with the URL the client used | Make them match exactly, including scheme and port |
-| 401 on every call | The credential was revoked, or Agent access is off | Check Agent access → Agents, or ask an administrator |
+| 401 on every call | The credential was revoked, or Agent apps are off | Check Agent apps → Agents, or ask an administrator |
 | Connects but lists no tools (Gemini CLI) | url was used instead of httpUrl | Change the key to httpUrl |
 | invalid_grant on refresh | The token was already used, or the agent was revoked | Sign in again |
 | 400 with -32020 | Headers disagree with the body on 2026-07-28 | Send MCP-Protocol-Version, Mcp-Method and Mcp-Name consistently |

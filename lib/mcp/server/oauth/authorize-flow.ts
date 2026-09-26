@@ -134,30 +134,48 @@ export async function prepareAuthorization(params: {
   if (!policy.enabled) {
     return {
       kind: "blocked",
-      title: "Agent access is turned off here",
+      title: "Agent apps are turned off here",
       description:
-        "An owner or administrator has to enable Agent access for this organization before anyone can connect an agent.",
+        "An owner or administrator has to enable Agent apps for this organization before anyone can connect one.",
       context,
     };
   }
   if (!policy.memberAllowed) {
     return {
       kind: "blocked",
-      title: "Your account is not on the Agent access list",
+      title: "Your account is not on the Agent apps list",
       description:
-        "This organization limits Agent access to selected members. Ask an administrator to add you.",
+        "This organization limits Agent apps to selected members. Ask an administrator to add you.",
       context,
     };
   }
 
   // Nothing is created here, so there is no budget to check: the agent was
   // counted when it was made. All that is left is whether one is waiting.
-  const pending = await listPendingOAuthGrants(params.user.id);
+  // A client issued from an agent app may connect that one and no other, so it
+  // is offered a list of exactly one. A client that registered itself carries
+  // no binding and is offered everything waiting.
+  const issuedFor = resolved.client.row.grantId;
+  const waiting = await listPendingOAuthGrants(params.user.id);
+  const pending = issuedFor
+    ? waiting.filter((grant) => grant.id === issuedFor)
+    : waiting;
+
+  if (issuedFor && pending.length === 0) {
+    return {
+      kind: "blocked",
+      title: "That agent app is already connected",
+      description: `These credentials were issued for one agent app, and it is no longer waiting for a client. Create a new agent app in App Portal → Agent apps, and use the credentials it gives you.`,
+      context,
+      openAgentAccess: true,
+    };
+  }
+
   if (pending.length === 0) {
     return {
       kind: "blocked",
       title: "Nothing is waiting to connect",
-      description: `${context.client.name} asked to connect, but you have no agent set up for sign-in. Create one under App Portal → Agent access, choose Sign-in as its connection method, then add this connector again.`,
+      description: `${context.client.name} asked to connect, but you have no agent set up for sign-in. Create one under App Portal → Agent apps, choose Sign-in as its connection method, then add this connector again.`,
       context,
       openAgentAccess: true,
     };
