@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Three ways for a client to identify itself, because clients are mid-migration.** Client ID Metadata Documents, which revision `2026-07-28` prefers and Claude Code uses; dynamic registration, which that revision deprecates and several shipping clients still do; and a client created by hand under **Agent access → OAuth clients**, for a connector that asks for an ID and secret up front. PKCE with `S256` throughout. A loopback redirect matches without its port, which RFC 8252 requires and a native client cannot work without
 - **Tokens that revoking actually stops.** Access tokens are opaque and hashed rather than signed, so revoking an agent takes effect on its next call rather than whenever a JWT would have expired — the property a key already had. Refresh tokens rotate on every use, and presenting one twice revokes every live token on that authorization rather than serving a replay; the authorization survives, so the client simply signs in again
 
+### 📝 Changed
+
+- **The documentation stopped explaining and started instructing.** A person reading the docs already owns the product and is stuck on a task, so the pages lead with steps, tables and a diagram rather than with what a thing is and why it exists. Connect an agent is half the length it was and mostly snippets; Agent access is a reference rather than an essay. The rationale that was inlined belongs in commits, where it now stays
+
 ### 🐛 Fixed
 
 - **The protected resource metadata stopped advertising scopes it does not enforce.** It offered `read` and `write`, which have not existed since per-key scopes were dropped, and the documentation still told people a missing NetSuite tool might mean their key was read-only. Both said something that could not be acted on. `scopes_supported` is now the one scope this server issues, and the troubleshooting table says what is actually true: a tool is missing because an administrator disabled it for that account
