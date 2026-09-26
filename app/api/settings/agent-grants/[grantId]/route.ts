@@ -19,6 +19,7 @@ import { writeOrgAuditLog } from "@/lib/org/audit";
 const patchSchema = z.object({
   name: z.string().trim().min(1).max(128).optional(),
   personaId: z.string().trim().max(128).optional().nullable(),
+  netsuiteAccountId: z.string().trim().max(64).optional().nullable(),
 });
 
 export async function PATCH(
@@ -55,6 +56,7 @@ export async function PATCH(
       name: parsed.name,
       personaId:
         parsed.personaId === undefined ? undefined : requestedPersonaId,
+      netsuiteAccountId: parsed.netsuiteAccountId,
     });
     if (!updated) {
       return NextResponse.json(

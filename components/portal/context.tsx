@@ -5,6 +5,7 @@ import {
   type ReactNode,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -77,6 +78,30 @@ export function AppPortalProvider({ children }: { children: ReactNode }) {
     },
     [],
   );
+
+  /**
+   * `?portal=agent-access` opens straight to a section.
+   *
+   * Somewhere else in the app has to be able to say "go fix this there" — the
+   * consent screen does, when no agent is waiting — and a sentence naming a
+   * menu item is a worse answer than a link. Read from `window` rather than
+   * `useSearchParams` so the page is not forced into a Suspense boundary for
+   * something that only matters once, on arrival. The parameter is then
+   * stripped, so a reload or a back button does not reopen it.
+   */
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("portal");
+    if (!requested) {
+      return;
+    }
+    if (PORTAL_NAV.some((item) => item.id === requested)) {
+      setSection(requested as PortalSectionId);
+      setOpen(true);
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.delete("portal");
+    window.history.replaceState(null, "", url.toString());
+  }, []);
 
   const value = useMemo(
     () => ({

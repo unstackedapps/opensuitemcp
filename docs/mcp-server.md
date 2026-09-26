@@ -34,33 +34,23 @@ minting a key is the whole decision.
 
 ## Two credentials
 
-An agent reaches this server one of two ways, and they produce the same thing:
-an entry under **App Portal → Agent access** that acts as its owner.
+Every agent is created the same way — **App Portal → Agent access → New
+agent** — and carries a name, a persona and optionally a pinned NetSuite
+account. One field decides how it authenticates.
 
-**Signing in.** The client is given the server URL, discovers the authorization
-server, and sends its user here to approve it. The client then holds a token it
-refreshes on its own. This is the path for Claude, Claude Code, Cursor, VS Code,
-Gemini CLI and anything else that implements MCP authorization.
-
-**An agent key.** A credential minted in the app and pasted into a header. The
-path for an agent with no person behind it, a client with no OAuth support, or
-an install that is not on HTTPS.
+| Connects by | The client holds | Created state |
+| --- | --- | --- |
+| **Sign-in** | A token it refreshes itself, after approving a consent screen | *Awaiting connection* until a client completes the flow |
+| **Agent key** | A secret pasted into an `Authorization` header | Active immediately; the key is shown once |
 
 Both are re-checked against the org's policy on every call, so an administrator
 turning Agent access off stops an agent that signed in yesterday just as it
 stops one holding a key.
 
-The step-by-step for each client is in
-[Connect an agent](connect-an-agent.md). What follows is what is behind it.
+Step-by-step per client is in [Connect an agent](connect-an-agent.md). What
+follows is what is behind it.
 
-### Creating a key
-
-In the app, open the **App Portal → Agent access**.
-
-1. Copy the **Server URL** shown there.
-2. Name a key after the agent that will hold it (`AP review agent`).
-3. Create it, then **copy the key immediately** — it is put on your clipboard,
-   and it is the only credential here that is yours to store.
+### Key format
 
 Keys look like:
 
@@ -103,6 +93,20 @@ flow works either way.
 | `/api/oauth/token` | Authorization code and refresh grants. `application/x-www-form-urlencoded` |
 | `/api/oauth/register` | RFC 7591 dynamic client registration. `application/json` |
 | `/api/oauth/revoke` | RFC 7009 |
+
+### What the consent screen does
+
+It binds a client to an agent that already exists. It never creates one.
+
+An agent is made in the portal, named and configured there, and sits *Awaiting
+connection*. `/oauth/authorize` offers the ones waiting; approving issues a code
+naming the chosen agent, and the token exchange fills in the client id. If
+nothing is waiting, the screen says so and offers a link to the portal rather
+than a form.
+
+The bind is guarded on the agent still being unclaimed, so two codes racing for
+the same agent leave one winner; the loser's token request fails with
+`invalid_grant`.
 
 ### How a client identifies itself
 

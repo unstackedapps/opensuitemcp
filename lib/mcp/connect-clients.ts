@@ -7,14 +7,21 @@
  * Gemini CLI's `url` means SSE, so an MCP server pasted there simply never
  * connects — so they are written down once, here, rather than rediscovered.
  *
- * Two ways to connect, and neither is the fallback:
+ * Both ways start in the same place: the agent is created in the portal, named
+ * and given a persona, and only then is a client pointed at it. What differs is
+ * the last step — approving a sign-in, or pasting a key into a header.
  *
- *   - **Sign in** — the client discovers the authorization server, the person
- *     approves once, and the client refreshes its own token from then on.
- *   - **Agent key** — a credential pasted into a header. The only option for a
- *     client with no OAuth support, an install without HTTPS, or an agent with
- *     no person behind it at all.
+ * The shared first step lives in PREREQUISITE below rather than at the top of
+ * every client, so there is one copy of it to keep true.
  */
+
+/** Step one, whichever client and whichever method. */
+export const PREREQUISITE: Record<"signIn" | "agentKey", string> = {
+  signIn:
+    "In App Portal → Agent access, create an agent and choose Sign-in. It waits there until you finish below.",
+  agentKey:
+    "In App Portal → Agent access, create an agent and choose Agent key. The key is copied to your clipboard once.",
+};
 
 export type ConnectClientId =
   | "claude"
@@ -60,9 +67,9 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
       signIn: {
         heading: "Add it as a custom connector",
         steps: [
-          "Open Settings → Connectors → Add custom connector.",
+          "In Claude, open Settings → Connectors → Add custom connector.",
           "Paste the server URL below and add the connector.",
-          "Claude opens this install; approve the agent and you are connected.",
+          "Claude opens this install. Approve the agent you just created.",
         ],
         snippet: {
           language: "text",
@@ -92,7 +99,8 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
         heading: "Add the server, then sign in",
         steps: [
           "Run the command below.",
-          "Run /mcp, choose opensuitemcp, and authenticate. A browser opens on this install.",
+          "Run /mcp, choose opensuitemcp, and authenticate.",
+          "Approve the agent in the browser window that opens.",
         ],
         snippet: {
           language: "bash",
@@ -116,7 +124,7 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
         heading: "Add it to mcp.json",
         steps: [
           "Put this in .cursor/mcp.json for one project, or ~/.cursor/mcp.json for all of them.",
-          "Cursor registers itself with this install and opens the sign-in.",
+          "Cursor opens the sign-in. Approve the agent you just created.",
         ],
         snippet: {
           language: "json",
@@ -157,7 +165,7 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
         heading: "Add it to .vscode/mcp.json",
         steps: [
           "Put this in .vscode/mcp.json, or run MCP: Open User Configuration for every workspace.",
-          "Start the server from the editor and complete the sign-in when prompted.",
+          "Start the server from the editor, then approve the agent when prompted.",
         ],
         snippet: {
           language: "json",
@@ -200,7 +208,7 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
         heading: "Add it to settings.json",
         steps: [
           "Put this in ~/.gemini/settings.json.",
-          "Run /mcp auth opensuitemcp to sign in.",
+          "Run /mcp auth opensuitemcp, then approve the agent.",
         ],
         snippet: {
           language: "json",
@@ -249,7 +257,7 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
         heading: "Add it as a connector",
         steps: [
           "Add a custom connector and paste the server URL below.",
-          "Complete the sign-in when prompted.",
+          "Approve the agent when prompted.",
         ],
         snippet: {
           language: "text",
@@ -284,8 +292,8 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
       signIn: {
         heading: "Point it at the server URL",
         steps: [
-          "Any client that implements MCP authorization needs only the URL: it reads the 401, finds this install's authorization server, and signs you in.",
-          "Check what it found with the command below.",
+          "Give it the server URL. It reads the 401, finds this install's authorization server, and opens the sign-in.",
+          "Check what it discovers with the command below.",
         ],
         snippet: {
           language: "bash",
