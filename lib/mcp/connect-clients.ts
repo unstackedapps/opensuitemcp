@@ -100,10 +100,8 @@ export const METHOD_COMPARISON: ComparisonRow[] = [
 ];
 
 export const METHOD_GUIDANCE = {
-  signIn:
-    "Pick Sign-in when a person is setting this up and the install is on HTTPS.",
-  agentKey:
-    "Pick Agent key for a scheduled job, CI, a client with no OAuth support, or an install that is not on HTTPS.",
+  signIn: "A person is setting this up, and the install is on HTTPS.",
+  agentKey: "A scheduled job, CI, a client with no OAuth support, or no HTTPS.",
 } as const;
 
 export type ReachabilityRow = {
@@ -111,6 +109,10 @@ export type ReachabilityRow = {
   runsOn: string;
   lanOnly: string;
 };
+
+/** Shown against a vendor-hosted client, where it decides whether any of this works. */
+export const VENDOR_REACHABILITY_NOTE =
+  "Runs on its vendor's servers, so this install must be reachable from the internet.";
 
 export const REACHABILITY: ReachabilityRow[] = [
   {
@@ -237,19 +239,17 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
           location: "Remote MCP server URL",
           code: serverUrl,
         },
-        note: "On a Team or Enterprise plan only an Owner can add a custom connector. If the dialog asks for an OAuth client ID and secret under Advanced settings, create one under the OAuth clients tab first — otherwise leave those blank.",
+        note: "Leave Advanced settings blank unless the dialog demands a client ID and secret — then make one under OAuth clients. On Team or Enterprise, only an Owner can add a connector.",
       },
       agentKey: {
         heading: "Use an agent key instead",
-        steps: [
-          "Claude's hosted apps run on Anthropic's servers, so they can only reach an install that is published on the internet.",
-          "Request header authentication is in beta and limited to some organizations. Where it is unavailable, sign-in is the only route.",
-        ],
+        steps: ["Add the key as a request header on the connector."],
         snippet: {
           language: "text",
           location: "Request header",
           code: `Authorization: Bearer ${KEY_PLACEHOLDER}`,
         },
+        note: "Request-header auth is in beta and limited to some organizations. Where it is unavailable, sign-in is the only route.",
       },
     },
     {
