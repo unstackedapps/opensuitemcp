@@ -21,6 +21,7 @@ import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db/client";
 import { user } from "@/lib/db/schema";
 import {
+  adoptUnboundManualClient,
   createManualOAuthClient,
   readClientCredentialsForGrant,
   resolveOAuthClient,
@@ -155,6 +156,35 @@ async function main() {
   const gone = await resolveOAuthClient(created.clientId);
   assert.equal(gone.ok, false, "the issued client must die with its app");
   console.log("8. client cascades on delete -> ok");
+
+  // A client made before the binding existed is adopted the first time it
+  // connects, rather than staying invisible to the portal forever.
+  const legacyApp = await mk("legacy app");
+  const legacy = await createManualOAuthClient({
+    userId: owner.id,
+    orgId: null,
+    clientName: "legacy",
+    redirectUris: ["https://claude.ai/api/mcp/auth_callback"],
+  });
+  assert.equal(
+    await readClientCredentialsForGrant({
+      userId: owner.id,
+      grantId: legacyApp.id,
+    }),
+    null,
+    "an unbound client must not be reachable from any app",
+  );
+  await adoptUnboundManualClient({
+    clientId: legacy.clientId,
+    grantId: legacyApp.id,
+    userId: owner.id,
+  });
+  const adopted = await readClientCredentialsForGrant({
+    userId: owner.id,
+    grantId: legacyApp.id,
+  });
+  assert.equal(adopted?.clientId, legacy.clientId);
+  console.log("9. legacy client adopted     -> ok");
 
   console.log("\nALL CREDENTIAL CHECKS PASSED");
   process.exit(0);

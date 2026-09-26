@@ -619,3 +619,39 @@ export async function rotateClientSecretForGrant(params: {
     );
   }
 }
+
+/**
+ * Attach a hand-made client that predates the binding to the app it connected.
+ *
+ * Clients created before an agent app could issue its own carry no grantId, so
+ * nothing in the portal can reach them: the tab that made them is gone and the
+ * details dialog looks them up by the app they belong to. Binding one the
+ * first time it completes an authorization makes it visible and manageable
+ * again, and gives it the same "this app only" rule as a freshly issued one.
+ *
+ * Only ever fills a null, so a client already bound elsewhere is left alone.
+ */
+export async function adoptUnboundManualClient(params: {
+  clientId: string;
+  grantId: string;
+  userId: string;
+}): Promise<void> {
+  try {
+    await db
+      .update(oauthClient)
+      .set({ grantId: params.grantId })
+      .where(
+        and(
+          eq(oauthClient.clientId, params.clientId),
+          eq(oauthClient.registrationKind, "manual"),
+          eq(oauthClient.createdByUserId, params.userId),
+          isNull(oauthClient.grantId),
+        ),
+      );
+  } catch (error) {
+    console.warn(
+      "[MCP OAuth] Failed to adopt a hand-made client:",
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+}

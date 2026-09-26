@@ -1,6 +1,7 @@
 import { MCP_SCOPE } from "@/lib/mcp/server/config";
 import { readClientCredentials } from "@/lib/mcp/server/oauth/client-auth";
 import {
+  adoptUnboundManualClient,
   clientSecretMatches,
   resolveOAuthClient,
   touchOAuthClient,
@@ -120,6 +121,15 @@ async function exchangeAuthorizationCode(params: {
       400,
     );
   }
+  // A hand-made client from before agent apps issued their own has no binding,
+  // and nothing in the portal can reach it. Connecting is the moment we learn
+  // which app it belongs to.
+  await adoptUnboundManualClient({
+    clientId: params.clientId,
+    grantId: grant.id,
+    userId: grant.userId,
+  });
+
   const tokens = await issueTokenPair({ grantId: grant.id });
   void touchOAuthClient(params.clientRowId);
 
