@@ -5,11 +5,8 @@ import {
   resolveOAuthClient,
   touchOAuthClient,
 } from "@/lib/mcp/server/oauth/clients";
-import {
-  attachGrantToCode,
-  consumeAuthorizationCode,
-} from "@/lib/mcp/server/oauth/codes";
-import { createOAuthGrantFromCode } from "@/lib/mcp/server/oauth/grants";
+import { consumeAuthorizationCode } from "@/lib/mcp/server/oauth/codes";
+import { connectOAuthGrant } from "@/lib/mcp/server/oauth/grants";
 import { oauthErrorResponse } from "@/lib/mcp/server/oauth/responses";
 import {
   type IssuedTokenPair,
@@ -112,8 +109,17 @@ async function exchangeAuthorizationCode(params: {
     return fail("invalid_grant", consumed.description, 400);
   }
 
-  const grant = await createOAuthGrantFromCode(consumed.code);
-  await attachGrantToCode({ codeId: consumed.code.id, grantId: grant.id });
+  // The agent already exists; this only binds it to the client that asked.
+  // A null here means it was revoked or claimed between consent and exchange,
+  // and minting against it would hand out a token nobody can see or revoke.
+  const grant = await connectOAuthGrant(consumed.code);
+  if (!grant) {
+    return fail(
+      "invalid_grant",
+      "That agent is no longer waiting to be connected. Create one in App Portal -> Agent access and try again.",
+      400,
+    );
+  }
   const tokens = await issueTokenPair({ grantId: grant.id });
   void touchOAuthClient(params.clientRowId);
 

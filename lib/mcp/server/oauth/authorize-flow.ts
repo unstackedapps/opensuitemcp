@@ -2,7 +2,6 @@ import "server-only";
 
 import { getPublicAppOrigin } from "@/lib/http/public-origin";
 import { getMcpIssuer, getMcpResourceIdentifier, MCP_SCOPE } from "../config";
-import { countActiveMcpApiKeys } from "../keys";
 import { resolveMcpPolicyForUser } from "../policy";
 import {
   buildAuthorizationRedirect,
@@ -11,7 +10,7 @@ import {
   validateAuthorizeRequest,
 } from "./authorize-request";
 import { resolveOAuthClient } from "./clients";
-import { countActiveOAuthGrants } from "./grants";
+import { listPendingOAuthGrants, type OAuthGrantSummary } from "./grants";
 import { isLoopbackOnlyClient } from "./redirect-uri";
 
 /**
@@ -41,7 +40,11 @@ export type AuthorizationContext = {
 };
 
 export type PrepareOutcome =
-  | { kind: "ok"; context: AuthorizationContext }
+  /**
+   * `pending` is every agent this person could connect. Never empty — an empty
+   * one is `blocked` instead, because there is nothing to consent to.
+   */
+  | { kind: "ok"; context: AuthorizationContext; pending: OAuthGrantSummary[] }
   /** Nothing may be sent to the client; render the reason. */
   | { kind: "fatal"; title: string; description: string }
   /** The client's callback is verified; send it the error. */
@@ -56,6 +59,8 @@ export type PrepareOutcome =
       title: string;
       description: string;
       context: AuthorizationContext;
+      /** Offer a way into the portal, for the cases a person can fix. */
+      openAgentAccess?: boolean;
     };
 
 export async function prepareAuthorization(params: {
@@ -145,22 +150,20 @@ export async function prepareAuthorization(params: {
     };
   }
 
-  // A signed-in agent and a pasted key are the same thing to the person holding
-  // them, so they share one budget rather than each having their own.
-  const [keys, grants] = await Promise.all([
-    countActiveMcpApiKeys(params.user.id),
-    countActiveOAuthGrants(params.user.id),
-  ]);
-  if (keys + grants >= policy.maxKeysPerUser) {
+  // Nothing is created here, so there is no budget to check: the agent was
+  // counted when it was made. All that is left is whether one is waiting.
+  const pending = await listPendingOAuthGrants(params.user.id);
+  if (pending.length === 0) {
     return {
       kind: "blocked",
-      title: "You have reached your agent limit",
-      description: `This organization allows ${policy.maxKeysPerUser} active agents per member, and you have ${keys + grants}. Revoke one under App Portal → Agent access, then try again.`,
+      title: "Nothing is waiting to connect",
+      description: `${context.client.name} asked to connect, but you have no agent set up for sign-in. Create one under App Portal → Agent access, choose Sign-in as its connection method, then add this connector again.`,
       context,
+      openAgentAccess: true,
     };
   }
 
-  return { kind: "ok", context };
+  return { kind: "ok", context, pending };
 }
 
 /** The deny path, and the cancel button on a blocked screen. */

@@ -12,30 +12,33 @@ import { ChatSDKError } from "@/lib/errors";
 import { revokeTokensForGrant } from "./tokens";
 
 /**
- * Standing consents.
+ * Agents that connect by signing a client in.
  *
  * A grant is the OAuth counterpart of an McpApiKey row, and is presented beside
  * one in the same list: both are "an agent that can act as me", and the person
  * managing them should not have to care which handshake produced which.
  *
- * Authorizing the same client twice makes two grants rather than replacing the
- * first. A stable client id — Claude Code's, say — is the same client pinned to
- * two different subsidiaries as often as it is a duplicate, and quietly killing
- * a working agent is the worse mistake.
+ * The row is created in the portal, before any client has asked, and waits. A
+ * client that completes the flow binds itself to a waiting row rather than
+ * making a new one — which is the whole reason the consent screen has no
+ * fields on it. Nothing is ever created from the authorization request.
  */
 
 export type OAuthGrantSummary = {
   id: string;
   name: string;
-  clientId: string;
-  clientName: string;
+  /** Null until a client has connected. */
+  clientId: string | null;
+  /** The client's own name, once one has connected. */
+  clientName: string | null;
   clientUri: string | null;
   personaId: string | null;
   netsuiteAccountId: string | null;
+  connectedAt: Date | null;
   lastUsedAt: Date | null;
   revokedAt: Date | null;
   createdAt: Date;
-  status: "active" | "revoked";
+  status: "pending" | "active" | "revoked";
 };
 
 function toSummary(
@@ -47,36 +50,108 @@ function toSummary(
     id: row.id,
     name: row.name,
     clientId: row.clientId,
-    clientName: clientName ?? row.name,
+    clientName: row.clientId ? (clientName ?? row.clientId) : null,
     clientUri,
     personaId: row.personaId,
     netsuiteAccountId: row.netsuiteAccountId,
+    connectedAt: row.connectedAt,
     lastUsedAt: row.lastUsedAt,
     revokedAt: row.revokedAt,
     createdAt: row.createdAt,
-    status: row.revokedAt ? "revoked" : "active",
+    status: row.revokedAt ? "revoked" : row.connectedAt ? "active" : "pending",
   };
 }
 
-/** Build the grant from what the person approved, not from the token request. */
-export async function createOAuthGrantFromCode(
-  code: OAuthAuthorizationCode,
-): Promise<OAuthGrant> {
+/**
+ * Create the agent, long before any client asks for it.
+ *
+ * Same dialog, same fields and same limit as minting a key — the only
+ * difference is that this row has no secret to hand back, and waits.
+ */
+export async function createPendingOAuthGrant(params: {
+  userId: string;
+  orgId: string | null;
+  name: string;
+  personaId: string | null;
+  netsuiteAccountId: string | null;
+  scope: string;
+}): Promise<OAuthGrantSummary> {
   try {
     const [row] = await db
       .insert(oauthGrant)
       .values({
-        userId: code.userId,
-        orgId: code.orgId,
-        clientId: code.clientId,
-        name: code.agentName,
-        personaId: code.personaId,
-        netsuiteAccountId: code.netsuiteAccountId,
-        scope: code.scope,
+        userId: params.userId,
+        orgId: params.orgId,
+        clientId: null,
+        name: params.name.trim().slice(0, 128),
+        personaId: params.personaId,
+        netsuiteAccountId: params.netsuiteAccountId,
+        scope: params.scope,
         createdAt: new Date(),
       })
       .returning();
-    return row;
+    return toSummary(row, null, null);
+  } catch (_error) {
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to create the agent",
+    );
+  }
+}
+
+/**
+ * The agents a consent screen may offer.
+ *
+ * Waiting rows only. An agent that a client already connected is not offered
+ * again: re-pointing a live agent at a different client would silently break
+ * whatever is using it, and making a second one is the safer reading.
+ */
+export async function listPendingOAuthGrants(
+  userId: string,
+): Promise<OAuthGrantSummary[]> {
+  try {
+    const rows = await db
+      .select()
+      .from(oauthGrant)
+      .where(
+        and(
+          eq(oauthGrant.userId, userId),
+          isNull(oauthGrant.clientId),
+          isNull(oauthGrant.revokedAt),
+        ),
+      )
+      .orderBy(asc(oauthGrant.createdAt));
+    return rows.map((row) => toSummary(row, null, null));
+  } catch (_error) {
+    throw new ChatSDKError("bad_request:database", "Failed to list agents");
+  }
+}
+
+/**
+ * Bind a waiting agent to the client that just signed in.
+ *
+ * Guarded on `clientId IS NULL`, so two codes racing for the same agent leave
+ * exactly one winner and the loser is told the agent is gone. Returning null
+ * is the caller's cue to fail the token exchange rather than mint against a
+ * row somebody else already claimed.
+ */
+export async function connectOAuthGrant(
+  code: OAuthAuthorizationCode,
+): Promise<OAuthGrant | null> {
+  try {
+    const [row] = await db
+      .update(oauthGrant)
+      .set({ clientId: code.clientId, connectedAt: new Date() })
+      .where(
+        and(
+          eq(oauthGrant.id, code.grantId),
+          eq(oauthGrant.userId, code.userId),
+          isNull(oauthGrant.clientId),
+          isNull(oauthGrant.revokedAt),
+        ),
+      )
+      .returning();
+    return row ?? null;
   } catch (_error) {
     throw new ChatSDKError(
       "bad_request:database",
@@ -137,13 +212,21 @@ export async function updateOAuthGrant(params: {
   grantId: string;
   name?: string;
   personaId?: string | null;
+  netsuiteAccountId?: string | null;
 }): Promise<OAuthGrantSummary | null> {
-  const patch: { name?: string; personaId?: string | null } = {};
+  const patch: {
+    name?: string;
+    personaId?: string | null;
+    netsuiteAccountId?: string | null;
+  } = {};
   if (params.name !== undefined) {
     patch.name = params.name.trim();
   }
   if (params.personaId !== undefined) {
     patch.personaId = params.personaId?.trim() || null;
+  }
+  if (params.netsuiteAccountId !== undefined) {
+    patch.netsuiteAccountId = params.netsuiteAccountId?.trim() || null;
   }
   if (Object.keys(patch).length === 0) {
     return null;

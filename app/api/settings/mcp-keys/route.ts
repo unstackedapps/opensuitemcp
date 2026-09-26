@@ -1,26 +1,20 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
+import { getUserSettings } from "@/lib/db/queries";
 import {
   getPublicAppOrigin,
   isPublicOriginConfigured,
 } from "@/lib/http/public-origin";
-import {
-  isPersonaAvailableToUser,
-  listAgentPersonaOptions,
-} from "@/lib/mcp/server/agent-personas";
+import { authorizeAgentCreation } from "@/lib/mcp/server/agent-creation";
+import { listAgentPersonaOptions } from "@/lib/mcp/server/agent-personas";
 import { getMcpServerUrl } from "@/lib/mcp/server/config";
-import {
-  countActiveMcpApiKeys,
-  createMcpApiKey,
-  listMcpApiKeys,
-} from "@/lib/mcp/server/keys";
-import {
-  countActiveOAuthGrants,
-  listOAuthGrants,
-} from "@/lib/mcp/server/oauth/grants";
+import { createMcpApiKey, listMcpApiKeys } from "@/lib/mcp/server/keys";
+import { listOAuthGrants } from "@/lib/mcp/server/oauth/grants";
 import { evaluateConnectPreflight } from "@/lib/mcp/server/oauth/preflight";
 import { resolveMcpPolicyForUser } from "@/lib/mcp/server/policy";
+import { resolveNetSuiteAccounts } from "@/lib/netsuite/accounts";
+import { listConnectedNetSuiteAccountIds } from "@/lib/netsuite/tokens";
 import { writeOrgAuditLog } from "@/lib/org/audit";
 
 const createSchema = z.object({
@@ -49,6 +43,18 @@ export async function GET(request: Request) {
     orgId: session.user.orgId,
   });
 
+  // Pinning an agent to one subsidiary is part of creating it, so the dialog
+  // needs the list up front rather than fetching it when it opens.
+  const [settings, connectedAccountIds] = await Promise.all([
+    getUserSettings({ userId: session.user.id }),
+    listConnectedNetSuiteAccountIds(session.user.id),
+  ]);
+  const accounts = resolveNetSuiteAccounts(settings ?? {}).map((entry) => ({
+    accountId: entry.accountId,
+    label: entry.label,
+    connected: connectedAccountIds.includes(entry.accountId),
+  }));
+
   return NextResponse.json({
     serverUrl: getMcpServerUrl(request),
     connect: {
@@ -61,6 +67,7 @@ export async function GET(request: Request) {
     policy,
     keys,
     grants,
+    accounts,
     personas: personas.map((persona) => ({
       id: persona.id,
       name: persona.name,
@@ -76,58 +83,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const policy = await resolveMcpPolicyForUser(
-    session.user.orgId,
-    session.user.id,
-  );
-  if (!policy.enabled) {
-    return NextResponse.json(
-      {
-        error:
-          "Agent access is disabled for this organization. Ask an administrator to enable it.",
-      },
-      { status: 403 },
-    );
-  }
-
-  if (!policy.memberAllowed) {
-    return NextResponse.json(
-      {
-        error:
-          "Agent access is limited to selected members of this organization. Ask an administrator to add you.",
-      },
-      { status: 403 },
-    );
-  }
-
   try {
     const parsed = createSchema.parse(await request.json());
-
-    const [keyCount, grantCount] = await Promise.all([
-      countActiveMcpApiKeys(session.user.id),
-      countActiveOAuthGrants(session.user.id),
-    ]);
-    const activeCount = keyCount + grantCount;
-    if (activeCount >= policy.maxKeysPerUser) {
-      return NextResponse.json(
-        {
-          error: `You already have ${activeCount} active agents. Revoke one before creating another.`,
-        },
-        { status: 409 },
-      );
-    }
-
     const requestedPersonaId = parsed.personaId?.trim() || null;
-    if (
-      requestedPersonaId &&
-      !(await isPersonaAvailableToUser(
-        { id: session.user.id, orgId: session.user.orgId },
-        requestedPersonaId,
-      ))
-    ) {
+
+    const allowed = await authorizeAgentCreation({
+      user: { id: session.user.id, orgId: session.user.orgId ?? null },
+      personaId: requestedPersonaId,
+    });
+    if (!allowed.ok) {
       return NextResponse.json(
-        { error: "That persona is not available to you." },
-        { status: 400 },
+        { error: allowed.denial.error },
+        { status: allowed.denial.status },
       );
     }
 
@@ -168,7 +135,7 @@ export async function POST(request: Request) {
     }
     console.error("[MCP Keys] Create failed:", error);
     return NextResponse.json(
-      { error: "Failed to create the API key" },
+      { error: "Failed to create the agent" },
       { status: 500 },
     );
   }

@@ -225,6 +225,13 @@
       "when": 1790197520197,
       "tag": "0031_oauth_authorization_server",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1790201120197,
+      "tag": "0032_pending_agent_grants",
+      "breakpoints": true
     }
   ]
 }

@@ -3,8 +3,6 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/app/(auth)/auth";
-import { getUserSettings } from "@/lib/db/queries";
-import { isPersonaAvailableToUser } from "@/lib/mcp/server/agent-personas";
 import {
   buildApprovalRedirect,
   buildDenialRedirect,
@@ -12,10 +10,12 @@ import {
 } from "@/lib/mcp/server/oauth/authorize-flow";
 import type { RawAuthorizeParams } from "@/lib/mcp/server/oauth/authorize-request";
 import { issueAuthorizationCode } from "@/lib/mcp/server/oauth/codes";
-import { resolveNetSuiteAccounts } from "@/lib/netsuite/accounts";
 
 /**
  * Approving and declining a sign-in request.
+ *
+ * Approving creates nothing. It picks one of the agents already waiting and
+ * issues a code naming it; the agent itself was made in the portal.
  *
  * Both actions re-derive the request from what was submitted rather than
  * trusting anything the page decided. The form travels through the browser, so
@@ -87,32 +87,16 @@ export async function submitConsent(
     return { error: prepared.description };
   }
 
-  const agentName =
-    (formData.get("agent_name") as string | null)?.trim() ||
-    prepared.context.client.name;
-  const personaId =
-    (formData.get("persona_id") as string | null)?.trim() || null;
-  // The consent screen's "follow my active account" option; see the form.
-  const rawAccountId =
-    (formData.get("netsuite_account_id") as string | null)?.trim() || null;
-  const accountId = rawAccountId === "__any__" ? null : rawAccountId;
-
-  if (
-    personaId &&
-    !(await isPersonaAvailableToUser(
-      { id: session.user.id, orgId: session.user.orgId },
-      personaId,
-    ))
-  ) {
-    return { error: "That persona is not available to you." };
-  }
-
-  if (accountId) {
-    const settings = await getUserSettings({ userId: session.user.id });
-    const configured = resolveNetSuiteAccounts(settings ?? {});
-    if (!configured.some((entry) => entry.accountId === accountId)) {
-      return { error: "That NetSuite account is not one of yours." };
-    }
+  // The form names an agent; whether that agent is this person's and still
+  // waiting is decided here, against the list the page was built from. A
+  // tampered grant_id finds nothing and gets the same answer as a stale one.
+  const grantId = (formData.get("grant_id") as string | null)?.trim() || null;
+  const chosen = prepared.pending.find((grant) => grant.id === grantId);
+  if (!chosen) {
+    return {
+      error:
+        "That agent is no longer waiting to be connected. Reload this page and try again.",
+    };
   }
 
   const code = await issueAuthorizationCode({
@@ -123,9 +107,7 @@ export async function submitConsent(
     codeChallenge: prepared.context.request.codeChallenge,
     scope: prepared.context.request.scope,
     resource: prepared.context.request.resource,
-    agentName: agentName.slice(0, 128),
-    personaId,
-    netsuiteAccountId: accountId,
+    grantId: chosen.id,
   });
 
   redirect(buildApprovalRedirect({ context: prepared.context, code }));

@@ -13,10 +13,11 @@ import { useCallback, useMemo, useState } from "react";
 import useSWR from "swr";
 import { AgentConnectGuide } from "@/components/agent-connect-guide";
 import {
-  AgentKeyDialog,
-  type AgentKeyDraft,
+  type AgentAccountOption,
+  AgentDialog,
+  type AgentDraft,
   type AgentPersonaOption,
-} from "@/components/agent-key-dialog";
+} from "@/components/agent-dialog";
 import { ConfirmDestructiveDialog } from "@/components/confirm-destructive-dialog";
 import { OAuthClientsPanel } from "@/components/oauth-clients-panel";
 import { Badge } from "@/components/ui/badge";
@@ -59,8 +60,9 @@ type McpGrantSummary = {
   netsuiteAccountId: string | null;
   lastUsedAt: string | null;
   revokedAt: string | null;
+  connectedAt: string | null;
   createdAt: string;
-  status: "active" | "revoked";
+  status: "pending" | "active" | "revoked";
 };
 
 type McpKeysResponse = {
@@ -78,6 +80,7 @@ type McpKeysResponse = {
   };
   keys: McpKeySummary[];
   grants: McpGrantSummary[];
+  accounts: AgentAccountOption[];
   personas: AgentPersonaOption[];
 };
 
@@ -95,9 +98,10 @@ type AgentRow = {
   name: string;
   credential: string;
   personaId: string | null;
+  netsuiteAccountId: string | null;
   lastUsedAt: string | null;
   rotatedAt: string | null;
-  status: "active" | "revoked" | "expired";
+  status: "pending" | "active" | "revoked" | "expired";
   copyable: boolean;
 };
 
@@ -195,14 +199,26 @@ export function McpAccessPanel({
     [copy],
   );
 
-  const createKey = useCallback(
-    async (draft: AgentKeyDraft) => {
+  /**
+   * One dialog, two endpoints.
+   *
+   * The choice is the agent's, not the caller's: a key has a secret to hand
+   * back and a sign-in has nothing until a client arrives, so they cannot share
+   * a response shape. Both run the same guards on the server.
+   */
+  const createAgent = useCallback(
+    async (draft: AgentDraft) => {
+      const signingIn = draft.method === "signin";
       setSaving(true);
       try {
-        const response = await fetch(ENDPOINT, {
+        const response = await fetch(signingIn ? GRANTS_ENDPOINT : ENDPOINT, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(draft),
+          body: JSON.stringify({
+            name: draft.name,
+            personaId: draft.personaId,
+            netsuiteAccountId: draft.netsuiteAccountId,
+          }),
         });
         const payload = await response.json();
         if (!response.ok) {
@@ -216,6 +232,15 @@ export function McpAccessPanel({
         setCreatingOpen(false);
         await mutate();
         await onChanged?.();
+
+        if (signingIn) {
+          toast({
+            type: "success",
+            description: `${draft.name} is waiting. Add this server to your AI client and approve it.`,
+          });
+          return;
+        }
+
         await copy(payload.token, "Agent key");
         toast({
           type: "success",
@@ -231,7 +256,7 @@ export function McpAccessPanel({
   );
 
   const saveAgent = useCallback(
-    async (row: AgentRow, draft: AgentKeyDraft) => {
+    async (row: AgentRow, draft: AgentDraft) => {
       setSaving(true);
       try {
         const base = row.kind === "grant" ? GRANTS_ENDPOINT : ENDPOINT;
@@ -303,12 +328,16 @@ export function McpAccessPanel({
     [mutate, onChanged],
   );
 
-  const editingDraft = useMemo<AgentKeyDraft | undefined>(
+  const editingDraft = useMemo<AgentDraft | undefined>(
     () =>
       editing
         ? {
             name: editing.name,
             personaId: editing.personaId ?? AVA_PERSONA_ID,
+            netsuiteAccountId: editing.netsuiteAccountId,
+            // Settled at creation and not offered again, but the dialog's draft
+            // is one shape either way.
+            method: editing.kind === "grant" ? "signin" : "key",
           }
         : undefined,
     [editing],
@@ -321,6 +350,7 @@ export function McpAccessPanel({
   }
 
   const personas = data.personas ?? [];
+  const accounts = data.accounts ?? [];
 
   // One list. A key and a sign-in are different handshakes for the same thing,
   // and the person managing them should not have to hold that distinction.
@@ -331,6 +361,7 @@ export function McpAccessPanel({
       name: key.name,
       credential: key.maskedToken,
       personaId: key.personaId,
+      netsuiteAccountId: key.netsuiteAccountId,
       lastUsedAt: key.lastUsedAt,
       rotatedAt: key.rotatedAt,
       status: key.status,
@@ -340,8 +371,11 @@ export function McpAccessPanel({
       id: grant.id,
       kind: "grant" as const,
       name: grant.name,
-      credential: `Signed in · ${grant.clientName}`,
+      credential: grant.clientName
+        ? `Signed in · ${grant.clientName}`
+        : "Waiting for a client to sign in",
       personaId: grant.personaId,
+      netsuiteAccountId: grant.netsuiteAccountId,
       lastUsedAt: grant.lastUsedAt,
       rotatedAt: null,
       status: grant.status,
@@ -349,10 +383,14 @@ export function McpAccessPanel({
     })),
   ];
 
-  const activeRows = rows.filter((row) => row.status === "active");
+  const activeRows = rows.filter(
+    (row) => row.status === "active" || row.status === "pending",
+  );
   // Revoked and expired agents are kept — the threads they opened and the work
   // they did still refer to them — but an archive is not a working list.
-  const archivedRows = rows.filter((row) => row.status !== "active");
+  const archivedRows = rows.filter(
+    (row) => row.status !== "active" && row.status !== "pending",
+  );
   const visibleRows = showArchived ? rows : activeRows;
   const atLimit = activeRows.length >= data.policy.maxKeysPerUser;
   const blocked = !(data.policy.enabled && data.policy.memberAllowed);
@@ -467,7 +505,7 @@ export function McpAccessPanel({
               {visibleRows.length === 0 ? (
                 <p className="text-muted-foreground text-xs">
                   {activeRows.length === 0
-                    ? "No agents yet. Create a key, or connect one from the next tab."
+                    ? "No agents yet. Create one, then point your AI client at the server URL above."
                     : "No agents to show."}
                 </p>
               ) : (
@@ -487,9 +525,11 @@ export function McpAccessPanel({
                         <div className="flex flex-wrap items-center gap-1.5">
                           {row.status === "active" ? null : (
                             <Badge variant="outline">
-                              {row.status === "expired"
-                                ? "Expired"
-                                : "Archived"}
+                              {row.status === "pending"
+                                ? "Awaiting connection"
+                                : row.status === "expired"
+                                  ? "Expired"
+                                  : "Archived"}
                             </Badge>
                           )}
                           <Badge variant="secondary">
@@ -507,7 +547,7 @@ export function McpAccessPanel({
                           ) : null}
                         </div>
                       </div>
-                      {row.status === "active" ? (
+                      {row.status === "active" || row.status === "pending" ? (
                         <div className="flex shrink-0 items-center gap-1">
                           {row.kind === "key" ? (
                             <Button
@@ -575,16 +615,17 @@ export function McpAccessPanel({
         </Tabs>
       </div>
 
-      <AgentKeyDialog
+      <AgentDialog
+        accounts={accounts}
         mode="create"
         onOpenChange={setCreatingOpen}
-        onSubmit={createKey}
+        onSubmit={createAgent}
         open={creatingOpen}
         personas={personas}
         saving={saving}
       />
 
-      <AgentKeyDialog
+      <AgentDialog
         initial={editingDraft}
         mode="edit"
         onOpenChange={(open) => {
@@ -597,6 +638,7 @@ export function McpAccessPanel({
             void saveAgent(editing, draft);
           }
         }}
+        accounts={accounts}
         open={Boolean(editing)}
         personas={personas}
         saving={saving}

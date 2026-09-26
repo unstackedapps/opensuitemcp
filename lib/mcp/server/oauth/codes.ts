@@ -19,9 +19,8 @@ import { revokeTokensForGrant } from "./tokens";
  * Authorization codes.
  *
  * A code exists for the seconds between a person clicking Authorize and the
- * client exchanging it. It carries what they actually consented to, so the
- * grant is built from their choices rather than from anything the token request
- * asserts.
+ * client exchanging it. It names the agent they approved, so the token request
+ * cannot redirect the authorization at some other agent — or invent one.
  */
 const CODE_TTL_MS = 60 * 1000;
 
@@ -33,9 +32,8 @@ export type IssueCodeParams = {
   codeChallenge: string;
   scope: string;
   resource: string;
-  agentName: string;
-  personaId: string | null;
-  netsuiteAccountId: string | null;
+  /** The waiting agent this code connects. */
+  grantId: string;
 };
 
 export async function issueAuthorizationCode(
@@ -54,9 +52,7 @@ export async function issueAuthorizationCode(
       codeChallenge: params.codeChallenge,
       scope: params.scope,
       resource: params.resource,
-      agentName: params.agentName,
-      personaId: params.personaId,
-      netsuiteAccountId: params.netsuiteAccountId,
+      grantId: params.grantId,
       expiresAt: new Date(Date.now() + CODE_TTL_MS),
       createdAt: new Date(),
     });
@@ -121,9 +117,7 @@ export async function consumeAuthorizationCode(params: {
   }
 
   if (row.consumedAt) {
-    if (row.grantId) {
-      await revokeTokensForGrant(row.grantId);
-    }
+    await revokeTokensForGrant(row.grantId);
     return {
       ok: false,
       description:
@@ -179,22 +173,4 @@ export async function consumeAuthorizationCode(params: {
   }
 
   return { ok: true, code: claimed[0] };
-}
-
-/** Record which grant a code produced, so a later replay has something to revoke. */
-export async function attachGrantToCode(params: {
-  codeId: string;
-  grantId: string;
-}): Promise<void> {
-  try {
-    await db
-      .update(oauthAuthorizationCode)
-      .set({ grantId: params.grantId })
-      .where(eq(oauthAuthorizationCode.id, params.codeId));
-  } catch (error) {
-    console.warn(
-      "[MCP OAuth] Failed to link an authorization code to its grant:",
-      error instanceof Error ? error.message : String(error),
-    );
-  }
 }
