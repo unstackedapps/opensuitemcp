@@ -590,8 +590,8 @@ export function McpAccessPanel({
           Agent apps
         </p>
         <p className="text-muted-foreground text-xs leading-relaxed">
-          An agent app acts as you over MCP, reaching exactly what you have
-          enabled in OpenSuiteMCP — nothing more.
+          An agent app acts as you over MCP, reaching what you have enabled in
+          OpenSuiteMCP.
         </p>
       </div>
 
@@ -615,7 +615,7 @@ export function McpAccessPanel({
             </Button>
           </div>
           <p className="text-muted-foreground text-xs">
-            This install's public address. Every app here connects through it —{" "}
+            This install's public address —{" "}
             <a
               className="underline underline-offset-2 hover:text-foreground"
               href={CONNECT_AGENT_DOCS_URL}
@@ -659,7 +659,6 @@ export function McpAccessPanel({
               <p className="font-medium text-sm">Apps and credentials</p>
               <p className="text-muted-foreground text-xs leading-relaxed">
                 Each app holds its own credential, persona and NetSuite account.
-                Revoking one leaves the rest alone.
               </p>
             </div>
             <Button

@@ -14,8 +14,6 @@ Migrations `0014_org_admin` and `0015_org_bootstrap_data` are **additive only**:
   types into org tables (enabled, unlocked)
 - Leaves all per-user `UserSettings` and `NetSuiteToken` rows intact
 
-Nothing is deleted or rewritten. Current users keep working after upgrade.
-
 ## Required manual step: designate an owner
 
 The migration **cannot** infer who should be org owner on an existing install.
