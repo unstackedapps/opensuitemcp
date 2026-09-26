@@ -22,13 +22,13 @@ describe("connect preflight", () => {
     );
   });
 
-  it("flags plain http on a real host, and points at agent keys instead", () => {
+  it("flags plain http on a real host, and points at bearer tokens instead", () => {
     const result = evaluateConnectPreflight({
       origin: "http://netsuite.acme.com",
       originIsConfigured: true,
     });
     assert.equal(result.status, "insecure");
-    assert.match(result.detail, /agent key/);
+    assert.match(result.detail, /bearer token/);
   });
 
   it("flags a guessed origin before someone loses an hour to it", () => {

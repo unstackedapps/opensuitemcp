@@ -23,6 +23,8 @@ const createSchema = z.object({
   description: z.string().trim().max(256).optional().nullable(),
   /** For a connector that demands an ID and secret rather than registering. */
   issueClientCredentials: z.boolean().optional(),
+  /** Where that connector returns. Required when issuing credentials. */
+  callbackUrl: z.string().trim().url().max(512).optional(),
 });
 
 export async function POST(request: Request) {
@@ -59,12 +61,22 @@ export async function POST(request: Request) {
     // Issued from the agent app, bound to it, and shown once — the same
     // bargain its key makes. A connector that registers itself needs none of
     // this and never sees it.
+    // A client with no registered callback is refused at the first
+    // authorization with "that callback address is not registered", so the
+    // callback is required rather than defaulted to nothing.
+    if (parsed.issueClientCredentials && !parsed.callbackUrl) {
+      return NextResponse.json(
+        { error: "A callback URL is required for client credentials." },
+        { status: 400 },
+      );
+    }
+
     const credentials = parsed.issueClientCredentials
       ? await createManualOAuthClient({
           userId: session.user.id,
           orgId: session.user.orgId ?? null,
           clientName: grant.name,
-          redirectUris: [],
+          redirectUris: [parsed.callbackUrl as string],
           grantId: grant.id,
         })
       : null;

@@ -10,7 +10,7 @@ export type AssignedPersona = {
 };
 
 /**
- * The persona an agent key is actually acting as.
+ * The persona an agent app is actually acting as.
  *
  * Every key has one. A key with no assignment, and a key whose persona was
  * deleted after it was minted, both land on Ava — she ships with the install

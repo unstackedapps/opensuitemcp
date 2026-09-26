@@ -43,6 +43,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { AVA_PERSONA_ID } from "@/lib/ai/personas/ids";
 import { CONNECT_AGENT_DOCS_URL } from "@/lib/constants";
+import { KNOWN_CALLBACK_URLS } from "@/lib/mcp/connect-clients";
 import type { AgentConnectionKind } from "@/lib/mcp/server/oauth/grants";
 import type { ConnectPreflight } from "@/lib/mcp/server/oauth/preflight";
 import { fetcher } from "@/lib/utils";
@@ -132,7 +133,7 @@ type AgentRow = {
 };
 
 const CONNECTION_LABEL: Record<AgentConnectionKind, string> = {
-  bearer: "Bearer token",
+  bearer: "Bearer auth",
   "oauth-pending": "OAuth 2.1",
   "oauth-dcr": "OAuth 2.1 · DCR",
   "oauth-cimd": "OAuth 2.1 · CIMD",
@@ -241,7 +242,7 @@ export function McpAccessPanel({
           });
           return;
         }
-        await copy(payload.token, "Agent key");
+        await copy(payload.token, "Bearer auth");
       } catch {
         toast({ type: "error", description: "Could not copy the key." });
       }
@@ -270,6 +271,7 @@ export function McpAccessPanel({
             personaId: draft.personaId,
             netsuiteAccountId: draft.netsuiteAccountId,
             issueClientCredentials: signingIn && draft.issueClientCredentials,
+            callbackUrl: draft.callbackUrl,
           }),
         });
         const payload = await response.json();
@@ -301,7 +303,7 @@ export function McpAccessPanel({
           return;
         }
 
-        await copy(payload.token, "Agent key");
+        await copy(payload.token, "Bearer auth");
         toast({
           type: "success",
           description: `${draft.name} created. Its key is on your clipboard.`,
@@ -361,7 +363,7 @@ export function McpAccessPanel({
           return;
         }
         await mutate();
-        await copy(payload.token, "Agent key");
+        await copy(payload.token, "Bearer auth");
         toast({
           type: "success",
           description: `New key for ${key.name} copied to your clipboard.`,
@@ -414,6 +416,7 @@ export function McpAccessPanel({
             personaId: editing.personaId ?? AVA_PERSONA_ID,
             netsuiteAccountId: editing.netsuiteAccountId,
             issueClientCredentials: false,
+            callbackUrl: KNOWN_CALLBACK_URLS[0].url,
             // Settled at creation and not offered again, but the dialog's draft
             // is one shape either way.
             method: editing.kind === "grant" ? "signin" : "key",
@@ -854,7 +857,7 @@ export function McpAccessPanel({
 /**
  * The client ID and secret, shown once.
  *
- * Same bargain the agent key makes, for the same reason: the secret is stored
+ * Same bargain the bearer token makes, for the same reason: the secret is stored
  * only as a hash after this. It names the app it belongs to because that is
  * the whole point of the binding — these credentials connect that app and no
  * other, so pasting them into a second connector will not work.
@@ -971,7 +974,9 @@ function AppDetailsDialog({
   const [secret, setSecret] = useState<{
     clientId: string;
     clientSecret: string | null;
+    redirectUris: string[];
   } | null>(null);
+  const [callback, setCallback] = useState("");
   const [busy, setBusy] = useState(false);
 
   // A different app's credentials must never be left on screen.
@@ -1011,6 +1016,7 @@ function AppDetailsDialog({
         return;
       }
       setSecret(payload);
+      setCallback((payload.redirectUris ?? [])[0] ?? "");
       if (rotate) {
         toast({
           type: "success",
@@ -1019,6 +1025,33 @@ function AppDetailsDialog({
       }
     } catch {
       toast({ type: "error", description: "Could not read the credentials." });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveCallback = async () => {
+    if (!row) {
+      return;
+    }
+    setBusy(true);
+    try {
+      const response = await fetch(`${GRANTS_ENDPOINT}/${row.id}/credentials`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ redirectUris: [callback.trim()] }),
+      });
+      const payload = await response.json();
+      toast(
+        response.ok
+          ? { type: "success", description: "Callback URL saved." }
+          : {
+              type: "error",
+              description: payload.error ?? "Could not save the callback URL.",
+            },
+      );
+    } catch {
+      toast({ type: "error", description: "Could not save the callback URL." });
     } finally {
       setBusy(false);
     }
@@ -1046,7 +1079,7 @@ function AppDetailsDialog({
           {row?.kind === "key" ? (
             <>
               <Field
-                label="Agent key"
+                label="Bearer auth"
                 onCopy={row.copyable ? () => onCopyKey(row) : undefined}
                 value={row.credential}
               />
@@ -1076,6 +1109,32 @@ function AppDetailsDialog({
                 }
                 value={secret?.clientSecret ?? "••••••••••••"}
               />
+              {secret ? (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Callback URL</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      className="font-mono text-xs"
+                      onChange={(event) => setCallback(event.target.value)}
+                      value={callback}
+                    />
+                    <Button
+                      className="shrink-0"
+                      disabled={busy || !callback.trim()}
+                      onClick={() => saveCallback()}
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                    >
+                      Save
+                    </Button>
+                  </div>
+                  <p className="text-muted-foreground text-xs leading-relaxed">
+                    Must match where the connector sends you back, or the
+                    sign-in is refused as an unregistered callback.
+                  </p>
+                </div>
+              ) : null}
             </>
           ) : null}
 

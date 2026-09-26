@@ -21,7 +21,7 @@ describe("connect guide", () => {
     );
   });
 
-  it("offers an agent key everywhere, since sign-in is not always possible", () => {
+  it("offers a bearer token everywhere, since sign-in is not always possible", () => {
     for (const client of clients) {
       assert.ok(client.agentKey.snippet, `${client.id} needs a key snippet`);
     }

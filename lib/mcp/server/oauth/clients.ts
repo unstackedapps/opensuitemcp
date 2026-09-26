@@ -425,7 +425,7 @@ export async function registerDcrClient(
  * This is the path for a connector that asks for a client id and secret rather
  * than discovering one — Claude's advanced settings, and anything else built
  * before registration was automatic. The secret is stored encrypted as well as
- * hashed, for the same reason an agent key is: losing it to a dismissed dialog
+ * hashed, for the same reason a bearer token is: losing it to a dismissed dialog
  * is a worse outcome than the narrow reversibility it buys.
  */
 export async function createManualOAuthClient(params: {
@@ -510,7 +510,7 @@ export async function touchOAuthClient(id: string): Promise<void> {
 /**
  * The credentials an agent app issued for itself, read back.
  *
- * The same bargain the agent key makes: stored encrypted under ENCRYPTION_KEY
+ * The same bargain the bearer token makes: stored encrypted under ENCRYPTION_KEY
  * as well as hashed, so its owner can copy it again rather than losing it to a
  * dismissed dialog. Scoped to the owner and to the app, so a grant id from
  * somebody else's account finds nothing.
@@ -518,7 +518,11 @@ export async function touchOAuthClient(id: string): Promise<void> {
 export async function readClientCredentialsForGrant(params: {
   userId: string;
   grantId: string;
-}): Promise<{ clientId: string; clientSecret: string | null } | null> {
+}): Promise<{
+  clientId: string;
+  clientSecret: string | null;
+  redirectUris: string[];
+} | null> {
   let row: OAuthClient | undefined;
   try {
     const rows = await db
@@ -547,7 +551,37 @@ export async function readClientCredentialsForGrant(params: {
     clientSecret: row.clientSecretCipher
       ? decrypt(row.clientSecretCipher)
       : null,
+    redirectUris: Array.isArray(row.redirectUris)
+      ? (row.redirectUris as string[])
+      : [],
   };
+}
+
+/** Correct a callback that was registered wrong, without reissuing anything. */
+export async function setClientCallbacksForGrant(params: {
+  userId: string;
+  grantId: string;
+  redirectUris: string[];
+}): Promise<boolean> {
+  try {
+    const updated = await db
+      .update(oauthClient)
+      .set({ redirectUris: params.redirectUris })
+      .where(
+        and(
+          eq(oauthClient.grantId, params.grantId),
+          eq(oauthClient.createdByUserId, params.userId),
+          isNull(oauthClient.disabledAt),
+        ),
+      )
+      .returning({ id: oauthClient.id });
+    return updated.length > 0;
+  } catch (_error) {
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to update the callback URL",
+    );
+  }
 }
 
 /**

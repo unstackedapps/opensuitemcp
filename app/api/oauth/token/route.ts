@@ -24,7 +24,7 @@ export const dynamic = "force-dynamic";
  * Two grants: an authorization code, exchanged once, and a refresh token, which
  * rotates on every use. There is no `client_credentials` grant — every
  * principal on this server is a person, and an agent that genuinely has no
- * person behind it wants an agent key instead.
+ * person behind it wants a bearer token instead.
  *
  * The body is `application/x-www-form-urlencoded`, per RFC 6749 section 4.1.3.
  * Reading it as text and parsing it here rather than relying on a JSON body
