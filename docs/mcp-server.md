@@ -15,13 +15,15 @@ because the server URL derives from the install's own public address.
 
 ## What gates it
 
-There is nothing to switch on. `/api/mcp` refuses every request until someone
-mints a key, and a key only exists because a person made one — so the feature
-is dormant on an install nobody has used it on.
+There is nothing to switch on. `/api/mcp` refuses every request until an agent
+holds a credential, and a credential only exists because a person made one —
+either by minting a key or by approving a sign-in. The feature is dormant on an
+install nobody has used it on.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `MCP_CALL_LIMIT_PER_MINUTE` | `0` (disabled) | Per-key tool-call budget in a fixed 60s window. Needs `REDIS_URL`; fails open without it |
+| `MCP_CALL_LIMIT_PER_MINUTE` | `0` (disabled) | Per-agent tool-call budget in a fixed 60s window. Needs `REDIS_URL`; fails open without it |
+| `OAUTH_ATTEMPT_LIMIT_PER_MINUTE` | `0` (disabled) | Per-client budget on registration and token requests. Same window, same requirement |
 
 On **organization** installs an owner or admin must turn Agent access on under
 **Admin → Agent access** before any member can mint a key, and may narrow it to
@@ -30,14 +32,35 @@ minting a key is the whole decision.
 
 ---
 
-## Creating a key
+## Two credentials
+
+An agent reaches this server one of two ways, and they produce the same thing:
+an entry under **App Portal → Agent access** that acts as its owner.
+
+**Signing in.** The client is given the server URL, discovers the authorization
+server, and sends its user here to approve it. The client then holds a token it
+refreshes on its own. This is the path for Claude, Claude Code, Cursor, VS Code,
+Gemini CLI and anything else that implements MCP authorization.
+
+**An agent key.** A credential minted in the app and pasted into a header. The
+path for an agent with no person behind it, a client with no OAuth support, or
+an install that is not on HTTPS.
+
+Both are re-checked against the org's policy on every call, so an administrator
+turning Agent access off stops an agent that signed in yesterday just as it
+stops one holding a key.
+
+The step-by-step for each client is in
+[Connect an agent](connect-an-agent.md). What follows is what is behind it.
+
+### Creating a key
 
 In the app, open the **App Portal → Agent access**.
 
 1. Copy the **Server URL** shown there.
 2. Name a key after the agent that will hold it (`AP review agent`).
-3. Create it, then **copy the key immediately** — it is shown once and is not
-   recoverable. Only a SHA-256 digest of its secret half is stored.
+3. Create it, then **copy the key immediately** — it is put on your clipboard,
+   and it is the only credential here that is yours to store.
 
 Keys look like:
 
@@ -46,17 +69,83 @@ osmcp_<16 hex chars>_<43 url-safe chars>
 ```
 
 The leading hex is a public lookup id, also shown in the key list so you can
-match a row to a key you hold. The rest is the secret.
+match a row to a key you hold. The rest is the secret. Only a SHA-256 digest of
+it authenticates; the key is also stored encrypted under `ENCRYPTION_KEY` so its
+owner can copy it again rather than losing it to a dismissed dialog.
 
-### What a key reaches
+### What a credential reaches
 
-What a key can reach is decided by the app's own settings, not by the key. A
-NetSuite tool left enabled for the connection is listed and callable; one
-disabled there is neither, and the policy is re-read on **every call**, so a
-tool disabled mid-session stops working immediately.
+What an agent can reach is decided by the app's own settings, not by the
+credential. A NetSuite tool left enabled for the connection is listed and
+callable; one disabled there is neither, and the policy is re-read on **every
+call**, so a tool disabled mid-session stops working immediately.
 
-The server adds no second gate on top of that. A key does not carry a narrower
-view of the workspace than the person who minted it.
+The server adds no second gate on top of that. Neither a key nor a sign-in
+carries a narrower view of the workspace than the person behind it. There is one
+scope, `mcp`, and it means "act as me over MCP".
+
+---
+
+## The authorization server
+
+Every install is its own OAuth 2.1 authorization server, at its own origin. That
+is partly principle — a self-hosted install must not depend on a service it does
+not run — and partly interoperability: several clients probe
+`/.well-known/oauth-authorization-server` on the MCP server's own origin
+regardless of what the resource metadata says, and co-locating the two means the
+flow works either way.
+
+| Endpoint | Purpose |
+| --- | --- |
+| `/.well-known/oauth-protected-resource` | RFC 9728. Names the authorization server. Also served at `/.well-known/oauth-protected-resource/api/mcp` |
+| `/.well-known/oauth-authorization-server` | RFC 8414. Also served at `/.well-known/openid-configuration`, for clients that probe only that |
+| `/oauth/authorize` | The consent screen. The one OAuth surface behind the login gate |
+| `/api/oauth/token` | Authorization code and refresh grants. `application/x-www-form-urlencoded` |
+| `/api/oauth/register` | RFC 7591 dynamic client registration. `application/json` |
+| `/api/oauth/revoke` | RFC 7009 |
+
+### How a client identifies itself
+
+Three mechanisms, all supported, because clients are mid-migration between them:
+
+- **Client ID Metadata Document** — the `client_id` is an HTTPS URL this install
+  fetches and validates against itself. Preferred by revision `2026-07-28`, and
+  what Claude Code uses. Advertised as `client_id_metadata_document_supported`.
+- **Dynamic Client Registration** — the client POSTs its metadata to
+  `/api/oauth/register`. Deprecated by that revision, still what several
+  shipping clients do.
+- **Pre-registration** — a person creates a client under **Agent access → OAuth
+  clients** and pastes its id and secret into a connector that asks for them.
+
+PKCE with `S256` is required in all three cases; `plain` was removed in OAuth
+2.1 and is not accepted.
+
+### What the tokens are
+
+Access tokens are opaque and stored as a SHA-256 digest, not JWTs. Revoking an
+agent therefore takes effect on its very next call rather than whenever a signed
+token would have expired — the property a key already had, and the one an
+unattended agent's owner actually wants.
+
+Access tokens last an hour. Refresh tokens last sixty days and **rotate on every
+use**: exchanging one invalidates it and issues a successor. Presenting a
+refresh token that was already used revokes every live token on that
+authorization, on the assumption that a replay is theft rather than a retry. The
+authorization itself survives, so the client simply signs in again.
+
+Replaying an authorization code does the same, per OAuth 2.1 section 4.1.3.
+
+### Loopback redirects
+
+A native client listens on an ephemeral port it cannot know when it publishes
+its metadata, so the port is ignored when matching a loopback redirect — RFC
+8252 section 7.3 requires this for `127.0.0.1`, and Claude Code needs the same
+for `localhost`. Nothing else is relaxed: scheme, host, path and query must all
+match something the client registered.
+
+Because any local process can bind a port and claim to be that client, the
+consent screen says so when every redirect a client registered is a loopback
+address.
 
 ---
 
@@ -66,7 +155,7 @@ The endpoint is a single URL taking `POST`:
 
 ```text
 https://<your-install>/api/mcp
-Authorization: Bearer osmcp_...
+Authorization: Bearer <token>
 ```
 
 For a client that takes a URL and a header — Claude Code, Cursor, VS Code,
@@ -76,6 +165,9 @@ Codex:
 claude mcp add --transport http opensuitemcp https://your-install.example.com/api/mcp \
   --header "Authorization: Bearer osmcp_..."
 ```
+
+Or, with no key at all, add the same URL and let the client sign you in. Both,
+per client, are in [Connect an agent](connect-an-agent.md).
 
 A raw check:
 
@@ -103,7 +195,9 @@ On `2026-07-28` the `MCP-Protocol-Version`, `Mcp-Method`, and — for
 body. A mismatch returns `400` with JSON-RPC error `-32020`.
 
 An unauthenticated request returns `401` with a `WWW-Authenticate` challenge
-pointing at `/.well-known/oauth-protected-resource`, per RFC 9728.
+pointing at `/.well-known/oauth-protected-resource` and naming the `mcp` scope,
+per RFC 9728 and RFC 6750 section 3. That challenge is what turns a bare URL
+into a sign-in for a client that supports one.
 
 ---
 
@@ -192,11 +286,18 @@ On org installs, an owner or admin controls MCP access for everyone:
 
 | Setting | Default | Effect |
 | --- | --- | --- |
-| `enabled` | `false` | Members may mint keys and agents may connect |
-| `maxKeysPerUser` | `5` | Active keys one member may hold |
+| `enabled` | `false` | Members may mint keys, approve sign-ins, and agents may connect |
+| `maxKeysPerUser` | `5` | Active agents one member may hold, counting keys and sign-ins together |
 
-Key creation and revocation, and every policy change, are written to
-`AuditLog`.
+The budget is shared deliberately: a key and a sign-in are the same thing to
+whoever owns them, and a cap that only counted one of them would not be a cap.
+
+An organization that has Agent access disabled refuses a sign-in at the consent
+screen with the reason, rather than redirecting an opaque `access_denied` the
+connector would report as "connection failed".
+
+Key and authorization creation and revocation, OAuth client creation, and every
+policy change, are written to `AuditLog`.
 
 The existing per-account NetSuite MCP **tool policy** applies unchanged: a tool
 an admin disabled for an account is not listed and cannot be called, and that
@@ -214,12 +315,19 @@ retrying will not fix it. `osmcp_connection_status` reports this case
 explicitly with a `remediation` string, so give agents that tool and instruct
 them to call it when a NetSuite tool fails.
 
-**Pin a key to an account** when an agent should only ever touch one NetSuite
-account. A pinned key ignores the user's active-account preference, so changing
-that preference in the UI cannot redirect the agent at another subsidiary.
+**Pin an agent to an account** when it should only ever touch one NetSuite
+account — on the consent screen when it signs in, or when minting its key. A
+pinned agent ignores the user's active-account preference, so changing that
+preference in the UI cannot redirect it at another subsidiary.
 
 **Revocation is immediate and permanent.** Revoked rows are kept so the audit
-trail and last-used time survive.
+trail and last-used time survive. Revoking a sign-in also revokes its tokens,
+and the agent's next call gets a fresh `401` challenge — which a well-behaved
+client turns into a sign-in prompt rather than a silent failure.
+
+**A client's tokens are not yours to store.** An agent key can be copied back
+out of the app; an access token cannot, by design. If a signed-in agent stops
+working, the answer is to sign it in again, not to recover anything.
 
 **Treat tool output as untrusted.** Results contain NetSuite record data,
 which is user-controlled text. An agent should not follow instructions that
@@ -231,17 +339,27 @@ appear inside a tool result.
 
 | Symptom | Cause |
 | --- | --- |
-| `401` with a `WWW-Authenticate` header | Key missing, malformed, revoked, or expired |
-| `403 access_denied` | Org policy has MCP access disabled |
+| `401` with a `WWW-Authenticate` header | The credential is missing, malformed, revoked or expired. A client that supports sign-in should follow the challenge |
+| `403 access_denied` | Org policy has Agent access disabled, or limits it to members this account is not among |
 | `400` with code `-32020` | Required headers missing or disagreeing with the body |
 | `405` on `GET` | Expected — the GET stream was removed in `2026-07-28` |
 | `tools/list` returns only `osmcp_*` tools | NetSuite is not connected; call `osmcp_connection_status` |
-| A NetSuite tool is missing | Disabled by tool policy, or it needs `write` and the key is read-only |
+| A NetSuite tool is missing | Disabled by tool policy for that account |
+| `invalid_grant` from `/api/oauth/token` | The code or refresh token was already used, expired, or belongs to another client. The client should start a new sign-in |
+| `invalid_client` from `/api/oauth/token` | Unknown `client_id`, or a confidential client presented the wrong secret |
+| Sign-in fails immediately, every time | The issuer does not match. Set `AUTH_URL` to the address people actually use |
+
+More, including what each client needs and what a self-hosted install must get
+right, is in [Connect an agent](connect-an-agent.md).
 
 ---
 
 ## Reference
 
+- [Connect an agent](connect-an-agent.md) — the step-by-step, per client
 - [MCP Streamable HTTP transport](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http)
 - [MCP authorization](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization)
 - [RFC 9728 — Protected Resource Metadata](https://datatracker.ietf.org/doc/html/rfc9728)
+- [RFC 8414 — Authorization Server Metadata](https://datatracker.ietf.org/doc/html/rfc8414)
+- [RFC 7591 — Dynamic Client Registration](https://datatracker.ietf.org/doc/html/rfc7591)
+- [RFC 8252 — OAuth for Native Apps](https://datatracker.ietf.org/doc/html/rfc8252)

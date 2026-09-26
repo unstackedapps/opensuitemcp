@@ -11,7 +11,7 @@ import { personaPlaybookOutlineInline } from "@/lib/ai/personas/playbook-shape";
 import type { CustomPersona } from "@/lib/ai/personas/types";
 import { getUserSettings, upsertUserSettings } from "@/lib/db/queries";
 import { generateUUID } from "@/lib/utils";
-import { setMcpApiKeyPersona } from "../keys";
+import { setMcpPrincipalPersona } from "../authenticate";
 import { resolveAssignedPersona } from "../persona-assignment";
 import { type McpToolDefinition, toolError, toolResult } from "./types";
 
@@ -152,11 +152,7 @@ const createPersona: McpToolDefinition = {
 
     const adopt = args.adopt === true;
     if (adopt) {
-      await setMcpApiKeyPersona({
-        userId: principal.userId,
-        keyId: principal.keyId,
-        personaId: persona.id,
-      });
+      await setMcpPrincipalPersona({ principal, personaId: persona.id });
     }
 
     return toolResult(
@@ -326,11 +322,7 @@ const deletePersona: McpToolDefinition = {
 
     const wasAdopted = principal.personaId === personaId;
     if (wasAdopted) {
-      await setMcpApiKeyPersona({
-        userId: principal.userId,
-        keyId: principal.keyId,
-        personaId: null,
-      });
+      await setMcpPrincipalPersona({ principal, personaId: null });
     }
 
     const ava = resolveAssignedPersona(null, null);
@@ -351,7 +343,7 @@ const setAgentPersona: McpToolDefinition = {
   name: "osmcp_set_agent_persona",
   title: "Set agent persona",
   description:
-    "Assign a persona to this API key, or shed the current one by omitting `personaId`, which returns this connection to Ava. Every key acts as some persona; Ava is the one it falls back to. The assignment is reported by osmcp_whoami on every future connection, so a fresh session learns which specialist it is meant to be. It records intent only: read the instructions with osmcp_get_persona and adopt them yourself.",
+    "Assign a persona to this connection, or shed the current one by omitting `personaId`, which returns this connection to Ava. Every agent acts as some persona; Ava is the one it falls back to. The assignment is reported by osmcp_whoami on every future connection, so a fresh session learns which specialist it is meant to be. It records intent only: read the instructions with osmcp_get_persona and adopt them yourself.",
   inputSchema: {
     type: "object",
     properties: {
@@ -368,11 +360,7 @@ const setAgentPersona: McpToolDefinition = {
     const personaId = readString(args, "personaId");
 
     if (!personaId) {
-      await setMcpApiKeyPersona({
-        userId: principal.userId,
-        keyId: principal.keyId,
-        personaId: null,
-      });
+      await setMcpPrincipalPersona({ principal, personaId: null });
       const ava = resolveAssignedPersona(null, null);
       return toolResult(
         { personaId: ava.id, name: ava.name, shed: true },
@@ -394,14 +382,13 @@ const setAgentPersona: McpToolDefinition = {
       );
     }
 
-    const assigned = await setMcpApiKeyPersona({
-      userId: principal.userId,
-      keyId: principal.keyId,
+    const assigned = await setMcpPrincipalPersona({
+      principal,
       personaId: persona.id,
     });
     if (!assigned) {
       return toolError(
-        "This API key could not be updated. A revoked key cannot change its persona.",
+        "This connection could not be updated. A revoked key or authorization cannot change its persona.",
       );
     }
 
