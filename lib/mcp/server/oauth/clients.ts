@@ -2,10 +2,10 @@ import "server-only";
 
 import { randomBytes } from "node:crypto";
 import { lookup } from "node:dns/promises";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { type OAuthClient, oauthClient } from "@/lib/db/schema";
-import { encrypt } from "@/lib/encryption";
+import { decrypt, encrypt } from "@/lib/encryption";
 import { ChatSDKError } from "@/lib/errors";
 import { allowOAuthOutboundFetch } from "@/lib/rate-limit";
 import {
@@ -458,6 +458,7 @@ export async function createManualOAuthClient(params: {
         tokenEndpointAuthMethod: "client_secret_post",
         registrationKind: "manual",
         createdByUserId: params.userId,
+        grantId: params.grantId ?? null,
         orgId: params.orgId,
         createdAt: new Date(),
       })
@@ -502,6 +503,85 @@ export async function touchOAuthClient(id: string): Promise<void> {
     console.warn(
       "[MCP OAuth] Failed to record client usage:",
       error instanceof Error ? error.message : String(error),
+    );
+  }
+}
+
+/**
+ * The credentials an agent app issued for itself, read back.
+ *
+ * The same bargain the agent key makes: stored encrypted under ENCRYPTION_KEY
+ * as well as hashed, so its owner can copy it again rather than losing it to a
+ * dismissed dialog. Scoped to the owner and to the app, so a grant id from
+ * somebody else's account finds nothing.
+ */
+export async function readClientCredentialsForGrant(params: {
+  userId: string;
+  grantId: string;
+}): Promise<{ clientId: string; clientSecret: string | null } | null> {
+  let row: OAuthClient | undefined;
+  try {
+    const rows = await db
+      .select()
+      .from(oauthClient)
+      .where(
+        and(
+          eq(oauthClient.grantId, params.grantId),
+          eq(oauthClient.createdByUserId, params.userId),
+          isNull(oauthClient.disabledAt),
+        ),
+      )
+      .limit(1);
+    row = rows[0];
+  } catch (_error) {
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to read the client credentials",
+    );
+  }
+  if (!row) {
+    return null;
+  }
+  return {
+    clientId: row.clientId,
+    clientSecret: row.clientSecretCipher
+      ? decrypt(row.clientSecretCipher)
+      : null,
+  };
+}
+
+/**
+ * Replace the secret in place, keeping the client id.
+ *
+ * What a leaked credential wants: the connector keeps its client id and its
+ * binding, and only the half that leaked changes. Deleting the app to get a
+ * fresh secret would take its name, persona, pinned account and history too.
+ */
+export async function rotateClientSecretForGrant(params: {
+  userId: string;
+  grantId: string;
+}): Promise<{ clientId: string; clientSecret: string } | null> {
+  const clientSecret = `${CLIENT_SECRET_PREFIX}${randomBytes(32).toString("base64url")}`;
+  try {
+    const [row] = await db
+      .update(oauthClient)
+      .set({
+        clientSecretHash: hashOAuthTokenSecret(clientSecret),
+        clientSecretCipher: encrypt(clientSecret),
+      })
+      .where(
+        and(
+          eq(oauthClient.grantId, params.grantId),
+          eq(oauthClient.createdByUserId, params.userId),
+          isNull(oauthClient.disabledAt),
+        ),
+      )
+      .returning();
+    return row ? { clientId: row.clientId, clientSecret } : null;
+  } catch (_error) {
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to replace the client secret",
     );
   }
 }

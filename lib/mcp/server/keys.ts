@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { type McpApiKey, mcpApiKey, user } from "@/lib/db/schema";
 import { decrypt, encrypt } from "@/lib/encryption";
@@ -17,6 +17,7 @@ import {
 export type McpApiKeySummary = {
   id: string;
   name: string;
+  description: string | null;
   tokenId: string;
   maskedToken: string;
   /** Whether the key can still be copied, or was minted before that existed. */
@@ -54,6 +55,7 @@ function toSummary(row: McpApiKey): McpApiKeySummary {
   return {
     id: row.id,
     name: row.name,
+    description: row.description,
     tokenId: row.tokenId,
     maskedToken: maskMcpApiKey(row.tokenId),
     copyable: Boolean(row.tokenCipher),
@@ -106,6 +108,7 @@ export async function createMcpApiKey(params: {
   orgId: string | null;
   name: string;
   netsuiteAccountId?: string | null;
+  description?: string | null;
   /** Persona the agent is assigned from the start; null gives it no role. */
   personaId?: string | null;
   expiresAt?: Date | null;
@@ -120,6 +123,7 @@ export async function createMcpApiKey(params: {
       .insert(mcpApiKey)
       .values({
         userId: params.userId,
+        description: params.description?.trim().slice(0, 256) || null,
         orgId: params.orgId,
         name: params.name,
         tokenId: minted.tokenId,
@@ -152,11 +156,24 @@ export async function updateMcpApiKey(params: {
   userId: string;
   keyId: string;
   name?: string;
+  description?: string | null;
   personaId?: string | null;
+  netsuiteAccountId?: string | null;
 }): Promise<McpApiKeySummary | null> {
-  const patch: { name?: string; personaId?: string | null } = {};
+  const patch: {
+    name?: string;
+    description?: string | null;
+    personaId?: string | null;
+    netsuiteAccountId?: string | null;
+  } = {};
   if (params.name !== undefined) {
     patch.name = params.name.trim();
+  }
+  if (params.description !== undefined) {
+    patch.description = params.description?.trim().slice(0, 256) || null;
+  }
+  if (params.netsuiteAccountId !== undefined) {
+    patch.netsuiteAccountId = params.netsuiteAccountId?.trim() || null;
   }
   if (params.personaId !== undefined) {
     patch.personaId = params.personaId?.trim() || null;
@@ -426,6 +443,33 @@ export async function touchMcpApiKey(keyId: string): Promise<void> {
     console.warn(
       "[MCP Server] Failed to record key usage:",
       error instanceof Error ? error.message : String(error),
+    );
+  }
+}
+
+/**
+ * Delete a revoked key for good. Mirrors deleteRevokedOAuthGrant.
+ */
+export async function deleteRevokedMcpApiKey(params: {
+  userId: string;
+  keyId: string;
+}): Promise<boolean> {
+  try {
+    const deleted = await db
+      .delete(mcpApiKey)
+      .where(
+        and(
+          eq(mcpApiKey.id, params.keyId),
+          eq(mcpApiKey.userId, params.userId),
+          isNotNull(mcpApiKey.revokedAt),
+        ),
+      )
+      .returning({ id: mcpApiKey.id });
+    return deleted.length > 0;
+  } catch (_error) {
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to delete the agent app",
     );
   }
 }

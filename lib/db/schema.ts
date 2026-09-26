@@ -685,6 +685,8 @@ export const mcpApiKey = pgTable(
     /** Org at mint time; null on solo installs. Used for audit and policy. */
     orgId: uuid("orgId").references(() => org.id),
     name: varchar("name", { length: 128 }).notNull(),
+    /** Free text from its owner: which laptop, which account, whose Claude. */
+    description: varchar("description", { length: 256 }),
     tokenId: varchar("tokenId", { length: 32 }).notNull(),
     tokenHash: text("tokenHash").notNull(),
     /**
@@ -928,6 +930,8 @@ export const oauthGrant = pgTable(
      */
     clientId: varchar("clientId", { length: 512 }),
     name: varchar("name", { length: 128 }).notNull(),
+    /** Free text from its owner: which laptop, which account, whose Claude. */
+    description: varchar("description", { length: 256 }),
     /** Pins the grant to one NetSuite account; null follows the active one. */
     netsuiteAccountId: varchar("netsuiteAccountId", { length: 64 }),
     personaId: varchar("personaId", { length: 128 }),

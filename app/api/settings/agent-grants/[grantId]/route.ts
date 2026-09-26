@@ -3,6 +3,7 @@ import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
 import { isPersonaAvailableToUser } from "@/lib/mcp/server/agent-personas";
 import {
+  deleteRevokedOAuthGrant,
   revokeOAuthGrant,
   updateOAuthGrant,
 } from "@/lib/mcp/server/oauth/grants";
@@ -20,6 +21,7 @@ const patchSchema = z.object({
   name: z.string().trim().min(1).max(128).optional(),
   personaId: z.string().trim().max(128).optional().nullable(),
   netsuiteAccountId: z.string().trim().max(64).optional().nullable(),
+  description: z.string().trim().max(256).optional().nullable(),
 });
 
 export async function PATCH(
@@ -57,6 +59,7 @@ export async function PATCH(
       personaId:
         parsed.personaId === undefined ? undefined : requestedPersonaId,
       netsuiteAccountId: parsed.netsuiteAccountId,
+      description: parsed.description,
     });
     if (!updated) {
       return NextResponse.json(
@@ -92,8 +95,15 @@ export async function PATCH(
   }
 }
 
+/**
+ * Revoke, or — with `?purge=1` on an already-revoked app — delete for good.
+ *
+ * Revoking keeps the row so the audit trail and last-used time survive.
+ * Purging is the owner saying they are finished with it, and is only offered
+ * once the app is archived.
+ */
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ grantId: string }> },
 ) {
   const session = await auth();
@@ -102,6 +112,30 @@ export async function DELETE(
   }
 
   const { grantId } = await params;
+
+  if (new URL(request.url).searchParams.get("purge") === "1") {
+    const purged = await deleteRevokedOAuthGrant({
+      userId: session.user.id,
+      grantId,
+    });
+    if (!purged) {
+      return NextResponse.json(
+        { error: "No such agent app, or it has not been revoked yet." },
+        { status: 404 },
+      );
+    }
+    if (session.user.orgId) {
+      await writeOrgAuditLog({
+        orgId: session.user.orgId,
+        actorUserId: session.user.id,
+        action: "mcp_oauth.delete",
+        targetType: "OAuthGrant",
+        targetId: grantId,
+      });
+    }
+    return NextResponse.json({ deleted: true });
+  }
+
   const revoked = await revokeOAuthGrant({ userId: session.user.id, grantId });
   if (!revoked) {
     return NextResponse.json(

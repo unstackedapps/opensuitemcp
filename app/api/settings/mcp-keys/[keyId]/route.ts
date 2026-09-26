@@ -2,12 +2,18 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
 import { isPersonaAvailableToUser } from "@/lib/mcp/server/agent-personas";
-import { revokeMcpApiKey, updateMcpApiKey } from "@/lib/mcp/server/keys";
+import {
+  deleteRevokedMcpApiKey,
+  revokeMcpApiKey,
+  updateMcpApiKey,
+} from "@/lib/mcp/server/keys";
 import { writeOrgAuditLog } from "@/lib/org/audit";
 
 const patchSchema = z.object({
   name: z.string().trim().min(1).max(128).optional(),
   personaId: z.string().trim().max(128).optional().nullable(),
+  description: z.string().trim().max(256).optional().nullable(),
+  netsuiteAccountId: z.string().trim().max(64).optional().nullable(),
 });
 
 /** Rename an agent or move it to a different persona. The secret is untouched. */
@@ -84,8 +90,9 @@ export async function PATCH(
   return NextResponse.json({ key: updated });
 }
 
+/** Revoke, or — with `?purge=1` on a revoked app — delete for good. */
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ keyId: string }> },
 ) {
   const session = await auth();
@@ -94,6 +101,21 @@ export async function DELETE(
   }
 
   const { keyId } = await params;
+
+  if (new URL(request.url).searchParams.get("purge") === "1") {
+    const purged = await deleteRevokedMcpApiKey({
+      userId: session.user.id,
+      keyId,
+    });
+    if (!purged) {
+      return NextResponse.json(
+        { error: "No such agent app, or it has not been revoked yet." },
+        { status: 404 },
+      );
+    }
+    return NextResponse.json({ deleted: true });
+  }
+
   const revoked = await revokeMcpApiKey({ userId: session.user.id, keyId });
   if (!revoked) {
     return NextResponse.json(

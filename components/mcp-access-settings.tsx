@@ -2,14 +2,17 @@
 
 import {
   AlertTriangle,
+  ArrowUpDown,
+  Ban,
   Copy,
+  Eye,
   KeyRound,
   Pencil,
   Plus,
   RefreshCw,
   Trash2,
 } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 import {
   type AgentAccountOption,
@@ -30,9 +33,17 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { AVA_PERSONA_ID } from "@/lib/ai/personas/ids";
 import { CONNECT_AGENT_DOCS_URL } from "@/lib/constants";
+import type { AgentConnectionKind } from "@/lib/mcp/server/oauth/grants";
 import type { ConnectPreflight } from "@/lib/mcp/server/oauth/preflight";
 import { fetcher } from "@/lib/utils";
 import { toast } from "./toast";
@@ -40,6 +51,7 @@ import { toast } from "./toast";
 type McpKeySummary = {
   id: string;
   name: string;
+  description: string | null;
   maskedToken: string;
   copyable: boolean;
   netsuiteAccountId: string | null;
@@ -60,6 +72,8 @@ type McpKeySummary = {
 type McpGrantSummary = {
   id: string;
   name: string;
+  description: string | null;
+  connectionKind: AgentConnectionKind;
   clientName: string;
   clientUri: string | null;
   personaId: string | null;
@@ -103,15 +117,26 @@ type AgentRow = {
   id: string;
   kind: "key" | "grant";
   name: string;
+  description: string | null;
+  connectionKind: AgentConnectionKind;
   credential: string;
   personaId: string | null;
   netsuiteAccountId: string | null;
   lastUsedAt: string | null;
   rotatedAt: string | null;
   status: "pending" | "active" | "revoked" | "expired";
+  createdAt: string;
   copyable: boolean;
   /** Set when this app issued a client ID for a connector that wanted one. */
   issuedClientId: string | null;
+};
+
+const CONNECTION_LABEL: Record<AgentConnectionKind, string> = {
+  bearer: "Bearer token",
+  "oauth-pending": "OAuth 2.1",
+  "oauth-dcr": "OAuth 2.1 · DCR",
+  "oauth-cimd": "OAuth 2.1 · CIMD",
+  "oauth-client-key": "OAuth 2.1 · client key",
 };
 
 const GRANTS_ENDPOINT = "/api/settings/agent-grants";
@@ -173,6 +198,10 @@ export function McpAccessPanel({
    * registering themselves, and they belong to the app they were issued from:
    * they can connect that one and no other.
    */
+  const [viewing, setViewing] = useState<AgentRow | null>(null);
+  const [pendingPurge, setPendingPurge] = useState<AgentRow | null>(null);
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<"recent" | "name" | "used">("recent");
   const [issued, setIssued] = useState<{
     name: string;
     clientId: string;
@@ -237,6 +266,7 @@ export function McpAccessPanel({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             name: draft.name,
+            description: draft.description || null,
             personaId: draft.personaId,
             netsuiteAccountId: draft.netsuiteAccountId,
             issueClientCredentials: signingIn && draft.issueClientCredentials,
@@ -343,6 +373,23 @@ export function McpAccessPanel({
     [copy, mutate],
   );
 
+  const purgeAgent = useCallback(
+    async (row: AgentRow) => {
+      const base = row.kind === "grant" ? GRANTS_ENDPOINT : ENDPOINT;
+      const response = await fetch(`${base}/${row.id}?purge=1`, {
+        method: "DELETE",
+      });
+      if (response.ok) {
+        await mutate();
+        await onChanged?.();
+        toast({ type: "success", description: `${row.name} deleted.` });
+      } else {
+        toast({ type: "error", description: "Could not delete the app." });
+      }
+    },
+    [mutate, onChanged],
+  );
+
   const revokeAgent = useCallback(
     async (row: AgentRow) => {
       const base = row.kind === "grant" ? GRANTS_ENDPOINT : ENDPOINT;
@@ -363,6 +410,7 @@ export function McpAccessPanel({
       editing
         ? {
             name: editing.name,
+            description: editing.description ?? "",
             personaId: editing.personaId ?? AVA_PERSONA_ID,
             netsuiteAccountId: editing.netsuiteAccountId,
             issueClientCredentials: false,
@@ -390,11 +438,14 @@ export function McpAccessPanel({
       id: key.id,
       kind: "key" as const,
       name: key.name,
+      description: key.description,
+      connectionKind: "bearer" as const,
       credential: key.maskedToken,
       personaId: key.personaId,
       netsuiteAccountId: key.netsuiteAccountId,
       lastUsedAt: key.lastUsedAt,
       rotatedAt: key.rotatedAt,
+      createdAt: key.createdAt,
       status: key.status,
       copyable: key.copyable,
       issuedClientId: null,
@@ -403,6 +454,8 @@ export function McpAccessPanel({
       id: grant.id,
       kind: "grant" as const,
       name: grant.name,
+      description: grant.description,
+      connectionKind: grant.connectionKind,
       credential: grant.clientName
         ? `Signed in · ${grant.clientName}`
         : "Waiting for an app to sign in",
@@ -411,6 +464,7 @@ export function McpAccessPanel({
       netsuiteAccountId: grant.netsuiteAccountId,
       lastUsedAt: grant.lastUsedAt,
       rotatedAt: null,
+      createdAt: grant.createdAt,
       status: grant.status,
       copyable: false,
     })),
@@ -424,7 +478,32 @@ export function McpAccessPanel({
   const archivedRows = rows.filter(
     (row) => row.status !== "active" && row.status !== "pending",
   );
-  const visibleRows = showArchived ? rows : activeRows;
+  const needle = query.trim().toLowerCase();
+  const visibleRows = (showArchived ? rows : activeRows)
+    .filter(
+      (row) =>
+        !needle ||
+        [row.name, row.description, personaLabel(row.personaId, personas)]
+          .filter(Boolean)
+          .some((field) => (field as string).toLowerCase().includes(needle)),
+    )
+    .sort((a, b) => {
+      if (sort === "name") {
+        return a.name.localeCompare(b.name);
+      }
+      if (sort === "used") {
+        // Never-used sorts last rather than first: a row with no date is not
+        // the most recently used one.
+        return (
+          new Date(b.lastUsedAt ?? 0).getTime() -
+          new Date(a.lastUsedAt ?? 0).getTime()
+        );
+      }
+      return (
+        new Date(b.createdAt ?? 0).getTime() -
+        new Date(a.createdAt ?? 0).getTime()
+      );
+    });
   const atLimit = activeRows.length >= data.policy.maxKeysPerUser;
   const blocked = !(data.policy.enabled && data.policy.memberAllowed);
 
@@ -501,14 +580,48 @@ export function McpAccessPanel({
         <section className="space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <Label className="text-xs">Your agent apps</Label>
-            <div className="flex items-center gap-3">
+            <Button
+              disabled={blocked || atLimit}
+              onClick={() => setCreatingOpen(true)}
+              size="sm"
+              type="button"
+            >
+              <Plus className="size-3.5" />
+              New app
+            </Button>
+          </div>
+
+          {rows.length > 1 ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                className="h-8 min-w-40 flex-1 text-xs"
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Filter by name, note or persona"
+                value={query}
+              />
+              <Select
+                onValueChange={(value) =>
+                  setSort(value as "recent" | "name" | "used")
+                }
+                value={sort}
+              >
+                <SelectTrigger className="h-8 w-auto gap-1.5 text-xs">
+                  <ArrowUpDown className="size-3.5 text-muted-foreground" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="recent">Newest</SelectItem>
+                  <SelectItem value="name">Name</SelectItem>
+                  <SelectItem value="used">Last used</SelectItem>
+                </SelectContent>
+              </Select>
               {archivedRows.length > 0 ? (
                 <div className="flex items-center gap-2">
                   <Label
                     className="text-muted-foreground text-xs"
                     htmlFor="show-archived-agents"
                   >
-                    Show archived
+                    Archived
                   </Label>
                   <Switch
                     checked={showArchived}
@@ -517,17 +630,8 @@ export function McpAccessPanel({
                   />
                 </div>
               ) : null}
-              <Button
-                disabled={blocked || atLimit}
-                onClick={() => setCreatingOpen(true)}
-                size="sm"
-                type="button"
-              >
-                <Plus className="size-3.5" />
-                New agent
-              </Button>
             </div>
-          </div>
+          ) : null}
 
           {atLimit ? (
             <p className="text-muted-foreground text-xs">
@@ -577,65 +681,93 @@ export function McpAccessPanel({
                           {`Key replaced ${formatDate(row.rotatedAt)}`}
                         </span>
                       ) : null}
-                      {row.issuedClientId ? (
-                        <Badge variant="outline">Client ID issued</Badge>
-                      ) : null}
                     </div>
                   </div>
-                  {row.status === "active" || row.status === "pending" ? (
-                    <div className="flex shrink-0 items-center gap-1">
-                      {row.kind === "key" ? (
-                        <Button
-                          onClick={() => copyKey(row)}
-                          size="sm"
-                          type="button"
-                          variant="ghost"
-                        >
-                          <Copy className="size-3.5" />
-                          <span className="sr-only">
-                            Copy the key for {row.name}
-                          </span>
-                        </Button>
-                      ) : null}
+                  <div className="flex shrink-0 items-center gap-1">
+                    {row.status === "revoked" || row.status === "expired" ? (
                       <Button
-                        onClick={() => setEditing(row)}
-                        size="sm"
-                        type="button"
-                        variant="ghost"
-                      >
-                        <Pencil className="size-3.5" />
-                        <span className="sr-only">Edit {row.name}</span>
-                      </Button>
-                      {row.kind === "key" ? (
-                        <Button
-                          onClick={() => setPendingRotate(row)}
-                          size="sm"
-                          type="button"
-                          variant="ghost"
-                        >
-                          <RefreshCw className="size-3.5" />
-                          <span className="sr-only">
-                            Replace the key for {row.name}
-                          </span>
-                        </Button>
-                      ) : null}
-                      <Button
-                        onClick={() => setPendingRevoke(row)}
+                        onClick={() => setPendingPurge(row)}
                         size="sm"
                         type="button"
                         variant="ghost"
                       >
                         <Trash2 className="size-3.5" />
-                        <span className="sr-only">Revoke {row.name}</span>
+                        <span className="sr-only">
+                          Delete {row.name} permanently
+                        </span>
                       </Button>
-                    </div>
-                  ) : null}
+                    ) : (
+                      <>
+                        <Button
+                          onClick={() => setViewing(row)}
+                          size="sm"
+                          type="button"
+                          variant="ghost"
+                        >
+                          <KeyRound className="size-3.5" />
+                          <span className="sr-only">
+                            Credentials for {row.name}
+                          </span>
+                        </Button>
+                        <Button
+                          onClick={() => setEditing(row)}
+                          size="sm"
+                          type="button"
+                          variant="ghost"
+                        >
+                          <Pencil className="size-3.5" />
+                          <span className="sr-only">Edit {row.name}</span>
+                        </Button>
+                        <Button
+                          onClick={() => setPendingRevoke(row)}
+                          size="sm"
+                          type="button"
+                          variant="ghost"
+                        >
+                          <Ban className="size-3.5" />
+                          <span className="sr-only">Revoke {row.name}</span>
+                        </Button>
+                      </>
+                    )}
+                  </div>
                 </li>
               ))}
             </ul>
           )}
         </section>
       </div>
+
+      <AppDetailsDialog
+        connectionLabel={
+          viewing ? CONNECTION_LABEL[viewing.connectionKind] : ""
+        }
+        onClose={() => setViewing(null)}
+        onCopyKey={copyKey}
+        onRotateKey={(row) => {
+          setViewing(null);
+          setPendingRotate(row);
+        }}
+        row={viewing}
+        serverUrl={data.serverUrl}
+      />
+
+      <ConfirmDestructiveDialog
+        confirmLabel="Delete permanently"
+        description={`${pendingPurge?.name ?? "This app"} and its history will be removed for good. This cannot be undone.`}
+        onConfirm={() => {
+          if (pendingPurge) {
+            void purgeAgent(pendingPurge);
+          }
+          setPendingPurge(null);
+        }}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingPurge(null);
+          }
+        }}
+        open={Boolean(pendingPurge)}
+        title="Delete this agent app permanently?"
+      />
 
       <CredentialsDialog
         issued={issued}
@@ -790,23 +922,214 @@ function Field({
 }: {
   label: string;
   value: string;
-  onCopy: () => void;
+  onCopy?: () => void;
 }) {
   return (
     <div className="space-y-1.5">
       <Label className="text-xs">{label}</Label>
       <div className="flex items-center gap-2">
         <Input className="font-mono text-xs" readOnly value={value} />
-        <Button
-          className="size-9 shrink-0 p-0"
-          onClick={onCopy}
-          type="button"
-          variant="outline"
-        >
-          <Copy className="size-3.5" />
-          <span className="sr-only">Copy the {label}</span>
-        </Button>
+        {onCopy ? (
+          <Button
+            className="size-9 shrink-0 p-0"
+            onClick={onCopy}
+            type="button"
+            variant="outline"
+          >
+            <Copy className="size-3.5" />
+            <span className="sr-only">Copy the {label}</span>
+          </Button>
+        ) : null}
       </div>
     </div>
+  );
+}
+
+/**
+ * Everything about one app, and the two things its credential supports.
+ *
+ * Needing a fresh secret should never mean deleting the app: it would take the
+ * name, the note, the persona, the pinned account and the history with it. So
+ * both credential kinds can be copied again and replaced in place, which is
+ * what the key always allowed and what a sign-in app had lost.
+ */
+function AppDetailsDialog({
+  row,
+  serverUrl,
+  connectionLabel,
+  onClose,
+  onCopyKey,
+  onRotateKey,
+}: {
+  row: AgentRow | null;
+  serverUrl: string;
+  connectionLabel: string;
+  onClose: () => void;
+  onCopyKey: (row: AgentRow) => void;
+  onRotateKey: (row: AgentRow) => void;
+}) {
+  const [secret, setSecret] = useState<{
+    clientId: string;
+    clientSecret: string | null;
+  } | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  // A different app's credentials must never be left on screen.
+  const open = Boolean(row);
+  const shownFor = useRef<string | null>(null);
+  if (open && shownFor.current !== row?.id) {
+    shownFor.current = row?.id ?? null;
+    if (secret) {
+      setSecret(null);
+    }
+  }
+
+  const copy = async (value: string, what: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast({ type: "success", description: `${what} copied.` });
+    } catch {
+      toast({ type: "error", description: `Could not copy the ${what}.` });
+    }
+  };
+
+  const load = async (rotate: boolean) => {
+    if (!row) {
+      return;
+    }
+    setBusy(true);
+    try {
+      const response = await fetch(`${GRANTS_ENDPOINT}/${row.id}/credentials`, {
+        method: rotate ? "POST" : "GET",
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        toast({
+          type: "error",
+          description: payload.error ?? "Could not read the credentials.",
+        });
+        return;
+      }
+      setSecret(payload);
+      if (rotate) {
+        toast({
+          type: "success",
+          description: "New secret issued. The client ID is unchanged.",
+        });
+      }
+    } catch {
+      toast({ type: "error", description: "Could not read the credentials." });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const isClientKey = row?.connectionKind === "oauth-client-key";
+
+  return (
+    <Dialog onOpenChange={(next) => !next && onClose()} open={open}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{row?.name}</DialogTitle>
+          <DialogDescription>
+            {row?.description || connectionLabel}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3 py-1">
+          <Field
+            label="Server URL"
+            onCopy={() => copy(serverUrl, "Server URL")}
+            value={serverUrl}
+          />
+
+          {row?.kind === "key" ? (
+            <>
+              <Field
+                label="Agent key"
+                onCopy={row.copyable ? () => onCopyKey(row) : undefined}
+                value={row.credential}
+              />
+              <p className="text-muted-foreground text-xs leading-relaxed">
+                {row.copyable
+                  ? "Copy it from the list, or replace it below."
+                  : "This key predates copy-back, so it can only be replaced."}
+              </p>
+            </>
+          ) : null}
+
+          {isClientKey ? (
+            <>
+              <Field
+                label="Client ID"
+                onCopy={
+                  secret ? () => copy(secret.clientId, "Client ID") : undefined
+                }
+                value={secret?.clientId ?? "••••••••••••"}
+              />
+              <Field
+                label="Client secret"
+                onCopy={
+                  secret?.clientSecret
+                    ? () => copy(secret.clientSecret ?? "", "Client secret")
+                    : undefined
+                }
+                value={secret?.clientSecret ?? "••••••••••••"}
+              />
+            </>
+          ) : null}
+
+          {row?.kind === "grant" && !isClientKey ? (
+            <p className="text-muted-foreground text-xs leading-relaxed">
+              This app's client registered itself, so there is no secret here to
+              copy. Revoking the app ends its access immediately.
+            </p>
+          ) : null}
+        </div>
+
+        <DialogFooter className="sm:justify-between">
+          <div className="flex gap-2">
+            {isClientKey ? (
+              <>
+                <Button
+                  disabled={busy}
+                  onClick={() => load(false)}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  <Eye className="size-3.5" />
+                  Reveal
+                </Button>
+                <Button
+                  disabled={busy}
+                  onClick={() => load(true)}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  <RefreshCw className="size-3.5" />
+                  New secret
+                </Button>
+              </>
+            ) : null}
+            {row?.kind === "key" ? (
+              <Button
+                onClick={() => onRotateKey(row)}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                <RefreshCw className="size-3.5" />
+                Replace key
+              </Button>
+            ) : null}
+          </div>
+          <Button onClick={onClose} size="sm" type="button">
+            Done
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
