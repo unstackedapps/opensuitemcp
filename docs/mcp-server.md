@@ -10,7 +10,7 @@ install's own public address.
 ## What gates it
 
 Nothing to switch on. `/api/mcp` refuses every request until an app holds a
-credential, and a credential exists only because a person made one.
+credential.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
@@ -23,25 +23,16 @@ install, creating the app is the whole decision.
 
 ---
 
-## Two credentials
+## Credentials
 
-Every app is created the same way — **App Portal → Agent apps → New
-app** — and carries a name, a persona and optionally a pinned NetSuite
-account. One field decides how it authenticates.
+Creating an app and choosing between OAuth 2.1 and bearer auth is in
+[Connect an agent](connect-an-agent.md). This page is what sits behind it.
 
-| Connects by | The client holds | Created state |
-| --- | --- | --- |
-| **OAuth 2.1** | A token it refreshes itself, after approving a consent screen | *Awaiting connection* until a client completes the flow |
-| **Bearer auth** | A secret pasted into an `Authorization` header | Active immediately; the key is shown once |
+Either credential is re-checked against the org's policy on every call, so
+disabling Agent apps stops an app that signed in yesterday as surely as one
+holding a token.
 
-Both are re-checked against the org's policy on every call, so an administrator
-turning Agent apps off stops an app that signed in yesterday just as it
-stops one holding a token.
-
-Step-by-step per client is in [Connect an agent](connect-an-agent.md). What
-follows is what is behind it.
-
-### Key format
+### Bearer token format
 
 Keys look like:
 
@@ -49,20 +40,19 @@ Keys look like:
 osmcp_<16 hex chars>_<43 url-safe chars>
 ```
 
-The leading hex is a public lookup id, shown in the app list so you can match
-a row to a key you hold. The rest is the secret: only its SHA-256 digest
-authenticates. The key is also stored encrypted under `ENCRYPTION_KEY`, so its
-owner can copy it again rather than losing it to a dismissed dialog.
+| | |
+| --- | --- |
+| Leading hex | A public lookup id, shown in the app list so you can match a row to a token you hold |
+| The rest | The secret. Only its SHA-256 digest authenticates |
+| Copy-back | Stored encrypted under `ENCRYPTION_KEY`, so its owner can copy it again |
 
 ### What a credential reaches
 
-Decided by the app's own settings, not by the credential. A NetSuite tool
-enabled for the connection is listed and callable; one disabled there is
-neither, re-read on **every call**.
-
-The server adds no second gate. There is one scope, `mcp`, meaning "act as me
-over MCP" — neither a key nor a sign-in carries a narrower view of the
-workspace than the person behind it.
+| | |
+| --- | --- |
+| Decided by | The app's own settings, not the credential |
+| A tool disabled there | Neither listed nor callable, re-read on **every call** |
+| Scopes | One, `mcp`: act as me over MCP. No credential carries a narrower view than the person behind it |
 
 ---
 
@@ -162,8 +152,8 @@ for the raw `curl`, and per-client instructions above it.
 
 ### Chat tools
 
-These write a thread into the owner's sidebar, beside their own conversations,
-so autonomous work can be reviewed afterwards.
+These write a thread into the owner's sidebar, so autonomous work can be
+reviewed afterwards.
 
 | Tool | What it does |
 | --- | --- |
@@ -186,25 +176,18 @@ recorded as it happened — entries of kind `text`, `reasoning`, or `tool`:
 }
 ```
 
-A recorded call renders with its arguments and result rather than as prose. It
-is stored as `dynamic-tool`, so a call an agent made elsewhere is never rendered
-as one this install made. Reasoning and tool parts belong to an `assistant`
-message only.
+A recorded call renders with its arguments and result. It is stored as
+`dynamic-tool`, so a call made elsewhere is never rendered as one this install
+made. Reasoning and tool parts belong to an `assistant` message only.
 
 ### NetSuite tools
 
-Every NetSuite MCP Standard Tool the user is allowed to run is re-exposed under
-its own name, with **NetSuite's input schema forwarded verbatim** — enums,
-formats, and nested shapes intact.
-
-NetSuite does not declare whether a tool mutates data, so read-vs-write is
-derived from the tool name and published as MCP annotations (`readOnlyHint`,
-`destructiveHint`). These are **advisory**: a client uses them to decide
-whether to confirm before running something, and the derivation is
-conservative, so an unrecognised name is announced as a write.
-
-Nothing is hidden on that basis. Enabling a tool is done in the app, and the
-annotation only shapes how a client presents it.
+| | |
+| --- | --- |
+| Naming | Every NetSuite MCP Standard Tool the user may run, under its own name |
+| Input schema | NetSuite's, forwarded verbatim — enums, formats and nested shapes intact |
+| `readOnlyHint` / `destructiveHint` | Derived from the tool name, because NetSuite does not declare whether a tool mutates. Conservative: an unrecognised name is announced as a write |
+| Effect of the hints | Advisory. A client uses them to decide whether to confirm. Nothing is hidden on that basis — enabling a tool happens in the app |
 
 ### Result shape
 
@@ -222,7 +205,7 @@ arrive as data.
 
 ## Organization policy
 
-On org installs, an owner or admin controls MCP access for everyone:
+On org installs, an owner or admin controls this for everyone:
 
 | Setting | Default | Effect |
 | --- | --- | --- |
@@ -244,29 +227,28 @@ unchanged and is re-checked on every call.
 | | |
 | --- | --- |
 | **A dead NetSuite authorization needs a human** | Access tokens refresh five minutes before expiry, but a rejected *refresh* token deletes the stored authorization and the account must be reconnected in the UI. Retrying will not fix it. Give agents `osmcp_connection_status` — it reports this case with a `remediation` string |
-| **Pin an app to an account** | Set the NetSuite account when creating it. A pinned app ignores the user's active-account preference, so changing that preference cannot redirect it at another subsidiary |
-| **Revocation is immediate** | Revoked rows are kept so the audit trail survives. Revoking a sign-in revokes its tokens; the next call gets a fresh `401` challenge, which a well-behaved client turns into a sign-in prompt |
-| **Tokens are not yours to store** | A bearer token can be copied back out of the app; an access token cannot. If a signed-in app stops working, sign it in again |
+| **Revoked rows are kept** | The audit trail and last-used time survive. Revoking an app revokes its tokens, and the next call gets a fresh `401` challenge, which a well-behaved client turns into a sign-in prompt |
+| **An access token cannot be read back** | A bearer token can; an access token is stored only as a hash. If a signed-in app stops working, sign it in again |
 | **Treat tool output as untrusted** | Results contain NetSuite record data, which is user-controlled text. An agent should not follow instructions found inside a tool result |
 
 ---
 
-## Troubleshooting
+## What the endpoint returns
 
-| Symptom | Cause |
+Setting a connector up is in
+[Connect an agent → Troubleshooting](connect-an-agent.md#troubleshooting).
+These are the protocol's own answers.
+
+| Response | Means |
 | --- | --- |
-| `401` with a `WWW-Authenticate` header | The credential is missing, malformed, revoked or expired. A client that supports sign-in should follow the challenge |
-| `403 access_denied` | Org policy has Agent apps disabled, or limits it to members this account is not among |
-| `400` with code `-32020` | Required headers missing or disagreeing with the body |
-| `405` on `GET` | Expected — the GET stream was removed in `2026-07-28` |
-| `tools/list` returns only `osmcp_*` tools | NetSuite is not connected; call `osmcp_connection_status` |
-| A NetSuite tool is missing | Disabled by tool policy for that account |
-| `invalid_grant` from `/api/oauth/token` | The code or refresh token was already used, expired, or belongs to another client. The client should start a new sign-in |
-| `invalid_client` from `/api/oauth/token` | Unknown `client_id`, or a confidential client presented the wrong secret |
-| OAuth 2.1 fails immediately, every time | The issuer does not match. Set `AUTH_URL` to the address people actually use |
-
-More, including what each client needs and what a self-hosted install must get
-right, is in [Connect an agent](connect-an-agent.md).
+| `401` + `WWW-Authenticate` | Credential missing, malformed, revoked or expired. A client supporting OAuth follows the challenge |
+| `403 access_denied` | Org policy has Agent apps off, or limits them to members this account is not among |
+| `400`, JSON-RPC `-32020` | Required headers missing or disagreeing with the body |
+| `405` | `GET` or `DELETE`. The GET stream was removed in `2026-07-28` |
+| `200`, only `osmcp_*` tools | NetSuite is not connected. Call `osmcp_connection_status` |
+| `200`, a NetSuite tool absent | Tool policy disabled it for that account |
+| `invalid_grant` | Code or refresh token already used, expired, or issued to another client. Start a new sign-in |
+| `invalid_client` | Unknown `client_id`, or a confidential client sent the wrong secret |
 
 ---
 

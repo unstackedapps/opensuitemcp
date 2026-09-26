@@ -652,11 +652,28 @@ export function McpAccessPanel({
         )}
 
         <section className="space-y-2">
-          {/*
-            One row. The panel header two lines up already says "Agent apps",
-            so a "Your agent apps" label was a third row of chrome above a
-            list that often holds one thing.
-          */}
+          {/* Matches the AI Provider panel: title and button on one line, the
+              description under the title, then the list. */}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+            <div className="min-w-0 space-y-1">
+              <p className="font-medium text-sm">Apps and credentials</p>
+              <p className="text-muted-foreground text-xs leading-relaxed">
+                Each app holds its own credential, persona and NetSuite account.
+                Revoking one leaves the rest alone.
+              </p>
+            </div>
+            <Button
+              className="shrink-0"
+              disabled={blocked || atLimit}
+              onClick={() => setCreatingOpen(true)}
+              size="sm"
+              type="button"
+            >
+              <Plus className="size-3.5" />
+              New app
+            </Button>
+          </div>
+
           <div className="flex flex-wrap items-center gap-2">
             {rows.length > 1 ? (
               <>
@@ -700,17 +717,6 @@ export function McpAccessPanel({
                 />
               </div>
             ) : null}
-
-            <Button
-              className="ml-auto"
-              disabled={blocked || atLimit}
-              onClick={() => setCreatingOpen(true)}
-              size="sm"
-              type="button"
-            >
-              <Plus className="size-3.5" />
-              New app
-            </Button>
           </div>
 
           {atLimit ? (
