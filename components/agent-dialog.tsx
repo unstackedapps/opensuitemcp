@@ -90,7 +90,6 @@ type AgentDialogProps = {
   onReplaceKey?: () => void;
   onRevealCredentials?: () => void;
   onRotateSecret?: () => void;
-  onSaveCallback?: (url: string) => void;
   onRevoke?: () => void;
 };
 
@@ -136,11 +135,9 @@ export function AgentDialog({
   onReplaceKey,
   onRevealCredentials,
   onRotateSecret,
-  onSaveCallback,
   onRevoke,
 }: AgentDialogProps) {
   const [draft, setDraft] = useState<AgentDraft>(initial ?? EMPTY);
-  const [callback, setCallback] = useState("");
 
   // Reopening must not show the last app's details, and an edit starts from
   // what the app currently holds rather than whatever was typed last.
@@ -150,8 +147,15 @@ export function AgentDialog({
     }
   }, [open, initial]);
 
+  // Revealing fills the callback in; the footer Save writes it back with
+  // everything else, so the field needs no button of its own.
   useEffect(() => {
-    setCallback(credentials?.redirectUris[0] ?? "");
+    if (credentials) {
+      setDraft((d) => ({
+        ...d,
+        callbackUrl: credentials.redirectUris[0] ?? "",
+      }));
+    }
   }, [credentials]);
 
   const creating = mode === "create";
@@ -318,9 +322,7 @@ export function AgentDialog({
                   ))}
                   <Button
                     className="shrink-0"
-                    onClick={() =>
-                      setDraft((d) => ({ ...d, callbackUrl: "" }))
-                    }
+                    onClick={() => setDraft((d) => ({ ...d, callbackUrl: "" }))}
                     size="sm"
                     type="button"
                     variant="outline"
@@ -334,6 +336,34 @@ export function AgentDialog({
 
           {app ? (
             <div className="space-y-3 border-border/60 border-t pt-3 sm:col-span-2">
+              {app.hasClientCredentials ? (
+                <div className="flex items-center justify-between gap-2">
+                  <Label className="text-xs">Credentials</Label>
+                  <div className="flex gap-2">
+                    <Button
+                      disabled={busy}
+                      onClick={onRevealCredentials}
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                    >
+                      <Eye className="size-3.5" />
+                      Reveal
+                    </Button>
+                    <Button
+                      disabled={busy}
+                      onClick={onRotateSecret}
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                    >
+                      <RefreshCw className="size-3.5" />
+                      New secret
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+
               <Row
                 label="Server URL"
                 onCopy={() => onCopy?.(serverUrl, "Server URL")}
@@ -362,30 +392,6 @@ export function AgentDialog({
               {app.hasClientCredentials ? (
                 <>
                   <Row
-                    action={
-                      <div className="flex gap-2">
-                        <Button
-                          disabled={busy}
-                          onClick={onRevealCredentials}
-                          size="sm"
-                          type="button"
-                          variant="outline"
-                        >
-                          <Eye className="size-3.5" />
-                          Reveal
-                        </Button>
-                        <Button
-                          disabled={busy}
-                          onClick={onRotateSecret}
-                          size="sm"
-                          type="button"
-                          variant="outline"
-                        >
-                          <RefreshCw className="size-3.5" />
-                          New secret
-                        </Button>
-                      </div>
-                    }
                     label="Client ID"
                     onCopy={
                       credentials
@@ -409,21 +415,12 @@ export function AgentDialog({
                   />
                   {credentials ? (
                     <Row
-                      action={
-                        <Button
-                          disabled={busy || !callback.trim()}
-                          onClick={() => onSaveCallback?.(callback.trim())}
-                          size="sm"
-                          type="button"
-                          variant="outline"
-                        >
-                          Save
-                        </Button>
-                      }
                       editable
                       label="Callback URL"
-                      onChange={setCallback}
-                      value={callback}
+                      onChange={(value) =>
+                        setDraft((d) => ({ ...d, callbackUrl: value }))
+                      }
+                      value={draft.callbackUrl}
                     />
                   ) : null}
                 </>

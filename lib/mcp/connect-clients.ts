@@ -83,7 +83,7 @@ export function buildRawCalls(serverUrl: string): {
 }
 
 export const AGENT_FIELDS: { field: string; does: string }[] = [
-  { field: "Name", does: "What you will see in the agent list" },
+  { field: "Name", does: "What you will see in the app list" },
   { field: "Persona", does: "The NetSuite specialist it acts as" },
   {
     field: "NetSuite account",
@@ -160,7 +160,7 @@ export type TroubleshootingRow = {
 export const CONNECT_TROUBLESHOOTING: TroubleshootingRow[] = [
   {
     symptom: '"Nothing is waiting to connect"',
-    cause: "No agent is set to OAuth 2.1",
+    cause: "No app is set to OAuth 2.1",
     fix: "Create one, then retry from the AI",
   },
   {
@@ -185,7 +185,7 @@ export const CONNECT_TROUBLESHOOTING: TroubleshootingRow[] = [
   },
   {
     symptom: "invalid_grant on refresh",
-    cause: "The token was already used, or the agent was revoked",
+    cause: "The token was already used, or the app was revoked",
     fix: "Sign in again",
   },
   {
@@ -253,7 +253,7 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
         steps: [
           "In Claude, open Settings → Connectors → Add custom connector.",
           "Paste the server URL below and add the connector.",
-          "Claude opens this install. Approve the agent you just created.",
+          "Claude opens this install. Approve the app you just created.",
         ],
         snippet: {
           language: "text",
@@ -283,7 +283,7 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
         steps: [
           "Run the command below.",
           "Run /mcp, choose opensuitemcp, and authenticate.",
-          "Approve the agent in the browser window that opens.",
+          "Approve the app in the browser window that opens.",
         ],
         snippet: {
           language: "bash",
@@ -308,7 +308,7 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
         heading: "Add it to mcp.json",
         steps: [
           "Put this in .cursor/mcp.json for one project, or ~/.cursor/mcp.json for all of them.",
-          "Cursor opens the sign-in. Approve the agent you just created.",
+          "Cursor opens the sign-in. Approve the app you just created.",
         ],
         snippet: {
           language: "json",
@@ -350,7 +350,7 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
         heading: "Add it to .vscode/mcp.json",
         steps: [
           "Put this in .vscode/mcp.json, or run MCP: Open User Configuration for every workspace.",
-          "Start the server from the editor, then approve the agent when prompted.",
+          "Start the server from the editor, then approve the app when prompted.",
         ],
         snippet: {
           language: "json",
@@ -394,7 +394,7 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
         heading: "Add it to settings.json",
         steps: [
           "Put this in ~/.gemini/settings.json.",
-          "Run /mcp auth opensuitemcp, then approve the agent.",
+          "Run /mcp auth opensuitemcp, then approve the app.",
         ],
         snippet: {
           language: "json",
@@ -444,7 +444,7 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
         heading: "Add it as a connector",
         steps: [
           "Add a custom connector and paste the server URL below.",
-          "Approve the agent when prompted.",
+          "Approve the app when prompted.",
         ],
         snippet: {
           language: "text",

@@ -18,9 +18,9 @@ _Main chat UI._
 
 ## What’s in 5.3
 
-- **Agent access** — an external AI agent signs in with your install's URL, or is handed a key, and works in your NetSuite workspace as you, with your permissions and your tool policy
+- **Agent apps** — an external AI signs in with your install's URL, or is handed a bearer token, and works in your NetSuite workspace as you, with your permissions and your tool policy
 - **Agent-readable skills and personas** — an agent can list and read the instruction packs and specialist playbooks this workspace has enabled, and switch the active NetSuite account
-- **Org control** — **Admin → Agent access** turns it on for an organization and can narrow it to named members
+- **Org control** — **Admin → Agent apps** turns it on for an organization and can narrow it to named members
 
 ## What’s in 5.2
 
@@ -99,16 +99,16 @@ OpenSuiteMCP can also be an **MCP server**, so an external AI agent works
 inside a user's NetSuite workspace as that user — their connected account,
 their permissions, their tool policy.
 
-Create the agent under **App Portal → Agent access → New agent**, choosing how
-it connects:
+Create the app under **App Portal → Agent apps → New app**, choosing how it
+connects:
 
 - **OAuth 2.1** — every install is its own OAuth 2.1 authorization server, so the
-  client needs nothing but the URL. It sends you here to approve the agent, then
+  client needs nothing but the URL. It sends you here to approve the app, then
   refreshes its own token.
-- **Bearer auth** — a secret in a header, for an agent with no person behind it, a
+- **Bearer auth** — a token in a header, for an app with no person behind it, a
   client with no OAuth support, or an install that is not on HTTPS.
 
-Either way the agent reaches exactly what you have enabled in the app — the
+Either way the app reaches exactly what you have enabled in OpenSuiteMCP — the
 credential adds no gate of its own — and both appear in one list you can rename,
 re-role and revoke. The server URL derives from your install's public address,
 so self-hosted, sandbox and hosted installs each have their own and none of them

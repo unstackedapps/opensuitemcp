@@ -1,6 +1,6 @@
 export function isAssistantToolPartType(type: string): boolean {
   return (
-    // A tool an agent ran elsewhere and recorded over Agent access. It belongs
+    // A tool an agent ran elsewhere and recorded over Agent apps. It belongs
     // in the turn's tool deck beside this app's own, not loose in the prose.
     type === "dynamic-tool" ||
     type === "tool-searchNetsuiteDocs" ||

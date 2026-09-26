@@ -721,7 +721,7 @@ export const mcpApiKey = pgTable(
 export type McpApiKey = InferSelectModel<typeof mcpApiKey>;
 
 /**
- * Members allowed to use Agent access when the org narrows it to a list.
+ * Members allowed to create agent apps when the org narrows it to a list.
  * Ignored while the org policy is "all".
  */
 export const userAgentAccess = pgTable(
@@ -757,7 +757,7 @@ export const orgMcpServerPolicy = pgTable(
     /** Members may mint keys and external agents may connect. */
     enabled: boolean("enabled").notNull().default(false),
     /**
-     * "all" lets every member use Agent access once `enabled`; "selected"
+     * "all" lets every member create agent apps once `enabled`; "selected"
      * narrows it to the members listed in UserAgentAccess.
      */
     memberAccess: varchar("memberAccess", { length: 16 })

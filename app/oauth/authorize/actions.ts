@@ -95,7 +95,7 @@ export async function submitConsent(
   if (!chosen) {
     return {
       error:
-        "That agent is no longer waiting to be connected. Reload this page and try again.",
+        "That app is no longer waiting to be connected. Reload this page and try again.",
     };
   }
 

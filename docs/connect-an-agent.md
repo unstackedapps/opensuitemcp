@@ -8,18 +8,18 @@
 Point Claude, Cursor, VS Code, Gemini CLI, ChatGPT or anything else that
 speaks MCP at your NetSuite workspace.
 
-Two steps: **create the agent in the app**, then **point the AI at it**.
+Two steps: **create the app**, then **point your AI at it**.
 
 ---
 
-## 1. Create the agent
+## 1. Create the agent app
 
-Open **App Portal → Agent access**, copy the **Server URL**, then click
-**New agent**:
+Open **App Portal → Agent apps**, copy the **Server URL**, then click
+**New app**:
 
 | Field | What it does |
 | --- | --- |
-| Name | What you will see in the agent list |
+| Name | What you will see in the app list |
 | Persona | The NetSuite specialist it acts as |
 | NetSuite account | Pins it to one account, or follows your active one |
 | Connects by | Bearer auth or OAuth 2.1 — see below |
@@ -66,7 +66,7 @@ Replace `https://your-install.example.com/api/mcp` with your Server URL, and `os
 1. In App Portal → Agent apps, create an app and choose OAuth 2.1. It waits there until you finish below.
 2. In Claude, open Settings → Connectors → Add custom connector.
 3. Paste the server URL below and add the connector.
-4. Claude opens this install. Approve the agent you just created.
+4. Claude opens this install. Approve the app you just created.
 
 `Remote MCP server URL`
 
@@ -96,7 +96,7 @@ Authorization: Bearer osmcp_…
 1. In App Portal → Agent apps, create an app and choose OAuth 2.1. It waits there until you finish below.
 2. Run the command below.
 3. Run /mcp, choose opensuitemcp, and authenticate.
-4. Approve the agent in the browser window that opens.
+4. Approve the app in the browser window that opens.
 
 ```bash
 claude mcp add --transport http opensuitemcp https://your-install.example.com/api/mcp
@@ -118,7 +118,7 @@ claude mcp add --transport http opensuitemcp https://your-install.example.com/ap
 
 1. In App Portal → Agent apps, create an app and choose OAuth 2.1. It waits there until you finish below.
 2. Put this in .cursor/mcp.json for one project, or ~/.cursor/mcp.json for all of them.
-3. Cursor opens the sign-in. Approve the agent you just created.
+3. Cursor opens the sign-in. Approve the app you just created.
 
 `.cursor/mcp.json`
 
@@ -158,7 +158,7 @@ claude mcp add --transport http opensuitemcp https://your-install.example.com/ap
 
 1. In App Portal → Agent apps, create an app and choose OAuth 2.1. It waits there until you finish below.
 2. Put this in .vscode/mcp.json, or run MCP: Open User Configuration for every workspace.
-3. Start the server from the editor, then approve the agent when prompted.
+3. Start the server from the editor, then approve the app when prompted.
 
 `.vscode/mcp.json`
 
@@ -202,7 +202,7 @@ claude mcp add --transport http opensuitemcp https://your-install.example.com/ap
 
 1. In App Portal → Agent apps, create an app and choose OAuth 2.1. It waits there until you finish below.
 2. Put this in ~/.gemini/settings.json.
-3. Run /mcp auth opensuitemcp, then approve the agent.
+3. Run /mcp auth opensuitemcp, then approve the app.
 
 `~/.gemini/settings.json`
 
@@ -245,7 +245,7 @@ claude mcp add --transport http opensuitemcp https://your-install.example.com/ap
 
 1. In App Portal → Agent apps, create an app and choose OAuth 2.1. It waits there until you finish below.
 2. Add a custom connector and paste the server URL below.
-3. Approve the agent when prompted.
+3. Approve the app when prompted.
 
 `MCP server URL`
 
@@ -311,7 +311,7 @@ allowlist than publish.
 
 Sign-in works on every install with no extra configuration — each one is
 its own authorization server. Two things have to be true, and **App Portal
-→ Agent access** warns you when they are not:
+→ Agent apps** warns you when they are not:
 
 1. AUTH_URL is set to the address people actually use. Unset, it is guessed from forwarded headers — often correctly, which is worse.
 2. The install is served over HTTPS. OAuth 2.1 permits plain HTTP only on loopback; bearer tokens have no such requirement.
@@ -322,21 +322,21 @@ its own authorization server. Two things have to be true, and **App Portal
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| "Nothing is waiting to connect" | No agent is set to OAuth 2.1 | Create one, then retry from the AI |
+| "Nothing is waiting to connect" | No app is set to OAuth 2.1 | Create one, then retry from the AI |
 | OAuth 2.1 unavailable in the app | The install is not on HTTPS, or AUTH_URL is unset | Set AUTH_URL to the public URL. Use a bearer token meanwhile |
 | The client loops back to sign-in | AUTH_URL disagrees with the URL the client used | Make them match exactly, including scheme and port |
 | 401 on every call | The credential was revoked, or Agent apps are off | Check Agent apps → Agents, or ask an administrator |
 | Connects but lists no tools (Gemini CLI) | url was used instead of httpUrl | Change the key to httpUrl |
-| invalid_grant on refresh | The token was already used, or the agent was revoked | Sign in again |
+| invalid_grant on refresh | The token was already used, or the app was revoked | Sign in again |
 | 400 with -32020 | Headers disagree with the body on 2026-07-28 | Send MCP-Protocol-Version, Mcp-Method and Mcp-Name consistently |
 
 ---
 
-## Managing agents
+## Managing agent apps
 
-**App Portal → Agent access → Agents** lists every agent, whichever way it
-connects. Rename, change persona, replace a key, or revoke. Revoking is
-immediate: the next call gets `401`.
+**App Portal → Agent apps** lists every app, whichever way it connects.
+Open one to rename it, change its persona, copy or replace its credential,
+or revoke it. Revoking is immediate: the next call gets `401`.
 
 Self-hosting details and the protocol reference are in
 [MCP server](mcp-server.md).
