@@ -34,9 +34,9 @@ The two connection methods:
 | Credential lifetime | The client refreshes it | Until you replace it |
 | After creating it | Marked Awaiting connection until a client signs in | Active immediately; the key is shown once |
 
-Pick Sign-in when a person is setting this up and the install is on HTTPS.
+A person is setting this up, and the install is on HTTPS.
 
-Pick Agent key for a scheduled job, CI, a client with no OAuth support, or an install that is not on HTTPS.
+A scheduled job, CI, a client with no OAuth support, or no HTTPS.
 
 ---
 
@@ -59,19 +59,20 @@ Replace `https://your-install.example.com/api/mcp` with your Server URL, and `os
 https://your-install.example.com/api/mcp
 ```
 
-⚠️ On a Team or Enterprise plan only an Owner can add a custom connector. If the dialog asks for an OAuth client ID and secret under Advanced settings, create one under the OAuth clients tab first — otherwise leave those blank.
+⚠️ Leave Advanced settings blank unless the dialog demands a client ID and secret — then make one under OAuth clients. On Team or Enterprise, only an Owner can add a connector.
 
 **Use an agent key instead**
 
 1. In App Portal → Agent access, create an agent and choose Agent key. The key is copied to your clipboard once.
-2. Claude's hosted apps run on Anthropic's servers, so they can only reach an install that is published on the internet.
-3. Request header authentication is in beta and limited to some organizations. Where it is unavailable, sign-in is the only route.
+2. Add the key as a request header on the connector.
 
 `Request header`
 
 ```text
 Authorization: Bearer osmcp_…
 ```
+
+⚠️ Request-header auth is in beta and limited to some organizations. Where it is unavailable, sign-in is the only route.
 
 ### Claude Code
 

@@ -1,10 +1,14 @@
 "use client";
 
-import { AlertTriangle, CheckCircle2, Copy, Info } from "lucide-react";
+import { ChevronDown, Copy, Info } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "@/components/toast";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -13,20 +17,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   buildConnectClients,
   type ConnectClientId,
   type ConnectMethod,
-  PREREQUISITE,
+  VENDOR_REACHABILITY_NOTE,
 } from "@/lib/mcp/connect-clients";
 import type { ConnectPreflight } from "@/lib/mcp/server/oauth/preflight";
 
 /**
  * "I have this AI, how do I connect it?"
  *
- * Every client wants the same server URL in a different shape, and getting the
- * shape wrong fails quietly. Rather than describing the differences, this hands
- * over the exact thing to paste.
+ * Short on purpose. Whoever is reading this is standing in the panel that
+ * creates agents, so the shared first step — go to Agent access and make one —
+ * is the one instruction they demonstrably do not need; the public guide keeps
+ * it because its reader is somewhere else. One method is shown at a time, and
+ * the caveats sit behind a disclosure, because a caveat rendered as step 2 is
+ * how this grew to a screenful for what is really: pick a client, copy this.
  */
 export function AgentConnectGuide({
   serverUrl,
@@ -38,103 +46,69 @@ export function AgentConnectGuide({
   const clients = useMemo(() => buildConnectClients(serverUrl), [serverUrl]);
   const [selected, setSelected] = useState<ConnectClientId>("claude");
   const client = clients.find((entry) => entry.id === selected) ?? clients[0];
+  // An install without HTTPS or without AUTH_URL cannot complete a sign-in, so
+  // it is not offered — the panel header already says why.
   const signInAvailable = preflight.status === "ready";
+  const [method, setMethod] = useState<"signIn" | "agentKey">("signIn");
+  const canSignIn = signInAvailable && Boolean(client.signIn);
+  const showing = canSignIn ? method : "agentKey";
+
+  const active =
+    showing === "signIn" && client.signIn ? client.signIn : client.agentKey;
 
   return (
-    <div className="space-y-5">
-      <PreflightBanner preflight={preflight} />
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="min-w-48 flex-1 space-y-1.5">
+          <Label className="text-xs" htmlFor="connect-client">
+            Which AI?
+          </Label>
+          <Select
+            onValueChange={(value) => setSelected(value as ConnectClientId)}
+            value={selected}
+          >
+            <SelectTrigger className="w-full text-sm" id="connect-client">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {clients.map((entry) => (
+                <SelectItem key={entry.id} value={entry.id}>
+                  {entry.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-      <div className="space-y-1.5">
-        <Label className="text-xs" htmlFor="connect-client">
-          Which AI are you connecting?
-        </Label>
-        <Select
-          onValueChange={(value) => setSelected(value as ConnectClientId)}
-          value={selected}
+        <Tabs
+          onValueChange={(value) => setMethod(value as "signIn" | "agentKey")}
+          value={showing}
         >
-          <SelectTrigger className="w-full text-sm" id="connect-client">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {clients.map((entry) => (
-              <SelectItem key={entry.id} value={entry.id}>
-                {entry.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          <TabsList>
+            <TabsTrigger disabled={!canSignIn} value="signIn">
+              Sign-in
+            </TabsTrigger>
+            <TabsTrigger value="agentKey">Agent key</TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
 
+      <Steps method={active} />
+
       {client.runsOn === "vendor" ? (
-        <p className="flex gap-2 rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-muted-foreground text-xs leading-relaxed">
+        <p className="flex gap-2 text-muted-foreground text-xs leading-relaxed">
           <Info aria-hidden className="mt-0.5 size-3.5 shrink-0" />
-          <span>
-            {client.label} runs on its vendor's servers, so it needs this
-            install to be reachable on the internet.
-          </span>
+          {VENDOR_REACHABILITY_NOTE}
         </p>
       ) : null}
-
-      {client.signIn ? (
-        <MethodBlock
-          badge={signInAvailable ? "Recommended" : "Unavailable here"}
-          dimmed={!signInAvailable}
-          method={client.signIn}
-          prerequisite={PREREQUISITE.signIn}
-        />
-      ) : null}
-
-      <MethodBlock
-        badge={signInAvailable ? "Or use a key" : "Use this"}
-        method={client.agentKey}
-        prerequisite={PREREQUISITE.agentKey}
-      />
     </div>
   );
 }
 
-function PreflightBanner({ preflight }: { preflight: ConnectPreflight }) {
-  const ready = preflight.status === "ready";
-  const Icon = ready ? CheckCircle2 : AlertTriangle;
-
+function Steps({ method }: { method: ConnectMethod }) {
   return (
-    <p
-      className={
-        ready
-          ? "flex gap-2 rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-muted-foreground text-xs leading-relaxed"
-          : "flex gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-amber-700 text-xs leading-relaxed dark:text-amber-400"
-      }
-    >
-      <Icon aria-hidden className="mt-0.5 size-3.5 shrink-0" />
-      <span>
-        <span className="font-medium">{preflight.title}.</span>{" "}
-        {preflight.detail}
-      </span>
-    </p>
-  );
-}
-
-function MethodBlock({
-  method,
-  badge,
-  dimmed,
-  prerequisite,
-}: {
-  method: ConnectMethod;
-  badge: string;
-  dimmed?: boolean;
-  /** Rendered as step one; the agent exists before any client is touched. */
-  prerequisite: string;
-}) {
-  return (
-    <section className={dimmed ? "space-y-2 opacity-60" : "space-y-2"}>
-      <div className="flex items-center gap-2">
-        <Label className="text-xs">{method.heading}</Label>
-        <Badge variant="secondary">{badge}</Badge>
-      </div>
-
+    <div className="space-y-2">
       <ol className="ml-4 list-decimal space-y-1 text-muted-foreground text-xs leading-relaxed">
-        <li className="text-foreground/80">{prerequisite}</li>
         {method.steps.map((step) => (
           <li key={step}>{step}</li>
         ))}
@@ -143,11 +117,17 @@ function MethodBlock({
       {method.snippet ? <Snippet snippet={method.snippet} /> : null}
 
       {method.note ? (
-        <p className="text-muted-foreground text-xs leading-relaxed">
-          {method.note}
-        </p>
+        <Collapsible>
+          <CollapsibleTrigger className="group flex items-center gap-1 text-muted-foreground text-xs hover:text-foreground">
+            <ChevronDown className="size-3 transition-transform group-data-[state=open]:rotate-180" />
+            Good to know
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-1.5 text-muted-foreground text-xs leading-relaxed">
+            {method.note}
+          </CollapsibleContent>
+        </Collapsible>
       ) : null}
-    </section>
+    </div>
   );
 }
 

@@ -50,7 +50,7 @@ export function evaluateConnectPreflight(params: {
     return {
       status: "insecure",
       title: "Sign-in connect needs HTTPS",
-      detail: `This install is served over ${parsed.protocol}//. Agents can still connect with an agent key, which works over any transport.`,
+      detail: `Served over ${parsed.protocol}//. Use an agent key, which works over any transport.`,
     };
   }
 
@@ -58,13 +58,13 @@ export function evaluateConnectPreflight(params: {
     return {
       status: "configure",
       title: "Set AUTH_URL before connecting an agent",
-      detail: `This install's address is being guessed from request headers, currently ${params.origin}. A client checks that address against the one it asked for and refuses to sign in when they differ. Set AUTH_URL to pin it.`,
+      detail: `The address is guessed from request headers, currently ${params.origin}. A client refuses to sign in when it disagrees with the one it asked for. Set AUTH_URL to pin it.`,
     };
   }
 
   return {
     status: "ready",
     title: "Sign-in connect is ready",
-    detail: `Agents can sign in at ${params.origin}, or be handed an agent key.`,
+    detail: `Agents can sign in at ${params.origin}.`,
   };
 }
