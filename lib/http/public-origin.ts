@@ -33,6 +33,20 @@ export function getPublicAppOrigin(request?: Request): string {
   return "http://localhost:3000";
 }
 
+/**
+ * Is the public origin pinned by configuration, or guessed per request?
+ *
+ * A guess is usually right, which is exactly why it is worth surfacing: OAuth
+ * discovery documents state their own issuer and a client refuses one whose
+ * issuer disagrees with the address it asked for, so a wrong guess fails with
+ * nothing in the logs to explain it.
+ */
+export function isPublicOriginConfigured(): boolean {
+  return Boolean(
+    process.env.AUTH_URL?.trim() || process.env.NEXTAUTH_URL?.trim(),
+  );
+}
+
 /** Same-origin relative path only. Rejects protocol-relative values like `//evil.com`. */
 export function isSafeAppPath(
   value: string | null | undefined,

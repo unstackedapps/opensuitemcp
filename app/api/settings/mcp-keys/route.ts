@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
 import {
+  getPublicAppOrigin,
+  isPublicOriginConfigured,
+} from "@/lib/http/public-origin";
+import {
   isPersonaAvailableToUser,
   listAgentPersonaOptions,
 } from "@/lib/mcp/server/agent-personas";
@@ -11,6 +15,11 @@ import {
   createMcpApiKey,
   listMcpApiKeys,
 } from "@/lib/mcp/server/keys";
+import {
+  countActiveOAuthGrants,
+  listOAuthGrants,
+} from "@/lib/mcp/server/oauth/grants";
+import { evaluateConnectPreflight } from "@/lib/mcp/server/oauth/preflight";
 import { resolveMcpPolicyForUser } from "@/lib/mcp/server/policy";
 import { writeOrgAuditLog } from "@/lib/org/audit";
 
@@ -32,6 +41,9 @@ export async function GET(request: Request) {
     session.user.id,
   );
   const keys = await listMcpApiKeys(session.user.id);
+  // Agents that signed in and agents that were handed a key are one list to
+  // whoever owns them, so they are fetched together and rendered together.
+  const grants = await listOAuthGrants(session.user.id);
   const personas = await listAgentPersonaOptions({
     id: session.user.id,
     orgId: session.user.orgId,
@@ -39,8 +51,16 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     serverUrl: getMcpServerUrl(request),
+    connect: {
+      origin: getPublicAppOrigin(request),
+      preflight: evaluateConnectPreflight({
+        origin: getPublicAppOrigin(request),
+        originIsConfigured: isPublicOriginConfigured(),
+      }),
+    },
     policy,
     keys,
+    grants,
     personas: personas.map((persona) => ({
       id: persona.id,
       name: persona.name,
@@ -83,11 +103,15 @@ export async function POST(request: Request) {
   try {
     const parsed = createSchema.parse(await request.json());
 
-    const activeCount = await countActiveMcpApiKeys(session.user.id);
+    const [keyCount, grantCount] = await Promise.all([
+      countActiveMcpApiKeys(session.user.id),
+      countActiveOAuthGrants(session.user.id),
+    ]);
+    const activeCount = keyCount + grantCount;
     if (activeCount >= policy.maxKeysPerUser) {
       return NextResponse.json(
         {
-          error: `You already have ${activeCount} active keys. Revoke one before creating another.`,
+          error: `You already have ${activeCount} active agents. Revoke one before creating another.`,
         },
         { status: 409 },
       );

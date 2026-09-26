@@ -1,20 +1,32 @@
 "use client";
 
-import { Copy, KeyRound, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
+import {
+  AlertTriangle,
+  Copy,
+  KeyRound,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Trash2,
+} from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import useSWR from "swr";
+import { AgentConnectGuide } from "@/components/agent-connect-guide";
 import {
   AgentKeyDialog,
   type AgentKeyDraft,
   type AgentPersonaOption,
 } from "@/components/agent-key-dialog";
 import { ConfirmDestructiveDialog } from "@/components/confirm-destructive-dialog";
+import { OAuthClientsPanel } from "@/components/oauth-clients-panel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AVA_PERSONA_ID } from "@/lib/ai/personas/ids";
+import type { ConnectPreflight } from "@/lib/mcp/server/oauth/preflight";
 import { fetcher } from "@/lib/utils";
 import { toast } from "./toast";
 
@@ -32,8 +44,31 @@ type McpKeySummary = {
   status: "active" | "revoked" | "expired";
 };
 
+/**
+ * An agent that signed in rather than being handed a key.
+ *
+ * Deliberately shaped like McpKeySummary: the two are the same thing to whoever
+ * owns them, and the list renders them together.
+ */
+type McpGrantSummary = {
+  id: string;
+  name: string;
+  clientName: string;
+  clientUri: string | null;
+  personaId: string | null;
+  netsuiteAccountId: string | null;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+  status: "active" | "revoked";
+};
+
 type McpKeysResponse = {
   serverUrl: string;
+  connect: {
+    origin: string;
+    preflight: ConnectPreflight;
+  };
   policy: {
     enabled: boolean;
     memberAccess: "all" | "selected";
@@ -42,8 +77,31 @@ type McpKeysResponse = {
     managedByOrg: boolean;
   };
   keys: McpKeySummary[];
+  grants: McpGrantSummary[];
   personas: AgentPersonaOption[];
 };
+
+/**
+ * One row in the agent list, whichever credential is behind it.
+ *
+ * A key can be copied and replaced; a signed-in agent cannot, because its
+ * client holds a token it refreshes itself. Everything else — the name, the
+ * persona, the last use, revoking it — is identical, which is why one list is
+ * the honest presentation.
+ */
+type AgentRow = {
+  id: string;
+  kind: "key" | "grant";
+  name: string;
+  credential: string;
+  personaId: string | null;
+  lastUsedAt: string | null;
+  rotatedAt: string | null;
+  status: "active" | "revoked" | "expired";
+  copyable: boolean;
+};
+
+const GRANTS_ENDPOINT = "/api/settings/agent-grants";
 
 const ENDPOINT = "/api/settings/mcp-keys";
 
@@ -95,13 +153,9 @@ export function McpAccessPanel({
   );
   const [saving, setSaving] = useState(false);
   const [creatingOpen, setCreatingOpen] = useState(false);
-  const [editing, setEditing] = useState<McpKeySummary | null>(null);
-  const [pendingRotate, setPendingRotate] = useState<McpKeySummary | null>(
-    null,
-  );
-  const [pendingRevoke, setPendingRevoke] = useState<McpKeySummary | null>(
-    null,
-  );
+  const [editing, setEditing] = useState<AgentRow | null>(null);
+  const [pendingRotate, setPendingRotate] = useState<AgentRow | null>(null);
+  const [pendingRevoke, setPendingRevoke] = useState<AgentRow | null>(null);
   const [showArchived, setShowArchived] = useState(false);
 
   const copy = useCallback(async (value: string, label: string) => {
@@ -114,7 +168,7 @@ export function McpAccessPanel({
   }, []);
 
   const copyKey = useCallback(
-    async (key: McpKeySummary) => {
+    async (key: AgentRow) => {
       if (!key.copyable) {
         toast({
           type: "error",
@@ -176,11 +230,12 @@ export function McpAccessPanel({
     [copy, mutate, onChanged],
   );
 
-  const saveKey = useCallback(
-    async (keyId: string, draft: AgentKeyDraft) => {
+  const saveAgent = useCallback(
+    async (row: AgentRow, draft: AgentKeyDraft) => {
       setSaving(true);
       try {
-        const response = await fetch(`${ENDPOINT}/${keyId}`, {
+        const base = row.kind === "grant" ? GRANTS_ENDPOINT : ENDPOINT;
+        const response = await fetch(`${base}/${row.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(draft),
@@ -207,7 +262,7 @@ export function McpAccessPanel({
   );
 
   const rotateKey = useCallback(
-    async (key: McpKeySummary) => {
+    async (key: AgentRow) => {
       try {
         const response = await fetch(`${ENDPOINT}/${key.id}/rotate`, {
           method: "POST",
@@ -233,15 +288,14 @@ export function McpAccessPanel({
     [copy, mutate],
   );
 
-  const revokeKey = useCallback(
-    async (key: McpKeySummary) => {
-      const response = await fetch(`${ENDPOINT}/${key.id}`, {
-        method: "DELETE",
-      });
+  const revokeAgent = useCallback(
+    async (row: AgentRow) => {
+      const base = row.kind === "grant" ? GRANTS_ENDPOINT : ENDPOINT;
+      const response = await fetch(`${base}/${row.id}`, { method: "DELETE" });
       if (response.ok) {
         await mutate();
         await onChanged?.();
-        toast({ type: "success", description: `${key.name} archived.` });
+        toast({ type: "success", description: `${row.name} archived.` });
       } else {
         toast({ type: "error", description: "Could not archive the agent." });
       }
@@ -267,12 +321,40 @@ export function McpAccessPanel({
   }
 
   const personas = data.personas ?? [];
-  const activeKeys = data.keys.filter((key) => key.status === "active");
+
+  // One list. A key and a sign-in are different handshakes for the same thing,
+  // and the person managing them should not have to hold that distinction.
+  const rows: AgentRow[] = [
+    ...data.keys.map((key) => ({
+      id: key.id,
+      kind: "key" as const,
+      name: key.name,
+      credential: key.maskedToken,
+      personaId: key.personaId,
+      lastUsedAt: key.lastUsedAt,
+      rotatedAt: key.rotatedAt,
+      status: key.status,
+      copyable: key.copyable,
+    })),
+    ...(data.grants ?? []).map((grant) => ({
+      id: grant.id,
+      kind: "grant" as const,
+      name: grant.name,
+      credential: `Signed in · ${grant.clientName}`,
+      personaId: grant.personaId,
+      lastUsedAt: grant.lastUsedAt,
+      rotatedAt: null,
+      status: grant.status,
+      copyable: false,
+    })),
+  ];
+
+  const activeRows = rows.filter((row) => row.status === "active");
   // Revoked and expired agents are kept — the threads they opened and the work
   // they did still refer to them — but an archive is not a working list.
-  const archivedKeys = data.keys.filter((key) => key.status !== "active");
-  const visibleKeys = showArchived ? data.keys : activeKeys;
-  const atLimit = activeKeys.length >= data.policy.maxKeysPerUser;
+  const archivedRows = rows.filter((row) => row.status !== "active");
+  const visibleRows = showArchived ? rows : activeRows;
+  const atLimit = activeRows.length >= data.policy.maxKeysPerUser;
   const blocked = !(data.policy.enabled && data.policy.memberAllowed);
 
   return (
@@ -288,7 +370,7 @@ export function McpAccessPanel({
         </p>
       </div>
 
-      <div className="space-y-6 p-4 sm:p-5">
+      <div className="space-y-5 p-4 sm:p-5">
         <section className="space-y-2">
           <Label className="text-xs">Server URL</Label>
           <div className="flex items-center gap-2">
@@ -318,132 +400,179 @@ export function McpAccessPanel({
           </p>
         ) : null}
 
-        <section className="space-y-2">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <Label className="text-xs">Your agents</Label>
-            <div className="flex items-center gap-3">
-              {archivedKeys.length > 0 ? (
-                <div className="flex items-center gap-2">
-                  <Label
-                    className="text-muted-foreground text-xs"
-                    htmlFor="show-archived-agents"
-                  >
-                    Show archived
-                  </Label>
-                  <Switch
-                    checked={showArchived}
-                    id="show-archived-agents"
-                    onCheckedChange={setShowArchived}
-                  />
-                </div>
-              ) : null}
-              <Button
-                disabled={blocked || atLimit}
-                onClick={() => setCreatingOpen(true)}
-                size="sm"
-                type="button"
-              >
-                <Plus className="size-3.5" />
-                New agent
-              </Button>
-            </div>
-          </div>
+        {/*
+          Surfaced above the tabs, and only when something is wrong. A
+          misconfigured address breaks sign-in for every client at once and
+          explains itself nowhere else — but a healthy install does not need
+          telling, and the full reading lives under How to connect.
+        */}
+        {data.connect.preflight.status === "ready" ? null : (
+          <p className="flex gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-amber-700 text-xs leading-relaxed dark:text-amber-400">
+            <AlertTriangle aria-hidden className="mt-0.5 size-3.5 shrink-0" />
+            <span>
+              <span className="font-medium">
+                {data.connect.preflight.title}.
+              </span>{" "}
+              {data.connect.preflight.detail}
+            </span>
+          </p>
+        )}
 
-          {atLimit ? (
-            <p className="text-muted-foreground text-xs">
-              You have reached the limit of {data.policy.maxKeysPerUser} active
-              agents. Revoke one to create another.
-            </p>
-          ) : null}
+        <Tabs defaultValue="agents">
+          <TabsList>
+            <TabsTrigger value="agents">Agents</TabsTrigger>
+            <TabsTrigger value="connect">How to connect</TabsTrigger>
+            <TabsTrigger value="clients">OAuth clients</TabsTrigger>
+          </TabsList>
 
-          {visibleKeys.length === 0 ? (
-            <p className="text-muted-foreground text-xs">
-              {activeKeys.length === 0
-                ? "No agents yet."
-                : "No agents to show."}
-            </p>
-          ) : (
-            <ul className="space-y-2">
-              {visibleKeys.map((key) => (
-                <li
-                  className="flex items-start justify-between gap-3 rounded-md border border-border/60 p-3"
-                  key={key.id}
-                >
-                  <div className="min-w-0 space-y-1">
-                    <p className="truncate font-medium text-sm">{key.name}</p>
-                    <p className="truncate font-mono text-muted-foreground text-xs">
-                      {key.maskedToken}
-                    </p>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {key.status === "active" ? null : (
-                        <Badge variant="outline">
-                          {key.status === "expired" ? "Expired" : "Archived"}
-                        </Badge>
-                      )}
-                      <Badge variant="secondary">
-                        {personaLabel(key.personaId, personas)}
-                      </Badge>
-                      <span className="text-muted-foreground text-xs">
-                        {key.lastUsedAt
-                          ? `Last used ${formatDate(key.lastUsedAt)}`
-                          : "Never used"}
-                      </span>
-                      {key.rotatedAt ? (
-                        <span className="text-muted-foreground text-xs">
-                          {`Key replaced ${formatDate(key.rotatedAt)}`}
-                        </span>
-                      ) : null}
-                    </div>
-                  </div>
-                  {key.status === "active" ? (
-                    <div className="flex shrink-0 items-center gap-1">
-                      <Button
-                        onClick={() => copyKey(key)}
-                        size="sm"
-                        type="button"
-                        variant="ghost"
+          <TabsContent className="mt-4" value="agents">
+            <section className="space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <Label className="text-xs">Your agents</Label>
+                <div className="flex items-center gap-3">
+                  {archivedRows.length > 0 ? (
+                    <div className="flex items-center gap-2">
+                      <Label
+                        className="text-muted-foreground text-xs"
+                        htmlFor="show-archived-agents"
                       >
-                        <Copy className="size-3.5" />
-                        <span className="sr-only">
-                          Copy the key for {key.name}
-                        </span>
-                      </Button>
-                      <Button
-                        onClick={() => setEditing(key)}
-                        size="sm"
-                        type="button"
-                        variant="ghost"
-                      >
-                        <Pencil className="size-3.5" />
-                        <span className="sr-only">Edit {key.name}</span>
-                      </Button>
-                      <Button
-                        onClick={() => setPendingRotate(key)}
-                        size="sm"
-                        type="button"
-                        variant="ghost"
-                      >
-                        <RefreshCw className="size-3.5" />
-                        <span className="sr-only">
-                          Replace the key for {key.name}
-                        </span>
-                      </Button>
-                      <Button
-                        onClick={() => setPendingRevoke(key)}
-                        size="sm"
-                        type="button"
-                        variant="ghost"
-                      >
-                        <Trash2 className="size-3.5" />
-                        <span className="sr-only">Revoke {key.name}</span>
-                      </Button>
+                        Show archived
+                      </Label>
+                      <Switch
+                        checked={showArchived}
+                        id="show-archived-agents"
+                        onCheckedChange={setShowArchived}
+                      />
                     </div>
                   ) : null}
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+                  <Button
+                    disabled={blocked || atLimit}
+                    onClick={() => setCreatingOpen(true)}
+                    size="sm"
+                    type="button"
+                  >
+                    <Plus className="size-3.5" />
+                    New agent
+                  </Button>
+                </div>
+              </div>
+
+              {atLimit ? (
+                <p className="text-muted-foreground text-xs">
+                  You have reached the limit of {data.policy.maxKeysPerUser}{" "}
+                  active agents. Revoke one to create another.
+                </p>
+              ) : null}
+
+              {visibleRows.length === 0 ? (
+                <p className="text-muted-foreground text-xs">
+                  {activeRows.length === 0
+                    ? "No agents yet. Create a key, or connect one from the next tab."
+                    : "No agents to show."}
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {visibleRows.map((row) => (
+                    <li
+                      className="flex items-start justify-between gap-3 rounded-md border border-border/60 p-3"
+                      key={`${row.kind}-${row.id}`}
+                    >
+                      <div className="min-w-0 space-y-1">
+                        <p className="truncate font-medium text-sm">
+                          {row.name}
+                        </p>
+                        <p className="truncate font-mono text-muted-foreground text-xs">
+                          {row.credential}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {row.status === "active" ? null : (
+                            <Badge variant="outline">
+                              {row.status === "expired"
+                                ? "Expired"
+                                : "Archived"}
+                            </Badge>
+                          )}
+                          <Badge variant="secondary">
+                            {personaLabel(row.personaId, personas)}
+                          </Badge>
+                          <span className="text-muted-foreground text-xs">
+                            {row.lastUsedAt
+                              ? `Last used ${formatDate(row.lastUsedAt)}`
+                              : "Never used"}
+                          </span>
+                          {row.rotatedAt ? (
+                            <span className="text-muted-foreground text-xs">
+                              {`Key replaced ${formatDate(row.rotatedAt)}`}
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                      {row.status === "active" ? (
+                        <div className="flex shrink-0 items-center gap-1">
+                          {row.kind === "key" ? (
+                            <Button
+                              onClick={() => copyKey(row)}
+                              size="sm"
+                              type="button"
+                              variant="ghost"
+                            >
+                              <Copy className="size-3.5" />
+                              <span className="sr-only">
+                                Copy the key for {row.name}
+                              </span>
+                            </Button>
+                          ) : null}
+                          <Button
+                            onClick={() => setEditing(row)}
+                            size="sm"
+                            type="button"
+                            variant="ghost"
+                          >
+                            <Pencil className="size-3.5" />
+                            <span className="sr-only">Edit {row.name}</span>
+                          </Button>
+                          {row.kind === "key" ? (
+                            <Button
+                              onClick={() => setPendingRotate(row)}
+                              size="sm"
+                              type="button"
+                              variant="ghost"
+                            >
+                              <RefreshCw className="size-3.5" />
+                              <span className="sr-only">
+                                Replace the key for {row.name}
+                              </span>
+                            </Button>
+                          ) : null}
+                          <Button
+                            onClick={() => setPendingRevoke(row)}
+                            size="sm"
+                            type="button"
+                            variant="ghost"
+                          >
+                            <Trash2 className="size-3.5" />
+                            <span className="sr-only">Revoke {row.name}</span>
+                          </Button>
+                        </div>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </TabsContent>
+
+          <TabsContent className="mt-4" value="connect">
+            <AgentConnectGuide
+              preflight={data.connect.preflight}
+              serverUrl={data.serverUrl}
+            />
+          </TabsContent>
+
+          <TabsContent className="mt-4" value="clients">
+            <OAuthClientsPanel active={active} />
+          </TabsContent>
+        </Tabs>
       </div>
 
       <AgentKeyDialog
@@ -465,7 +594,7 @@ export function McpAccessPanel({
         }}
         onSubmit={(draft) => {
           if (editing) {
-            void saveKey(editing.id, draft);
+            void saveAgent(editing, draft);
           }
         }}
         open={Boolean(editing)}
@@ -477,12 +606,14 @@ export function McpAccessPanel({
         confirmLabel="Archive agent"
         description={
           pendingRevoke
-            ? `${pendingRevoke.name} stops working immediately and its key can never be used again. It moves to your archive, where the threads it opened still name it. This cannot be undone.`
+            ? pendingRevoke.kind === "grant"
+              ? `${pendingRevoke.name} stops working immediately and its tokens are revoked. It moves to your archive, where the threads it opened still name it. Connecting it again means signing in again. This cannot be undone.`
+              : `${pendingRevoke.name} stops working immediately and its key can never be used again. It moves to your archive, where the threads it opened still name it. This cannot be undone.`
             : ""
         }
         onConfirm={() => {
           if (pendingRevoke) {
-            void revokeKey(pendingRevoke);
+            void revokeAgent(pendingRevoke);
           }
         }}
         onOpenChange={(open) => {

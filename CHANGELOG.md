@@ -5,6 +5,22 @@ All notable changes to OpenSuiteMCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.5.0] - 2026-09-26
+
+### ✨ Added
+
+- **An agent signs in instead of being handed a key.** Every install is now its own OAuth 2.1 authorization server, at its own address — self-hosted, sandbox and cloud alike, with nothing to register anywhere and no dependency on any of the others. A person pastes one URL into Claude, Claude Code, Cursor, VS Code, Gemini CLI or ChatGPT, and the client finds the rest: the `401` names the resource metadata, the metadata names the authorization server, and the person approves the agent on a consent screen here. The discovery half of this shipped already and had nothing behind it; `authorization_servers` was the missing field, and without it every client fell back to asking its user to go and find a token
+- **The consent screen asks what minting a key asks.** A name, an optional NetSuite account to pin it to, and the persona it acts as — so an agent that signed in and an agent that was handed a key are the same thing afterwards, in one list, with one revoke button. Access itself stays all-or-nothing: what an agent reaches is the app's tool policy, re-read on every call, and a second gate that could disagree with it would be worse than none. One scope, `mcp`, meaning "act as me over MCP". The screen names the host it will send the browser back to, and warns when an agent is identified only by a port on your own machine
+- **Agent access tells you how to connect, per client.** They all speak the same protocol and every one of them asks for it differently: a URL in a dialog, a CLI flag, `mcpServers`, `servers`, `url`, `httpUrl`. The differences are not interesting but they are load-bearing — a server pasted under Gemini CLI's `url` means SSE and simply never connects — so **Agent access → How to connect** hands over the exact thing to paste. It also says, before anyone spends twenty minutes on it, whether sign-in can work on this install at all: it needs `AUTH_URL` set and HTTPS, and an agent key needs neither
+- **Three ways for a client to identify itself, because clients are mid-migration.** Client ID Metadata Documents, which revision `2026-07-28` prefers and Claude Code uses; dynamic registration, which that revision deprecates and several shipping clients still do; and a client created by hand under **Agent access → OAuth clients**, for a connector that asks for an ID and secret up front. PKCE with `S256` throughout. A loopback redirect matches without its port, which RFC 8252 requires and a native client cannot work without
+- **Tokens that revoking actually stops.** Access tokens are opaque and hashed rather than signed, so revoking an agent takes effect on its next call rather than whenever a JWT would have expired — the property a key already had. Refresh tokens rotate on every use, and presenting one twice revokes every live token on that authorization rather than serving a replay; the authorization survives, so the client simply signs in again
+
+### 🐛 Fixed
+
+- **The protected resource metadata stopped advertising scopes it does not enforce.** It offered `read` and `write`, which have not existed since per-key scopes were dropped, and the documentation still told people a missing NetSuite tool might mean their key was read-only. Both said something that could not be acted on. `scopes_supported` is now the one scope this server issues, and the troubleshooting table says what is actually true: a tool is missing because an administrator disabled it for that account
+
+---
+
 ## [5.4.2] - 2026-09-25
 
 ### ✨ Added

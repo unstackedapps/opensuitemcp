@@ -140,3 +140,38 @@ export async function allowMcpCallBurst(keyId: string): Promise<boolean> {
     return true;
   }
 }
+
+/**
+ * Fixed 60s window burst limit for the OAuth endpoints, keyed per client.
+ *
+ * Registration and token exchange are the only unauthenticated write paths the
+ * authorization server exposes, so they are the ones worth a budget. Disabled
+ * when OAUTH_ATTEMPT_LIMIT_PER_MINUTE is unset/0, or Redis is unavailable
+ * (fail-open so self-host without Redis still works).
+ */
+export async function allowOAuthAttempt(scope: string): Promise<boolean> {
+  const limit = envPositiveInt("OAUTH_ATTEMPT_LIMIT_PER_MINUTE", 0);
+  if (limit <= 0) {
+    return true;
+  }
+
+  const client = await getClient();
+  if (!client) {
+    return true;
+  }
+
+  const key = `ratelimit:oauth:burst:${scope}`;
+  try {
+    const count = await client.incr(key);
+    if (count === 1) {
+      await client.expire(key, 60);
+    }
+    return count <= limit;
+  } catch (error) {
+    console.warn(
+      "[RateLimit] oauth check failed:",
+      error instanceof Error ? error.message : String(error),
+    );
+    return true;
+  }
+}
