@@ -3,7 +3,6 @@ import "server-only";
 import { APP_VERSION } from "@/lib/app-release";
 import { allowMcpCallBurst } from "@/lib/rate-limit";
 import type { McpPrincipal } from "./authenticate";
-import { MCP_SERVER_NAME } from "./config";
 import {
   isHandshakeEraVersion,
   JSON_RPC_INTERNAL_ERROR,
@@ -18,6 +17,7 @@ import {
   type McpProtocolVersion,
   negotiateInitializeVersion,
 } from "./protocol";
+import { buildMcpServerInfo } from "./server-info";
 import { buildToolSurface, findTool, toWireTool } from "./tools";
 import { toolSurfaceDigest } from "./tools/digest";
 import { type McpToolDefinition, toolError } from "./tools/types";
@@ -55,8 +55,14 @@ export async function dispatchMcpRequest(params: {
   request: JsonRpcRequest;
   principal: McpPrincipal;
   protocolVersion: McpProtocolVersion;
+  /**
+   * This install's public address, passed in rather than resolved here: the
+   * identity a client displays is built from it, and only the route holds the
+   * headers it is derived from.
+   */
+  origin: string;
 }): Promise<DispatchOutcome> {
-  const { request, principal, protocolVersion } = params;
+  const { request, principal, protocolVersion, origin } = params;
 
   // Notifications carry no id and expect no body.
   if (request.id === null || request.id === undefined) {
@@ -67,7 +73,7 @@ export async function dispatchMcpRequest(params: {
   try {
     switch (request.method) {
       case "server/discover":
-        return ok(id, discoverResult(protocolVersion));
+        return ok(id, discoverResult(protocolVersion, origin));
 
       case "initialize":
         if (!isHandshakeEraVersion(protocolVersion)) {
@@ -77,6 +83,7 @@ export async function dispatchMcpRequest(params: {
           id,
           initializeResult(
             negotiateInitializeVersion(request, protocolVersion),
+            origin,
           ),
         );
 
@@ -182,26 +189,26 @@ async function callTool(
   return ok(id, { ...result, resultType: "complete" });
 }
 
-function discoverResult(protocolVersion: McpProtocolVersion) {
+function discoverResult(protocolVersion: McpProtocolVersion, origin: string) {
   return {
     supportedVersions: [...MCP_SUPPORTED_PROTOCOL_VERSIONS],
     protocolVersion,
     capabilities: { tools: { listChanged: false } },
-    serverInfo: { name: MCP_SERVER_NAME, version: APP_VERSION },
+    serverInfo: buildMcpServerInfo({ origin, version: APP_VERSION }),
     instructions: SERVER_INSTRUCTIONS,
     resultType: "complete",
     ...PRIVATE_CACHE,
   };
 }
 
-function initializeResult(protocolVersion: McpProtocolVersion) {
+function initializeResult(protocolVersion: McpProtocolVersion, origin: string) {
   return {
     protocolVersion:
       protocolVersion === MCP_LATEST_PROTOCOL_VERSION
         ? "2025-11-25"
         : protocolVersion,
     capabilities: { tools: { listChanged: false } },
-    serverInfo: { name: MCP_SERVER_NAME, version: APP_VERSION },
+    serverInfo: buildMcpServerInfo({ origin, version: APP_VERSION }),
     instructions: SERVER_INSTRUCTIONS,
   };
 }
