@@ -860,18 +860,15 @@ export const oauthAuthorizationCode = pgTable(
     scope: text("scope").notNull(),
     /** RFC 8707 audience this code may be exchanged for. */
     resource: text("resource").notNull(),
-    /** What the person chose on the consent screen. */
-    agentName: varchar("agentName", { length: 128 }).notNull(),
-    personaId: varchar("personaId", { length: 128 }),
-    netsuiteAccountId: varchar("netsuiteAccountId", { length: 64 }),
     expiresAt: timestamp("expiresAt").notNull(),
     consumedAt: timestamp("consumedAt"),
     /**
-     * The grant this code created, recorded on the exchange. OAuth 2.1 asks an
-     * authorization server to revoke what a replayed code already produced, and
-     * without this there is nothing to point at.
+     * The agent this code connects. Chosen before the client ever asked, so it
+     * is known at issue time rather than recorded on the exchange — which also
+     * gives OAuth 2.1's replay rule something to revoke, since a replayed code
+     * already points at the grant it produced.
      */
-    grantId: uuid("grantId"),
+    grantId: uuid("grantId").notNull(),
     createdAt: timestamp("createdAt").notNull(),
   },
   (table) => ({
@@ -889,13 +886,17 @@ export type OAuthAuthorizationCode = InferSelectModel<
 >;
 
 /**
- * A standing consent: this person let this client act as them.
+ * An agent that connects by signing a client in, rather than by carrying a key.
  *
- * The row is the OAuth counterpart of an McpApiKey, and carries the same three
- * choices — a name, an optional persona, an optional pinned NetSuite account —
- * so an agent that signed in is managed beside one that was handed a key, in
- * one list, with one revoke button. Access tokens come and go against it;
- * revoking the grant ends all of them at once.
+ * The row is the OAuth counterpart of an McpApiKey and carries the same three
+ * choices — a name, an optional persona, an optional pinned NetSuite account.
+ * Both are created the same way, in the portal, and differ only in how the
+ * client proves itself; they are listed together and revoked the same way.
+ *
+ * So the row is written before any client has asked for it. `clientId` and
+ * `connectedAt` stay null until one completes the flow, which is what makes
+ * the consent screen a yes-or-no question instead of a second setup form.
+ * Access tokens come and go against the row; revoking it ends all of them.
  */
 export const oauthGrant = pgTable(
   "OAuthGrant",
@@ -905,12 +906,19 @@ export const oauthGrant = pgTable(
       .notNull()
       .references(() => user.id),
     orgId: uuid("orgId").references(() => org.id),
-    clientId: varchar("clientId", { length: 512 }).notNull(),
+    /**
+     * The client that connected, or null while the agent is still waiting for
+     * one. An agent is created in the portal like any other; signing a client
+     * in fills this and `connectedAt` and nothing else.
+     */
+    clientId: varchar("clientId", { length: 512 }),
     name: varchar("name", { length: 128 }).notNull(),
     /** Pins the grant to one NetSuite account; null follows the active one. */
     netsuiteAccountId: varchar("netsuiteAccountId", { length: 64 }),
     personaId: varchar("personaId", { length: 128 }),
     scope: text("scope").notNull(),
+    /** When a client bound itself here; null means awaiting connection. */
+    connectedAt: timestamp("connectedAt"),
     lastUsedAt: timestamp("lastUsedAt"),
     revokedAt: timestamp("revokedAt"),
     createdAt: timestamp("createdAt").notNull(),

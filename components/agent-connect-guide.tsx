@@ -17,6 +17,7 @@ import {
   buildConnectClients,
   type ConnectClientId,
   type ConnectMethod,
+  PREREQUISITE,
 } from "@/lib/mcp/connect-clients";
 import type { ConnectPreflight } from "@/lib/mcp/server/oauth/preflight";
 
@@ -68,10 +69,8 @@ export function AgentConnectGuide({
         <p className="flex gap-2 rounded-md border border-border/60 bg-muted/40 px-3 py-2 text-muted-foreground text-xs leading-relaxed">
           <Info aria-hidden className="mt-0.5 size-3.5 shrink-0" />
           <span>
-            {client.label} runs on its vendor's servers, so it can only reach
-            this install if the address above is published on the internet. An
-            install reachable only on your own network works with Claude Code,
-            Cursor, VS Code and Gemini CLI, which run on your machine.
+            {client.label} runs on its vendor's servers, so it needs this
+            install to be reachable on the internet.
           </span>
         </p>
       ) : null}
@@ -81,13 +80,14 @@ export function AgentConnectGuide({
           badge={signInAvailable ? "Recommended" : "Unavailable here"}
           dimmed={!signInAvailable}
           method={client.signIn}
+          prerequisite={PREREQUISITE.signIn}
         />
       ) : null}
 
       <MethodBlock
         badge={signInAvailable ? "Or use a key" : "Use this"}
         method={client.agentKey}
-        note="Create the key under the Agents tab. It is shown once and copied to your clipboard."
+        prerequisite={PREREQUISITE.agentKey}
       />
     </div>
   );
@@ -118,12 +118,13 @@ function MethodBlock({
   method,
   badge,
   dimmed,
-  note,
+  prerequisite,
 }: {
   method: ConnectMethod;
   badge: string;
   dimmed?: boolean;
-  note?: string;
+  /** Rendered as step one; the agent exists before any client is touched. */
+  prerequisite: string;
 }) {
   return (
     <section className={dimmed ? "space-y-2 opacity-60" : "space-y-2"}>
@@ -133,6 +134,7 @@ function MethodBlock({
       </div>
 
       <ol className="ml-4 list-decimal space-y-1 text-muted-foreground text-xs leading-relaxed">
+        <li className="text-foreground/80">{prerequisite}</li>
         {method.steps.map((step) => (
           <li key={step}>{step}</li>
         ))}
@@ -144,9 +146,6 @@ function MethodBlock({
         <p className="text-muted-foreground text-xs leading-relaxed">
           {method.note}
         </p>
-      ) : null}
-      {note ? (
-        <p className="text-muted-foreground text-xs leading-relaxed">{note}</p>
       ) : null}
     </section>
   );

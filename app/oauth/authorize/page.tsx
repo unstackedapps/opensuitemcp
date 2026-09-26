@@ -1,8 +1,12 @@
 import { headers } from "next/headers";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/app/(auth)/auth";
 import { AuthBrand } from "@/components/auth-brand";
-import { ConsentForm } from "@/components/oauth/consent-form";
+import {
+  type ConsentAgentOption,
+  ConsentForm,
+} from "@/components/oauth/consent-form";
 import { Button } from "@/components/ui/button";
 import { getUserSettings } from "@/lib/db/queries";
 import { listAgentPersonaOptions } from "@/lib/mcp/server/agent-personas";
@@ -13,7 +17,6 @@ import {
 } from "@/lib/mcp/server/oauth/authorize-flow";
 import type { RawAuthorizeParams } from "@/lib/mcp/server/oauth/authorize-request";
 import { resolveNetSuiteAccounts } from "@/lib/netsuite/accounts";
-import { listConnectedNetSuiteAccountIds } from "@/lib/netsuite/tokens";
 
 export const dynamic = "force-dynamic";
 
@@ -25,10 +28,10 @@ export const dynamic = "force-dynamic";
  * and returned here afterwards, which is why it is a page rather than a route
  * handler.
  *
- * What it asks for mirrors minting a key — a name, a NetSuite account, a
- * persona — because the two produce the same thing. An agent that signed in and
- * an agent that was handed a key appear in one list and are revoked the same
- * way.
+ * It asks for nothing. The agent was created in the portal — named, given a
+ * persona, pinned to an account if wanted — and is sitting there waiting for a
+ * client. All that is left is whether this client may be the one, so this page
+ * shows what is about to happen and offers two buttons.
  */
 export default async function AuthorizePage({
   searchParams,
@@ -70,39 +73,52 @@ export default async function AuthorizePage({
     return (
       <Shell>
         <Notice description={prepared.description} title={prepared.title} />
+        {prepared.openAgentAccess ? (
+          <Button asChild className="w-full">
+            <Link href="/?portal=agent-access">Open Agent access</Link>
+          </Button>
+        ) : null}
         <CancelForm context={prepared.context} />
       </Shell>
     );
   }
 
-  const [personas, settings, connectedAccountIds] = await Promise.all([
+  // Names, not ids: the screen describes what the person already set up, so the
+  // persona and account are resolved here rather than shipped as identifiers.
+  const [personas, settings] = await Promise.all([
     listAgentPersonaOptions({
       id: session.user.id,
       orgId: session.user.orgId,
     }),
     getUserSettings({ userId: session.user.id }),
-    listConnectedNetSuiteAccountIds(session.user.id),
   ]);
 
-  const accounts = resolveNetSuiteAccounts(settings ?? {}).map((entry) => ({
-    accountId: entry.accountId,
-    label: entry.label,
-    connected: connectedAccountIds.includes(entry.accountId),
+  const personaNames = new Map(personas.map((one) => [one.id, one.name]));
+  const accountLabels = new Map(
+    resolveNetSuiteAccounts(settings ?? {}).map((entry) => [
+      entry.accountId,
+      entry.label,
+    ]),
+  );
+
+  const agents: ConsentAgentOption[] = prepared.pending.map((grant) => ({
+    id: grant.id,
+    name: grant.name,
+    personaName: grant.personaId
+      ? (personaNames.get(grant.personaId) ?? null)
+      : null,
+    accountLabel: grant.netsuiteAccountId
+      ? (accountLabels.get(grant.netsuiteAccountId) ?? grant.netsuiteAccountId)
+      : null,
   }));
 
   return (
     <Shell>
       <ConsentForm
-        accounts={accounts}
+        agents={agents}
         clientName={prepared.context.client.name}
         loopbackOnly={prepared.context.client.loopbackOnly}
         params={replayParams(raw)}
-        personas={personas.map((persona) => ({
-          id: persona.id,
-          name: persona.name,
-          primaryRole: persona.primaryRole,
-          authoredBy: persona.authoredBy ?? "user",
-        }))}
         redirectHost={prepared.context.client.redirectHost}
         userEmail={session.user.email ?? null}
       />
