@@ -46,7 +46,7 @@ export async function POST(request: Request) {
     });
   }
 
-  const parsed = parseClientMetadata(body, { fallbackName: "Unnamed agent" });
+  const parsed = parseClientMetadata(body, { fallbackName: "Unnamed client" });
   if (!parsed.ok) {
     return oauthErrorResponse({
       error: parsed.error,

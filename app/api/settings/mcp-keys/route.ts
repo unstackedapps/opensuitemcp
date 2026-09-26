@@ -136,7 +136,7 @@ export async function POST(request: Request) {
     }
     console.error("[MCP Keys] Create failed:", error);
     return NextResponse.json(
-      { error: "Failed to create the agent" },
+      { error: "Failed to create the app" },
       { status: 500 },
     );
   }

@@ -57,7 +57,7 @@ export function evaluateConnectPreflight(params: {
   if (!params.originIsConfigured) {
     return {
       status: "configure",
-      title: "Set AUTH_URL before connecting an agent",
+      title: "Set AUTH_URL before connecting an app",
       detail: `The address is guessed from request headers, currently ${params.origin}. A client refuses to sign in when it disagrees with the one it asked for. Set AUTH_URL to pin it.`,
     };
   }

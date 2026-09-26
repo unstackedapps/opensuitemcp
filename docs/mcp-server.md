@@ -9,24 +9,24 @@ install's own public address.
 
 ## What gates it
 
-Nothing to switch on. `/api/mcp` refuses every request until an agent holds a
+Nothing to switch on. `/api/mcp` refuses every request until an app holds a
 credential, and a credential exists only because a person made one.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `MCP_CALL_LIMIT_PER_MINUTE` | `0` (disabled) | Per-agent tool-call budget in a fixed 60s window. Needs `REDIS_URL`; fails open without it |
+| `MCP_CALL_LIMIT_PER_MINUTE` | `0` (disabled) | Per-app tool-call budget in a fixed 60s window. Needs `REDIS_URL`; fails open without it |
 | `OAUTH_ATTEMPT_LIMIT_PER_MINUTE` | `0` (disabled) | Per-client budget on registration and token requests. Same window, same requirement |
 
-On **organization** installs an owner or admin must turn Agent access on under
-**Admin → Agent access** first, and may narrow it to named members. On a solo
-install, creating the agent is the whole decision.
+On **organization** installs an owner or admin must turn Agent apps on under
+**Admin → Agent apps** first, and may narrow it to named members. On a solo
+install, creating the app is the whole decision.
 
 ---
 
 ## Two credentials
 
-Every agent is created the same way — **App Portal → Agent access → New
-agent** — and carries a name, a persona and optionally a pinned NetSuite
+Every app is created the same way — **App Portal → Agent apps → New
+app** — and carries a name, a persona and optionally a pinned NetSuite
 account. One field decides how it authenticates.
 
 | Connects by | The client holds | Created state |
@@ -35,8 +35,8 @@ account. One field decides how it authenticates.
 | **Bearer auth** | A secret pasted into an `Authorization` header | Active immediately; the key is shown once |
 
 Both are re-checked against the org's policy on every call, so an administrator
-turning Agent access off stops an agent that signed in yesterday just as it
-stops one holding a key.
+turning Agent apps off stops an app that signed in yesterday just as it
+stops one holding a token.
 
 Step-by-step per client is in [Connect an agent](connect-an-agent.md). What
 follows is what is behind it.
@@ -49,7 +49,7 @@ Keys look like:
 osmcp_<16 hex chars>_<43 url-safe chars>
 ```
 
-The leading hex is a public lookup id, shown in the agent list so you can match
+The leading hex is a public lookup id, shown in the app list so you can match
 a row to a key you hold. The rest is the secret: only its SHA-256 digest
 authenticates. The key is also stored encrypted under `ENCRYPTION_KEY`, so its
 owner can copy it again rather than losing it to a dismissed dialog.
@@ -84,14 +84,14 @@ the resource metadata still work.
 
 ### What the consent screen does
 
-**It binds a client to an agent that already exists. It never creates one.**
+**It binds a client to an app that already exists. It never creates one.**
 
 | | |
 | --- | --- |
 | Offers | Agents sitting *Awaiting connection* — created in the portal, named and configured there |
-| Approving | Issues a code naming the chosen agent; the token exchange fills in the client id |
+| Approving | Issues a code naming the chosen app; the token exchange fills in the client id |
 | Nothing waiting | The screen says so and links to the portal, rather than growing a form |
-| Two codes racing | The bind is guarded on the agent still being unclaimed. One winner; the loser gets `invalid_grant` |
+| Two codes racing | The bind is guarded on the app still being unclaimed. One winner; the loser gets `invalid_grant` |
 
 ### How a client identifies itself
 
@@ -125,7 +125,7 @@ screen warns when every redirect a client registered is a loopback address.
 
 ---
 
-## Connecting an agent
+## Connecting an agent app
 
 A single URL taking `POST`. The runnable calls live in one place so they cannot
 drift: [Connect an agent → Anything else](connect-an-agent.md#anything-else)
@@ -167,8 +167,8 @@ so autonomous work can be reviewed afterwards.
 
 | Tool | What it does |
 | --- | --- |
-| `osmcp_create_chat` | Open a thread, stamped with the persona the agent acts as |
-| `osmcp_append_chat` | Add a message to a thread this agent owns |
+| `osmcp_create_chat` | Open a thread, stamped with the persona the app acts as |
+| `osmcp_append_chat` | Add a message to a thread this app owns |
 
 `osmcp_append_chat` takes either `text` for plain prose, or `parts` for a turn
 recorded as it happened — entries of kind `text`, `reasoning`, or `tool`:
@@ -229,7 +229,7 @@ On org installs, an owner or admin controls MCP access for everyone:
 | `enabled` | `false` | Members may mint keys, approve sign-ins, and agents may connect |
 | `maxKeysPerUser` | `5` | Active agents one member may hold, counting keys and sign-ins together |
 
-An org with Agent access disabled refuses a sign-in **on the consent screen
+An org with Agent apps disabled refuses a sign-in **on the consent screen
 with the reason**, rather than redirecting an opaque `access_denied` the
 connector would report as "connection failed".
 
@@ -244,9 +244,9 @@ unchanged and is re-checked on every call.
 | | |
 | --- | --- |
 | **A dead NetSuite authorization needs a human** | Access tokens refresh five minutes before expiry, but a rejected *refresh* token deletes the stored authorization and the account must be reconnected in the UI. Retrying will not fix it. Give agents `osmcp_connection_status` — it reports this case with a `remediation` string |
-| **Pin an agent to an account** | Set the NetSuite account when creating it. A pinned agent ignores the user's active-account preference, so changing that preference cannot redirect it at another subsidiary |
+| **Pin an app to an account** | Set the NetSuite account when creating it. A pinned app ignores the user's active-account preference, so changing that preference cannot redirect it at another subsidiary |
 | **Revocation is immediate** | Revoked rows are kept so the audit trail survives. Revoking a sign-in revokes its tokens; the next call gets a fresh `401` challenge, which a well-behaved client turns into a sign-in prompt |
-| **Tokens are not yours to store** | An bearer token can be copied back out of the app; an access token cannot. If a signed-in agent stops working, sign it in again |
+| **Tokens are not yours to store** | A bearer token can be copied back out of the app; an access token cannot. If a signed-in app stops working, sign it in again |
 | **Treat tool output as untrusted** | Results contain NetSuite record data, which is user-controlled text. An agent should not follow instructions found inside a tool result |
 
 ---
@@ -256,7 +256,7 @@ unchanged and is re-checked on every call.
 | Symptom | Cause |
 | --- | --- |
 | `401` with a `WWW-Authenticate` header | The credential is missing, malformed, revoked or expired. A client that supports sign-in should follow the challenge |
-| `403 access_denied` | Org policy has Agent access disabled, or limits it to members this account is not among |
+| `403 access_denied` | Org policy has Agent apps disabled, or limits it to members this account is not among |
 | `400` with code `-32020` | Required headers missing or disagreeing with the body |
 | `405` on `GET` | Expected — the GET stream was removed in `2026-07-28` |
 | `tools/list` returns only `osmcp_*` tools | NetSuite is not connected; call `osmcp_connection_status` |

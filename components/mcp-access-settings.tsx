@@ -277,7 +277,7 @@ export function McpAccessPanel({
         if (!response.ok) {
           toast({
             type: "error",
-            description: payload.error ?? "Could not create the agent.",
+            description: payload.error ?? "Could not create the app.",
           });
           return;
         }
@@ -308,7 +308,7 @@ export function McpAccessPanel({
           description: `${draft.name} created. Its key is on your clipboard.`,
         });
       } catch {
-        toast({ type: "error", description: "Could not create the agent." });
+        toast({ type: "error", description: "Could not create the app." });
       } finally {
         setSaving(false);
       }
@@ -316,8 +316,40 @@ export function McpAccessPanel({
     [copy, mutate, onChanged],
   );
 
+  /**
+   * The callback lives on the client row, not the app, so saving an app with
+   * client credentials is two requests. Errors surface here; success is left
+   * to the caller, so one Save produces one message.
+   */
+  const saveCallback = useCallback(async (row: AgentRow, url: string) => {
+    try {
+      const response = await fetch(`${GRANTS_ENDPOINT}/${row.id}/credentials`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ redirectUris: [url] }),
+      });
+      if (!response.ok) {
+        const payload = await response.json();
+        toast({
+          type: "error",
+          description: payload.error ?? "Could not save the callback URL.",
+        });
+      }
+    } catch {
+      toast({ type: "error", description: "Could not save the callback URL." });
+    }
+  }, []);
+
   const saveAgent = useCallback(
     async (row: AgentRow, draft: AgentDraft) => {
+      // The callback lives on the client, not the app, so it is a second
+      // request — but one Save button, because they are one edit.
+      if (
+        row.connectionKind === "oauth-client-key" &&
+        draft.callbackUrl.trim()
+      ) {
+        await saveCallback(row, draft.callbackUrl.trim());
+      }
       setSaving(true);
       try {
         const base = row.kind === "grant" ? GRANTS_ENDPOINT : ENDPOINT;
@@ -330,7 +362,7 @@ export function McpAccessPanel({
         if (!response.ok) {
           toast({
             type: "error",
-            description: payload.error ?? "Could not save the agent.",
+            description: payload.error ?? "Could not save the app.",
           });
           return;
         }
@@ -339,12 +371,12 @@ export function McpAccessPanel({
         await mutate();
         toast({ type: "success", description: `${draft.name} saved.` });
       } catch {
-        toast({ type: "error", description: "Could not save the agent." });
+        toast({ type: "error", description: "Could not save the app." });
       } finally {
         setSaving(false);
       }
     },
-    [mutate],
+    [mutate, saveCallback],
   );
 
   const rotateKey = useCallback(
@@ -415,30 +447,6 @@ export function McpAccessPanel({
     [],
   );
 
-  const saveCallback = useCallback(async (row: AgentRow, url: string) => {
-    setCredentialsBusy(true);
-    try {
-      const response = await fetch(`${GRANTS_ENDPOINT}/${row.id}/credentials`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ redirectUris: [url] }),
-      });
-      const payload = await response.json();
-      toast(
-        response.ok
-          ? { type: "success", description: "Callback URL saved." }
-          : {
-              type: "error",
-              description: payload.error ?? "Could not save the callback URL.",
-            },
-      );
-    } catch {
-      toast({ type: "error", description: "Could not save the callback URL." });
-    } finally {
-      setCredentialsBusy(false);
-    }
-  }, []);
-
   const purgeAgent = useCallback(
     async (row: AgentRow) => {
       const base = row.kind === "grant" ? GRANTS_ENDPOINT : ENDPOINT;
@@ -465,7 +473,7 @@ export function McpAccessPanel({
         await onChanged?.();
         toast({ type: "success", description: `${row.name} archived.` });
       } else {
-        toast({ type: "error", description: "Could not archive the agent." });
+        toast({ type: "error", description: "Could not archive the app." });
       }
     },
     [mutate, onChanged],
@@ -607,8 +615,7 @@ export function McpAccessPanel({
             </Button>
           </div>
           <p className="text-muted-foreground text-xs">
-            This install's public address. Every agent here connects through it
-            —{" "}
+            This install's public address. Every app here connects through it —{" "}
             <a
               className="underline underline-offset-2 hover:text-foreground"
               href={CONNECT_AGENT_DOCS_URL}
@@ -686,13 +693,13 @@ export function McpAccessPanel({
                 <div className="flex items-center gap-2">
                   <Label
                     className="text-muted-foreground text-xs"
-                    htmlFor="show-archived-agents"
+                    htmlFor="show-archived-apps"
                   >
                     Archived
                   </Label>
                   <Switch
                     checked={showArchived}
-                    id="show-archived-agents"
+                    id="show-archived-apps"
                     onCheckedChange={setShowArchived}
                   />
                 </div>
@@ -714,7 +721,7 @@ export function McpAccessPanel({
           {visibleRows.length === 0 ? (
             <p className="text-muted-foreground text-xs">
               {activeRows.length === 0
-                ? "No agent apps yet. Create one, then point your AI client at the server URL above."
+                ? "No agent apps yet. Create one, then point your AI at the server URL above."
                 : "No agent apps to show."}
             </p>
           ) : (
@@ -868,7 +875,6 @@ export function McpAccessPanel({
           }
         }}
         onRotateSecret={() => editing && loadCredentials(editing, true)}
-        onSaveCallback={(url) => editing && saveCallback(editing, url)}
         open={Boolean(editing)}
         personas={personas}
         saving={saving}
@@ -876,7 +882,7 @@ export function McpAccessPanel({
       />
 
       <ConfirmDestructiveDialog
-        confirmLabel="Archive agent"
+        confirmLabel="Archive app"
         description={
           pendingRevoke
             ? pendingRevoke.kind === "grant"
@@ -895,7 +901,7 @@ export function McpAccessPanel({
           }
         }}
         open={Boolean(pendingRevoke)}
-        title="Archive this agent?"
+        title="Archive this agent app?"
       />
 
       <ConfirmDestructiveDialog
@@ -916,7 +922,7 @@ export function McpAccessPanel({
           }
         }}
         open={Boolean(pendingRotate)}
-        title="Replace this agent's key?"
+        title="Replace this app's token?"
       />
     </div>
   );

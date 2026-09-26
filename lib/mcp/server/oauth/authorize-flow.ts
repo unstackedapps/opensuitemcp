@@ -74,7 +74,7 @@ export async function prepareAuthorization(params: {
       kind: "fatal",
       title: "This sign-in request is incomplete",
       description:
-        "It arrived without a client_id, so there is no way to tell which agent is asking.",
+        "It arrived without a client_id, so there is no way to tell what is asking.",
     };
   }
 
@@ -82,7 +82,7 @@ export async function prepareAuthorization(params: {
   if (!resolved.ok) {
     return {
       kind: "fatal",
-      title: "That agent is not registered with this install",
+      title: "That client is not registered with this install",
       description: resolved.description,
     };
   }
