@@ -40,7 +40,7 @@ Keys look like:
 osmcp_<16 hex chars>_<43 url-safe chars>
 ```
 
-| | |
+| Part | What it is |
 | --- | --- |
 | Leading hex | A public lookup id, shown in the app list so you can match a row to a token you hold |
 | The rest | The secret. Only its SHA-256 digest authenticates |
@@ -48,7 +48,7 @@ osmcp_<16 hex chars>_<43 url-safe chars>
 
 ### What a credential reaches
 
-| | |
+| Question | Answer |
 | --- | --- |
 | Decided by | The app's own settings, not the credential |
 | A tool disabled there | Neither listed nor callable, re-read on **every call** |
@@ -76,7 +76,7 @@ the resource metadata still work.
 
 **It binds a client to an app that already exists. It never creates one.**
 
-| | |
+| Step | What happens |
 | --- | --- |
 | Offers | Agents sitting *Awaiting connection* — created in the portal, named and configured there |
 | Approving | Issues a code naming the chosen app; the token exchange fills in the client id |
@@ -96,7 +96,7 @@ with `S256` is required in every case; `plain` was removed in OAuth 2.1.
 
 ### What the tokens are
 
-| | |
+| Property | Value |
 | --- | --- |
 | Format | Opaque, stored as a SHA-256 digest. Not JWTs, so revoking takes effect on the next call |
 | Access token TTL | 1 hour |
@@ -104,26 +104,31 @@ with `S256` is required in every case; `plain` was removed in OAuth 2.1.
 | Refresh replay | Revokes every live token on that authorization. The authorization survives, so the client signs in again |
 | Code replay | Same, per OAuth 2.1 section 4.1.3 |
 
-### Loopback redirects
+### Redirect URIs
 
-The port is ignored when matching a loopback redirect — RFC 8252 section 7.3
-requires it for `127.0.0.1`, and Claude Code needs the same for `localhost`.
-Scheme, host, path and query must still match something the client registered.
+| Shape | Matching |
+| --- | --- |
+| `https://…` | Exact |
+| `http://` on loopback | Port ignored, per RFC 8252 §7.3. Scheme, host, path and query must still match |
+| Private-use scheme, e.g. `cursor://…` | Exact, per RFC 8252 §7.1 |
 
-Any local process can bind a port and claim to be that client, so the consent
-screen warns when every redirect a client registered is a loopback address.
+`javascript:`, `data:`, `vbscript:`, `file:`, `blob:` and `about:` are refused —
+an authorization code is appended to whatever the server redirects to.
+
+Any local process can bind a port or register a scheme handler and claim to be
+the client, so the consent screen warns when every redirect a client
+registered points back at this machine.
 
 ---
 
-## Connecting an agent app
+## The endpoint
 
-A single URL taking `POST`. The runnable calls live in one place so they cannot
-drift: [Connect an agent → Anything else](connect-an-agent.md#anything-else)
-for the raw `curl`, and per-client instructions above it.
+A single URL taking `POST`. Setup is in
+[Connect an agent](connect-an-agent.md).
 
 ### Protocol
 
-| | |
+| Topic | Detail |
 | --- | --- |
 | Transport | Streamable HTTP, revision `2026-07-28`. Stateless: one POST per JSON-RPC message, no sessions, no GET stream, no `initialize` |
 | Older revisions | `2025-11-25`, `2025-06-18`, `2025-03-26`. These use `initialize` and may send `Mcp-Session-Id`; the header is ignored and no session is minted |
@@ -182,7 +187,7 @@ made. Reasoning and tool parts belong to an `assistant` message only.
 
 ### NetSuite tools
 
-| | |
+| Aspect | Detail |
 | --- | --- |
 | Naming | Every NetSuite MCP Standard Tool the user may run, under its own name |
 | Input schema | NetSuite's, forwarded verbatim — enums, formats and nested shapes intact |
@@ -224,7 +229,7 @@ unchanged and is re-checked on every call.
 
 ## Operating notes
 
-| | |
+| Note | Detail |
 | --- | --- |
 | **A dead NetSuite authorization needs a human** | Access tokens refresh five minutes before expiry, but a rejected *refresh* token deletes the stored authorization and the account must be reconnected in the UI. Retrying will not fix it. Give agents `osmcp_connection_status` — it reports this case with a `remediation` string |
 | **Revoked rows are kept** | The audit trail and last-used time survive. Revoking an app revokes its tokens, and the next call gets a fresh `401` challenge, which a well-behaved client turns into a sign-in prompt |
