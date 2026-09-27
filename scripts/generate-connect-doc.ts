@@ -149,7 +149,10 @@ function render(): string {
     "",
     table(
       ["Connector", "Callback URL"],
-      KNOWN_CALLBACK_URLS.map((row) => [row.label, `\`${row.url}\``]),
+      KNOWN_CALLBACK_URLS.map((row) => [
+        row.label,
+        row.url ? `\`${row.url}\`` : (row.note ?? ""),
+      ]),
     ),
     "",
     "---",

@@ -24,8 +24,8 @@ import {
 } from "@/components/ui/select";
 import { AVA_PERSONA_ID } from "@/lib/ai/personas/ids";
 import {
+  CALLBACK_PRESETS,
   CONNECTS_FROM_OPTIONS,
-  KNOWN_CALLBACK_URLS,
   METHOD_NAMES,
 } from "@/lib/mcp/connect-clients";
 
@@ -132,7 +132,7 @@ const EMPTY: AgentDraft = {
   personaId: AVA_PERSONA_ID,
   method: "key",
   issueClientCredentials: false,
-  callbackUrl: KNOWN_CALLBACK_URLS[0].url,
+  callbackUrl: CALLBACK_PRESETS[0].url,
   connectsFrom: "",
 };
 
@@ -366,7 +366,7 @@ export function AgentDialog({
                     placeholder="Callback URL"
                     value={draft.callbackUrl}
                   />
-                  {KNOWN_CALLBACK_URLS.map((entry) => (
+                  {CALLBACK_PRESETS.map((entry) => (
                     <Button
                       className="shrink-0"
                       key={entry.url}

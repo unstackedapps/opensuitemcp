@@ -28,13 +28,35 @@
  * at all is refused at the first authorization with "that callback address is
  * not registered", which is accurate and unhelpful.
  */
-export const KNOWN_CALLBACK_URLS: { label: string; url: string }[] = [
+/**
+ * Where a connector expects to be sent back, for the ones that will not
+ * register themselves.
+ *
+ * `url` is null where the connector mints a different address per account, so
+ * there is nothing to publish and it has to be copied from the connector.
+ * Gemini's carries both the Google user id and the install host.
+ */
+export const KNOWN_CALLBACK_URLS: {
+  label: string;
+  url: string | null;
+  note?: string;
+}[] = [
   { label: "Claude", url: "https://claude.ai/api/mcp/auth_callback" },
   {
     label: "ChatGPT",
     url: "https://chatgpt.com/connector_platform_oauth_redirect",
   },
+  {
+    label: "Gemini",
+    url: null,
+    note: "Unique to your account. Copy it from Additional settings.",
+  },
 ];
+
+/** The ones with an address we can offer as a one-click preset. */
+export const CALLBACK_PRESETS = KNOWN_CALLBACK_URLS.filter(
+  (entry): entry is { label: string; url: string } => entry.url !== null,
+);
 
 /** The path every install serves MCP on. */
 export const MCP_PATH = "/api/mcp";
