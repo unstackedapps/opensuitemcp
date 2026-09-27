@@ -47,6 +47,7 @@ creating the app, and give it the connector's **callback URL**:
 | Connector | Callback URL |
 | --- | --- |
 | Claude | `https://claude.ai/api/mcp/auth_callback` |
+| ChatGPT | `https://chatgpt.com/connector_platform_oauth_redirect` |
 
 The app then hands you a client ID and secret, shown once and readable
 again from its details. Without a callback URL the first sign-in is
@@ -148,19 +149,22 @@ https://your-install.example.com/api/mcp
 
 ### ChatGPT
 
-**Add it as a connector**
+**Create an MCP app**
 
 1. In App Portal → Agent apps, create an app and choose OAuth 2.1. It waits there until you finish below.
-2. Add a custom connector and give it the server URL below.
-3. Approve the app on this install when ChatGPT sends you here.
+2. Open Settings → Plugins → Browse plugins → Create app → Create MCP app.
+3. Give it a Name, and paste the server URL below under Connection → Server URL.
+4. Leave Authentication on OAuth.
+5. Tick I understand and want to continue, then press Create.
+6. Approve the app on this install. You land back on the plugins page.
 
-`MCP server URL`
+`Connection → Server URL`
 
 ```text
 https://your-install.example.com/api/mcp
 ```
 
-⚠️ ChatGPT registers itself, so the client ID, secret and redirect URI it offers are optional. Leave them blank.
+⚠️ Advanced OAuth settings shows what ChatGPT discovered and lets you swap CIMD for DCR or your own client ID and secret. The discovered values work as they are.
 
 ### Anything else
 
