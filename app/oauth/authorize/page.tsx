@@ -114,6 +114,7 @@ export default async function AuthorizePage({
     name: grant.name,
     connectsFrom: grant.connectsFrom,
     connected,
+    heldBy: grant.clientName,
     matchesClient: Boolean(meant) && grant.connectsFrom === meant,
     personaName: grant.personaId
       ? (personaNames.get(grant.personaId) ?? null)

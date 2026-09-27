@@ -173,12 +173,17 @@ export async function listConnectableOAuthGrants(
   userId: string,
 ): Promise<OAuthGrantSummary[]> {
   try {
+    // The client's own name, so the screen can say who holds an app rather
+    // than printing an opaque client id at someone.
     const rows = await db
-      .select()
+      .select({ grant: oauthGrant, client: oauthClient })
       .from(oauthGrant)
+      .leftJoin(oauthClient, eq(oauthClient.clientId, oauthGrant.clientId))
       .where(and(eq(oauthGrant.userId, userId), isNull(oauthGrant.revokedAt)))
       .orderBy(asc(oauthGrant.createdAt));
-    return rows.map((row) => toSummary(row, null, null));
+    return rows.map((row) =>
+      toSummary(row.grant, row.client?.clientName ?? null, null),
+    );
   } catch (_error) {
     throw new ChatSDKError("bad_request:database", "Failed to list agents");
   }
