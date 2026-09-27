@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull, type SQL, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import {
   type OAuthAuthorizationCode,
@@ -292,7 +292,7 @@ export async function updateOAuthGrant(params: {
   const patch: {
     name?: string;
     description?: string | null;
-    connectsFrom?: string | null;
+    connectsFrom?: string | null | SQL<unknown>;
     personaId?: string | null;
     netsuiteAccountId?: string | null;
   } = {};
@@ -304,6 +304,15 @@ export async function updateOAuthGrant(params: {
   }
   if (params.personaId !== undefined) {
     patch.personaId = params.personaId?.trim() || null;
+  }
+  // Set once. An app is locked to the product it was made for, so a later
+  // edit cannot silently re-point it; COALESCE fills a null and leaves any
+  // existing value alone, in the same statement rather than read-then-write.
+  if (params.connectsFrom !== undefined) {
+    const value = params.connectsFrom?.trim().slice(0, 64) || null;
+    if (value) {
+      patch.connectsFrom = sql`COALESCE(${oauthGrant.connectsFrom}, ${value})`;
+    }
   }
   if (params.netsuiteAccountId !== undefined) {
     patch.netsuiteAccountId = params.netsuiteAccountId?.trim() || null;

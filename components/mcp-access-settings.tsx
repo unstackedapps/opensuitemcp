@@ -856,7 +856,6 @@ export function McpAccessPanel({
         open={creatingOpen}
         personas={personas}
         saving={saving}
-        serverUrl={data.serverUrl}
       />
 
       <AgentDialog
@@ -878,6 +877,7 @@ export function McpAccessPanel({
             ? {
                 kind: editing.kind,
                 connectionLabel: CONNECTION_LABEL[editing.connectionKind],
+                connectsFrom: editing.connectsFrom,
                 hasClientCredentials:
                   editing.connectionKind === "oauth-client-key",
                 credential: editing.credential,
@@ -906,7 +906,6 @@ export function McpAccessPanel({
         open={Boolean(editing)}
         personas={personas}
         saving={saving}
-        serverUrl={data.serverUrl}
       />
 
       <ConfirmDestructiveDialog
