@@ -187,7 +187,7 @@ export const PREREQUISITE: Record<"signIn" | "agentKey", string> = {
   signIn:
     "App Portal → Agent apps → New app. Choose OAuth 2.1 and save. It waits there until you finish below.",
   agentKey:
-    "App Portal → Agent apps → New app. Choose Bearer auth and save, then copy the token.",
+    "App Portal → Agent apps → New app. Choose Bearer auth and save, then open the app and copy its token.",
 };
 
 /**
@@ -412,12 +412,17 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
             app: "Cursor",
             steps: [
               "Settings → Customize → MCPs → New MCP Server. Cursor opens mcp.json.",
-              "Add the object above and save.",
+              "Add the object above, save, and close the file.",
+              "Back in Settings → Customize → MCPs, the connection reads Needs Authenticate. Press Authenticate.",
             ],
           },
           {
             app: THIS_APP,
-            steps: ["Authorize the app on the consent screen Cursor opens."],
+            steps: ["Authorize the app on the consent screen."],
+          },
+          {
+            app: "Cursor",
+            steps: ["Close the redirect page and return to Cursor."],
           },
         ],
         snippet: {
@@ -429,13 +434,17 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
             2,
           ),
         },
+        note: "A new connection sometimes does not appear in the list. Open the command palette and run Developer: Reload Window.",
       },
       agentKey: {
-        heading: "Add it to the same mcp.json",
+        heading: "Add it to mcp.json with a header",
         groups: [
           {
             app: "Cursor",
-            steps: ["Add the key as a header in the same file."],
+            steps: [
+              "Settings → Customize → MCPs → New MCP Server. Cursor opens mcp.json.",
+              "Add the object above, save, and close the file.",
+            ],
           },
         ],
         snippet: {
@@ -454,6 +463,7 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
             2,
           ),
         },
+        note: "A new connection sometimes does not appear in the list. Open the command palette and run Developer: Reload Window.",
       },
     },
     {
