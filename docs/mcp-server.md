@@ -80,7 +80,7 @@ the resource metadata still work.
 | --- | --- |
 | Offers | Agents sitting *Awaiting connection* — created in the portal, named and configured there |
 | Approving | Issues a code naming the chosen app; the token exchange fills in the client id |
-| Nothing waiting | The screen says so and links to the portal, rather than growing a form |
+| Nothing waiting | The screen links to the portal |
 | Two codes racing | The bind is guarded on the app still being unclaimed. One winner; the loser gets `invalid_grant` |
 
 ### How a client identifies itself

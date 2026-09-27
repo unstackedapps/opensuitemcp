@@ -21,9 +21,6 @@ shows yours, with a copy button.
 | Self-hosted | `https://opensuitemcp.mycompanydomain.com/api/mcp` |
 | Local | `http://localhost:3000/api/mcp` |
 
-A bearer token looks like `osmcp_…`, and is shown once when you
-create the app.
-
 ---
 
 ## Claude
