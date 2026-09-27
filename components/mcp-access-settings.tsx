@@ -540,7 +540,7 @@ export function McpAccessPanel({
       connectionKind: grant.connectionKind,
       credential: grant.clientName
         ? `Credential held by ${grant.clientName}`
-        : "Waiting for an app to sign in",
+        : "",
       issuedClientId: grant.issuedClientId,
       connectsFrom: grant.connectsFrom ?? null,
       personaId: grant.personaId,
@@ -756,14 +756,16 @@ export function McpAccessPanel({
                         {row.description}
                       </p>
                     ) : null}
-                    <p className="truncate font-mono text-muted-foreground text-xs">
-                      {row.credential}
-                    </p>
+                    {row.credential ? (
+                      <p className="truncate font-mono text-muted-foreground text-xs">
+                        {row.credential}
+                      </p>
+                    ) : null}
                     <div className="flex flex-wrap items-center gap-1.5">
                       {row.status === "active" ? null : (
                         <Badge variant="outline">
                           {row.status === "pending"
-                            ? "Never connected"
+                            ? "Not connected"
                             : row.status === "expired"
                               ? "Expired"
                               : "Archived"}
