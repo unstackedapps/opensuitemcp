@@ -895,6 +895,7 @@ export function McpAccessPanel({
           }
         }}
         onRevealCredentials={() => editing && loadCredentials(editing, false)}
+        onHideCredentials={() => setCredentials(null)}
         onRevoke={() => {
           if (editing) {
             setPendingRevoke(editing);

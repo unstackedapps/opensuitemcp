@@ -1,6 +1,6 @@
 "use client";
 
-import { Copy, Eye, RefreshCw } from "lucide-react";
+import { Copy, Eye, EyeOff, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -101,6 +101,7 @@ type AgentDialogProps = {
   onCopyKey?: () => void;
   onReplaceKey?: () => void;
   onRevealCredentials?: () => void;
+  onHideCredentials?: () => void;
   onRotateSecret?: () => void;
   onRevoke?: () => void;
 };
@@ -146,6 +147,7 @@ export function AgentDialog({
   onCopyKey,
   onReplaceKey,
   onRevealCredentials,
+  onHideCredentials,
   onRotateSecret,
   onRevoke,
 }: AgentDialogProps) {
@@ -392,13 +394,19 @@ export function AgentDialog({
                   <div className="flex gap-2">
                     <Button
                       disabled={busy}
-                      onClick={onRevealCredentials}
+                      onClick={
+                        credentials ? onHideCredentials : onRevealCredentials
+                      }
                       size="sm"
                       type="button"
                       variant="outline"
                     >
-                      <Eye className="size-3.5" />
-                      Reveal
+                      {credentials ? (
+                        <EyeOff className="size-3.5" />
+                      ) : (
+                        <Eye className="size-3.5" />
+                      )}
+                      {credentials ? "Hide" : "Reveal"}
                     </Button>
                     <Button
                       disabled={busy}
@@ -556,28 +564,28 @@ function Row({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-2">
-      <Label className="w-28 shrink-0 text-muted-foreground text-xs">
-        {label}
-      </Label>
-      <Input
-        className="font-mono text-xs"
-        onChange={(event) => onChange?.(event.target.value)}
-        readOnly={!editable}
-        value={value}
-      />
-      {onCopy ? (
-        <Button
-          className="size-9 shrink-0 p-0"
-          onClick={onCopy}
-          type="button"
-          variant="outline"
-        >
-          <Copy className="size-3.5" />
-          <span className="sr-only">Copy the {label}</span>
-        </Button>
-      ) : null}
-      {action}
+    <div className="space-y-1.5">
+      <Label className="text-muted-foreground text-xs">{label}</Label>
+      <div className="flex items-center gap-2">
+        <Input
+          className="font-mono text-xs"
+          onChange={(event) => onChange?.(event.target.value)}
+          readOnly={!editable}
+          value={value}
+        />
+        {onCopy ? (
+          <Button
+            className="size-9 shrink-0 p-0"
+            onClick={onCopy}
+            type="button"
+            variant="outline"
+          >
+            <Copy className="size-3.5" />
+            <span className="sr-only">Copy the {label}</span>
+          </Button>
+        ) : null}
+        {action}
+      </div>
     </div>
   );
 }
