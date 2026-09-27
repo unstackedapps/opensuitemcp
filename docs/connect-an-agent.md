@@ -211,6 +211,7 @@ app, and give it the connector's callback URL:
 | --- | --- |
 | Claude | `https://claude.ai/api/mcp/auth_callback` |
 | ChatGPT | `https://chatgpt.com/connector_platform_oauth_redirect` |
+| Gemini | Unique to your account. Copy it from Additional settings. |
 
 ---
 
