@@ -556,11 +556,6 @@ export function McpAccessPanel({
   const activeRows = rows.filter(
     (row) => row.status === "active" || row.status === "pending",
   );
-  // Revoked and expired agents are kept — the threads they opened and the work
-  // they did still refer to them — but an archive is not a working list.
-  const archivedRows = rows.filter(
-    (row) => row.status !== "active" && row.status !== "pending",
-  );
   const needle = query.trim().toLowerCase();
   const visibleRows = (showArchived ? rows : activeRows)
     .filter(
@@ -686,36 +681,35 @@ export function McpAccessPanel({
             </Button>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            {rows.length > 1 ? (
-              <>
-                <Input
-                  className="h-8 min-w-40 flex-1 text-xs"
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Filter apps"
-                  value={query}
-                />
-                <Select
-                  onValueChange={(value) =>
-                    setSort(value as "recent" | "name" | "used")
-                  }
-                  value={sort}
-                >
-                  <SelectTrigger className="h-8 w-auto gap-1.5 text-xs">
-                    <ArrowUpDown className="size-3.5 text-muted-foreground" />
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="recent">Newest</SelectItem>
-                    <SelectItem value="name">Name</SelectItem>
-                    <SelectItem value="used">Last used</SelectItem>
-                  </SelectContent>
-                </Select>
-              </>
-            ) : null}
-
-            {archivedRows.length > 0 ? (
-              <div className="flex items-center gap-2">
+          {/* Furniture, so it does not come and go: a toolbar that appears at
+              two rows and vanishes at one reads as a broken layout, and the
+              Archived switch slid left when its neighbours disappeared. It is
+              hidden only when there is nothing at all to act on. */}
+          {rows.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                className="h-8 min-w-40 flex-1 text-xs"
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Filter apps"
+                value={query}
+              />
+              <Select
+                onValueChange={(value) =>
+                  setSort(value as "recent" | "name" | "used")
+                }
+                value={sort}
+              >
+                <SelectTrigger className="h-8 w-auto gap-1.5 text-xs">
+                  <ArrowUpDown className="size-3.5 text-muted-foreground" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="recent">Newest</SelectItem>
+                  <SelectItem value="name">Name</SelectItem>
+                  <SelectItem value="used">Last used</SelectItem>
+                </SelectContent>
+              </Select>
+              <div className="ml-auto flex shrink-0 items-center gap-2">
                 <Label
                   className="text-muted-foreground text-xs"
                   htmlFor="show-archived-apps"
@@ -728,8 +722,8 @@ export function McpAccessPanel({
                   onCheckedChange={setShowArchived}
                 />
               </div>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
 
           {atLimit ? (
             <p className="text-muted-foreground text-xs">
@@ -744,7 +738,7 @@ export function McpAccessPanel({
         <section className="space-y-2">
           {visibleRows.length === 0 ? (
             <p className="text-muted-foreground text-xs">
-              {activeRows.length === 0
+              {rows.length === 0
                 ? "No agent apps yet. Create one, then point your AI at the server URL above."
                 : "No agent apps to show."}
             </p>
