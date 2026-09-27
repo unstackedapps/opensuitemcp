@@ -320,3 +320,31 @@ describe("an auth method this server cannot do", () => {
     assert.equal(result.metadata.tokenEndpointAuthMethod, "client_secret_post");
   });
 });
+
+describe("a client that registers one redirect URI we cannot honour", () => {
+  it("keeps the rest instead of refusing the client", () => {
+    const result = parseClientMetadata({
+      client_name: "Mixed",
+      redirect_uris: [
+        "javascript:alert(1)",
+        "https://mixed.test/cb",
+        "http://127.0.0.1/cb",
+      ],
+    });
+    assert.ok(result.ok);
+    assert.deepEqual(result.metadata.redirectUris, [
+      "https://mixed.test/cb",
+      "http://127.0.0.1/cb",
+    ]);
+  });
+
+  it("refuses when none of them are usable", () => {
+    const result = expectFailure(
+      parseClientMetadata({
+        client_name: "Hostile",
+        redirect_uris: ["javascript:alert(1)", "data:text/html,x"],
+      }),
+    );
+    assert.equal(result.error, "invalid_redirect_uri");
+  });
+});

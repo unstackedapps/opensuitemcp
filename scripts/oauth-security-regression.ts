@@ -48,6 +48,7 @@ async function main() {
     name: "poc",
     personaId: null,
     netsuiteAccountId: null,
+    connectsFrom: null,
     description: null,
     scope: "mcp",
   });

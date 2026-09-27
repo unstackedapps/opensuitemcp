@@ -21,6 +21,7 @@ import {
   type ConnectStepGroup,
   KEY_PLACEHOLDER,
   KNOWN_CALLBACK_URLS,
+  METHOD_NAMES,
   PREREQUISITE,
   REACHABILITY,
   SELF_HOST_REQUIREMENTS,
@@ -42,9 +43,30 @@ function table(head: string[], rows: string[][]): string {
   return [head, sep, ...rows].map((row) => `| ${row.join(" | ")} |`).join("\n");
 }
 
-function method(entry: ConnectMethod, prerequisite: string): string {
+function method(
+  entry: ConnectMethod,
+  methodName: string,
+  prerequisite: string,
+): string {
   const out: string[] = [];
-  out.push(`**${entry.heading}**`, "");
+  // The protocol name is the heading: a reader scanning for "OAuth 2.1" or
+  // "Bearer auth" should not have to infer it from "Add it to mcp.json".
+  out.push(`### ${methodName}`, "", `**${entry.heading}**`, "");
+
+  // Anything to paste comes before the steps that say to paste it. After
+  // them it is a reference for work already done.
+  if (entry.snippet) {
+    if (entry.snippet.location) {
+      out.push(`\`${entry.snippet.location}\``, "");
+    }
+    const fence = "```";
+    out.push(
+      `${fence}${entry.snippet.language}`,
+      entry.snippet.code,
+      fence,
+      "",
+    );
+  }
 
   // The app is created here, configured in the client, and approved back
   // here. One heading per hop, and the numbering runs straight through so a
@@ -63,18 +85,6 @@ function method(entry: ConnectMethod, prerequisite: string): string {
     out.push("");
   }
 
-  if (entry.snippet) {
-    if (entry.snippet.location) {
-      out.push(`\`${entry.snippet.location}\``, "");
-    }
-    const fence = "```";
-    out.push(
-      `${fence}${entry.snippet.language}`,
-      entry.snippet.code,
-      fence,
-      "",
-    );
-  }
   if (entry.note) {
     out.push(`⚠️ ${entry.note}`, "");
   }
@@ -106,10 +116,12 @@ function render(): string {
   for (const client of clients) {
     out.push(`## ${client.docHeading}`, "");
     if (client.signIn) {
-      out.push(method(client.signIn, PREREQUISITE.signIn));
+      out.push(method(client.signIn, METHOD_NAMES.signIn, PREREQUISITE.signIn));
     }
     if (client.agentKey) {
-      out.push(method(client.agentKey, PREREQUISITE.agentKey));
+      out.push(
+        method(client.agentKey, METHOD_NAMES.agentKey, PREREQUISITE.agentKey),
+      );
     }
   }
 

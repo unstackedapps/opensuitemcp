@@ -253,6 +253,13 @@
       "when": 1790211920197,
       "tag": "0035_agent_app_description",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1790215520197,
+      "tag": "0036_agent_app_connects_from",
+      "breakpoints": true
     }
   ]
 }

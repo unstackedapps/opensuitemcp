@@ -42,6 +42,8 @@ export type OAuthGrantSummary = {
   id: string;
   name: string;
   description: string | null;
+  /** Which AI product this app is for. */
+  connectsFrom: string | null;
   connectionKind: AgentConnectionKind;
   /** Null until a client has connected. */
   clientId: string | null;
@@ -89,6 +91,7 @@ function toSummary(
     id: row.id,
     name: row.name,
     description: row.description,
+    connectsFrom: row.connectsFrom,
     connectionKind: connectionKind({
       issuedClientId,
       registrationKind,
@@ -121,6 +124,7 @@ export async function createPendingOAuthGrant(params: {
   personaId: string | null;
   netsuiteAccountId: string | null;
   description: string | null;
+  connectsFrom: string | null;
   scope: string;
 }): Promise<OAuthGrantSummary> {
   try {
@@ -281,12 +285,14 @@ export async function updateOAuthGrant(params: {
   grantId: string;
   name?: string;
   description?: string | null;
+  connectsFrom?: string | null;
   personaId?: string | null;
   netsuiteAccountId?: string | null;
 }): Promise<OAuthGrantSummary | null> {
   const patch: {
     name?: string;
     description?: string | null;
+  connectsFrom?: string | null;
     personaId?: string | null;
     netsuiteAccountId?: string | null;
   } = {};

@@ -36,6 +36,69 @@ export const KNOWN_CALLBACK_URLS: { label: string; url: string }[] = [
   },
 ];
 
+/**
+ * The AI products an agent app can be created for.
+ *
+ * The same list the documentation is built from, so the picker cannot drift
+ * from the clients we have actually connected. "Other" is not here: it is the
+ * absence of a choice plus a name the person types.
+ */
+export const CONNECTS_FROM_OPTIONS: { id: string; label: string }[] = [
+  { id: "claude", label: "Claude" },
+  { id: "cursor", label: "Cursor" },
+  { id: "gemini", label: "Gemini" },
+  { id: "chatgpt", label: "ChatGPT" },
+];
+
+/**
+ * What a client calls itself when it registers, lowercased, mapped to the
+ * option it means. Gemini registers as "Google", and Claude Code as "Claude
+ * Code", so the reported name is rarely the label a person picked.
+ */
+const CLIENT_NAME_ALIASES: Record<string, string> = {
+  claude: "claude",
+  "claude code": "claude",
+  "claude desktop": "claude",
+  anthropic: "claude",
+  cursor: "cursor",
+  anysphere: "cursor",
+  google: "gemini",
+  gemini: "gemini",
+  chatgpt: "chatgpt",
+  openai: "chatgpt",
+};
+
+/** How an app's connectsFrom is shown: a known label, or what was typed. */
+export function connectsFromLabel(value: string | null | undefined): string {
+  if (!value) {
+    return "";
+  }
+  const known = CONNECTS_FROM_OPTIONS.find((option) => option.id === value);
+  return known ? known.label : value;
+}
+
+/**
+ * The option a registering client most likely means, or null when its name is
+ * one we do not recognise. Used only to pre-select on the consent screen — it
+ * never decides anything on its own.
+ */
+export function matchConnectsFrom(
+  clientName: string | null | undefined,
+): string | null {
+  if (!clientName) {
+    return null;
+  }
+  const name = clientName.trim().toLowerCase();
+  if (CLIENT_NAME_ALIASES[name]) {
+    return CLIENT_NAME_ALIASES[name];
+  }
+  // "Claude 1", "Cursor (work)" — a registered name often carries a suffix.
+  const hit = Object.keys(CLIENT_NAME_ALIASES).find(
+    (alias) => name.startsWith(`${alias} `) || name.startsWith(`${alias}-`),
+  );
+  return hit ? CLIENT_NAME_ALIASES[hit] : null;
+}
+
 /** Step one, whichever client and whichever method. */
 export const PREREQUISITE: Record<"signIn" | "agentKey", string> = {
   signIn:
@@ -241,7 +304,7 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
             app: "Claude",
             steps: [
               "Customize → Connectors → Add → Add custom connector.",
-              "Enter a name and the server URL below, then press Continue.",
+              "Enter a name and the server URL above, then press Continue.",
               "Choose CIMD, DCR, or your own OAuth client. The third asks for a client ID and secret.",
               "Press Add, then Connect.",
             ],
@@ -275,7 +338,7 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
             app: "Cursor",
             steps: [
               "Settings → Customize → MCPs → New MCP Server. Cursor opens mcp.json.",
-              "Add the object below and save.",
+              "Add the object above and save.",
             ],
           },
           {
@@ -294,7 +357,7 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
         },
       },
       agentKey: {
-        heading: "Use a bearer token instead",
+        heading: "Add it to the same mcp.json",
         groups: [
           {
             app: "Cursor",
@@ -331,7 +394,7 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
             app: "Gemini",
             steps: [
               "Settings → Personal intelligence → Connected apps → Custom apps.",
-              "Paste the server URL below and press Next.",
+              "Paste the server URL above and press Next.",
               "Press Next again to register automatically, or open Additional settings to paste a client ID and secret.",
               "Accept Google's privacy notice.",
             ],
@@ -363,7 +426,7 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
             app: "ChatGPT",
             steps: [
               "Settings → Plugins → Browse plugins → Create app → Create MCP app.",
-              "Give it a Name, and paste the server URL below under Connection → Server URL.",
+              "Give it a Name, and paste the server URL above under Connection → Server URL.",
               "Leave Authentication on OAuth.",
               "Tick I understand and want to continue, then press Create.",
             ],
@@ -412,7 +475,7 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
         },
       },
       agentKey: {
-        heading: "Use a bearer token instead",
+        heading: "Send it on every request",
         groups: [
           {
             app: "the client",

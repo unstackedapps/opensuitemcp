@@ -22,6 +22,7 @@ const patchSchema = z.object({
   personaId: z.string().trim().max(128).optional().nullable(),
   netsuiteAccountId: z.string().trim().max(64).optional().nullable(),
   description: z.string().trim().max(256).optional().nullable(),
+  connectsFrom: z.string().trim().max(64).optional().nullable(),
 });
 
 export async function PATCH(
@@ -60,6 +61,7 @@ export async function PATCH(
         parsed.personaId === undefined ? undefined : requestedPersonaId,
       netsuiteAccountId: parsed.netsuiteAccountId,
       description: parsed.description,
+      connectsFrom: parsed.connectsFrom,
     });
     if (!updated) {
       return NextResponse.json(

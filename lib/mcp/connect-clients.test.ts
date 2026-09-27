@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { buildConnectClients } from "./connect-clients";
+import {
+  buildConnectClients,
+  connectsFromLabel,
+  matchConnectsFrom,
+} from "./connect-clients";
 
 const SERVER = "https://netsuite.acme.com/api/mcp";
 const clients = buildConnectClients(SERVER);
@@ -76,5 +80,32 @@ describe("connect guide", () => {
         }
       }
     }
+  });
+});
+
+describe("which app a registering client means", () => {
+  it("maps the names the clients we support actually report", () => {
+    assert.equal(matchConnectsFrom("Claude"), "claude");
+    assert.equal(matchConnectsFrom("Claude Code"), "claude");
+    assert.equal(matchConnectsFrom("Cursor"), "cursor");
+    assert.equal(matchConnectsFrom("Google"), "gemini");
+    assert.equal(matchConnectsFrom("ChatGPT"), "chatgpt");
+  });
+
+  it("ignores case and a trailing suffix", () => {
+    assert.equal(matchConnectsFrom("  cursor  "), "cursor");
+    assert.equal(matchConnectsFrom("Claude 1"), "claude");
+  });
+
+  it("returns null rather than guessing", () => {
+    assert.equal(matchConnectsFrom("Grok"), null);
+    assert.equal(matchConnectsFrom(""), null);
+    assert.equal(matchConnectsFrom(null), null);
+  });
+
+  it("shows a known id by its label and anything else verbatim", () => {
+    assert.equal(connectsFromLabel("gemini"), "Gemini");
+    assert.equal(connectsFromLabel("Perplexity"), "Perplexity");
+    assert.equal(connectsFromLabel(null), "");
   });
 });
