@@ -232,20 +232,13 @@ export function AgentDialog({
             )}
           </Field>
 
-          <Field htmlFor="agent-description" label="Note">
-            <Textarea
-              className="min-h-16 resize-none"
-              id="agent-description"
-              maxLength={256}
-              onChange={(event) =>
-                setDraft((d) => ({ ...d, description: event.target.value }))
-              }
-              rows={2}
-              value={draft.description}
-            />
-          </Field>
-
-          <Field htmlFor="agent-persona" label="Persona">
+          {/* Without a NetSuite account field there is an odd number of
+              half-width fields, and the last one leaves a hole. */}
+          <Field
+            htmlFor="agent-persona"
+            label="Persona"
+            wide={accounts.length === 0}
+          >
             <Select
               onValueChange={(personaId) =>
                 setDraft((d) => ({ ...d, personaId }))
@@ -298,6 +291,19 @@ export function AgentDialog({
               </Select>
             </Field>
           ) : null}
+
+          <Field htmlFor="agent-description" label="Note" wide>
+            <Textarea
+              className="min-h-16 resize-none"
+              id="agent-description"
+              maxLength={256}
+              onChange={(event) =>
+                setDraft((d) => ({ ...d, description: event.target.value }))
+              }
+              rows={2}
+              value={draft.description}
+            />
+          </Field>
 
           {creating ? (
             <div className="space-y-2 sm:col-span-2">
@@ -516,13 +522,16 @@ function Field({
   label,
   htmlFor,
   children,
+  wide,
 }: {
   label: string;
   htmlFor: string;
   children: React.ReactNode;
+  /** Spans both columns: for a control taller than one row. */
+  wide?: boolean;
 }) {
   return (
-    <div className="space-y-1.5">
+    <div className={`space-y-1.5${wide ? " sm:col-span-2" : ""}`}>
       <Label className="text-xs" htmlFor={htmlFor}>
         {label}
       </Label>
