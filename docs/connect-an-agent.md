@@ -71,15 +71,22 @@ shows yours, with a copy button.
 *In Cursor*
 
 2. Settings → Customize → MCPs → New MCP Server. Cursor opens mcp.json.
-3. Add the object above and save.
+3. Add the object above, save, and close the file.
+4. Back in Settings → Customize → MCPs, the connection reads Needs Authenticate. Press Authenticate.
 
 *In OpenSuiteMCP*
 
-4. Authorize the app on the consent screen Cursor opens.
+5. Authorize the app on the consent screen.
+
+*In Cursor*
+
+6. Close the redirect page and return to Cursor.
+
+⚠️ A new connection sometimes does not appear in the list. Open the command palette and run Developer: Reload Window.
 
 ### Bearer auth
 
-**Add it to the same mcp.json**
+**Add it to mcp.json with a header**
 
 `.cursor/mcp.json`
 
@@ -98,11 +105,14 @@ shows yours, with a copy button.
 
 *In OpenSuiteMCP*
 
-1. App Portal → Agent apps → New app. Choose Bearer auth and save, then copy the token.
+1. App Portal → Agent apps → New app. Choose Bearer auth and save, then open the app and copy its token.
 
 *In Cursor*
 
-2. Add the key as a header in the same file.
+2. Settings → Customize → MCPs → New MCP Server. Cursor opens mcp.json.
+3. Add the object above, save, and close the file.
+
+⚠️ A new connection sometimes does not appear in the list. Open the command palette and run Developer: Reload Window.
 
 ## Gemini
 
@@ -192,7 +202,7 @@ curl -sS https://your-install.example.com/api/mcp \
 
 *In OpenSuiteMCP*
 
-1. App Portal → Agent apps → New app. Choose Bearer auth and save, then copy the token.
+1. App Portal → Agent apps → New app. Choose Bearer auth and save, then open the app and copy its token.
 
 *In the client*
 
