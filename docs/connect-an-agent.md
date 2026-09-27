@@ -8,22 +8,29 @@
 Point Claude, Cursor, Gemini, ChatGPT or anything else that speaks MCP
 at your NetSuite workspace.
 
-Replace `https://your-install.example.com/api/mcp` with your Server URL, and `osmcp_…` with
-your token. **App Portal → Agent apps** shows both.
+---
+
+## Server URL
+
+Every client below takes the same URL. **App Portal → Agent apps**
+shows yours, with a copy button.
+
+| Install | Server URL |
+| --- | --- |
+| OpenSuiteMCP cloud | `https://app.opensuitemcp.com/api/mcp` |
+| Self-hosted | `https://opensuitemcp.mycompanydomain.com/api/mcp` |
+| Local | `http://localhost:3000/api/mcp` |
+
+A bearer token looks like `osmcp_…`, and is shown once when you
+create the app.
 
 ---
 
-## Claude — web, desktop and mobile
+## Claude
 
 ### OAuth 2.1
 
 **Add it as a custom connector**
-
-`MCP server URL`
-
-```text
-https://your-install.example.com/api/mcp
-```
 
 *In OpenSuiteMCP*
 
@@ -100,17 +107,11 @@ https://your-install.example.com/api/mcp
 
 2. Add the key as a header in the same file.
 
-## Gemini web app
+## Gemini
 
 ### OAuth 2.1
 
 **Add it as a custom app**
-
-`Server URL`
-
-```text
-https://your-install.example.com/api/mcp
-```
 
 *In OpenSuiteMCP*
 
@@ -138,12 +139,6 @@ https://your-install.example.com/api/mcp
 ### OAuth 2.1
 
 **Create an MCP app**
-
-`Connection → Server URL`
-
-```text
-https://your-install.example.com/api/mcp
-```
 
 *In OpenSuiteMCP*
 

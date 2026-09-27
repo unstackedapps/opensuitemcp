@@ -31,14 +31,25 @@ describe("connect guide", () => {
     assert.equal(gemini?.agentKey, null);
   });
 
-  it("puts the real server URL in every sign-in snippet", () => {
+  it("puts the real server URL in any sign-in snippet that has one", () => {
+    // Clients that take nothing but the URL have no snippet: the Server URL
+    // section at the top of the page is the one copy of it.
     for (const client of clients) {
       const code = client.signIn?.snippet?.code;
-      assert.ok(code, `${client.id} needs a sign-in snippet`);
+      if (!code) {
+        continue;
+      }
       assert.ok(
         code.includes(SERVER) || code.includes(new URL(SERVER).origin),
         `${client.id} sign-in snippet should name the server`,
       );
+    }
+  });
+
+  it("leaves the bare-URL clients without a snippet", () => {
+    for (const id of ["claude", "gemini", "chatgpt"]) {
+      const client = clients.find((entry) => entry.id === id);
+      assert.equal(client?.signIn?.snippet, undefined, id);
     }
   });
 
