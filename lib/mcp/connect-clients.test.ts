@@ -9,22 +9,22 @@ describe("connect guide", () => {
   it("covers every client the docs promise", () => {
     assert.deepEqual(
       clients.map((client) => client.id),
-      [
-        "claude",
-        "claude-code",
-        "cursor",
-        "vscode",
-        "gemini-cli",
-        "chatgpt",
-        "other",
-      ],
+      ["claude", "cursor", "gemini", "chatgpt", "other"],
     );
   });
 
-  it("offers a bearer token everywhere, since sign-in is not always possible", () => {
+  it("offers a bearer token wherever the client can send a header", () => {
     for (const client of clients) {
+      if (!client.agentKey) {
+        continue;
+      }
       assert.ok(client.agentKey.snippet, `${client.id} needs a key snippet`);
     }
+  });
+
+  it("gives Gemini no bearer route, because custom apps take no headers", () => {
+    const gemini = clients.find((client) => client.id === "gemini");
+    assert.equal(gemini?.agentKey, null);
   });
 
   it("puts the real server URL in every sign-in snippet", () => {
@@ -40,7 +40,10 @@ describe("connect guide", () => {
 
   it("names the credential in every agent-key snippet", () => {
     for (const client of clients) {
-      const code = client.agentKey.snippet?.code ?? "";
+      const code = client.agentKey?.snippet?.code ?? "";
+      if (!client.agentKey) {
+        continue;
+      }
       assert.match(
         code,
         /osmcp_/,
@@ -49,16 +52,8 @@ describe("connect guide", () => {
     }
   });
 
-  it("gives Gemini CLI httpUrl, because url would mean SSE", () => {
-    const gemini = clients.find((client) => client.id === "gemini-cli");
-    assert.ok(gemini?.signIn?.snippet?.code.includes('"httpUrl"'));
-    assert.ok(!gemini?.signIn?.snippet?.code.includes('"url"'));
-  });
-
-  it("gives VS Code servers and Cursor mcpServers", () => {
-    const vscode = clients.find((client) => client.id === "vscode");
+  it("gives Cursor mcpServers, the key its mcp.json reads", () => {
     const cursor = clients.find((client) => client.id === "cursor");
-    assert.ok(vscode?.signIn?.snippet?.code.includes('"servers"'));
     assert.ok(cursor?.signIn?.snippet?.code.includes('"mcpServers"'));
   });
 
@@ -66,7 +61,7 @@ describe("connect guide", () => {
     const vendor = clients.filter((client) => client.runsOn === "vendor");
     assert.deepEqual(
       vendor.map((client) => client.id),
-      ["claude", "chatgpt"],
+      ["claude", "gemini", "chatgpt"],
     );
   });
 

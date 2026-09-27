@@ -5,8 +5,8 @@
 
 # Connect an agent
 
-Point Claude, Cursor, VS Code, Gemini CLI, ChatGPT or anything else that
-speaks MCP at your NetSuite workspace.
+Point Claude, Cursor, Gemini, ChatGPT or anything else that speaks MCP
+at your NetSuite workspace.
 
 Two steps: **create the app**, then **point your AI at it**.
 
@@ -47,7 +47,6 @@ creating the app, and give it the connector's **callback URL**:
 | Connector | Callback URL |
 | --- | --- |
 | Claude | `https://claude.ai/api/mcp/auth_callback` |
-| ChatGPT | `https://chatgpt.com/connector_platform_oauth_redirect` |
 
 The app then hands you a client ID and secret, shown once and readable
 again from its details. Without a callback URL the first sign-in is
@@ -89,29 +88,6 @@ Authorization: Bearer osmcp_…
 
 ⚠️ Request-header auth is in beta and limited to some organizations. Where it is unavailable, sign-in is the only route.
 
-### Claude Code
-
-**Add the server, then sign in**
-
-1. In App Portal → Agent apps, create an app and choose OAuth 2.1. It waits there until you finish below.
-2. Run the command below.
-3. Run /mcp, choose opensuitemcp, and authenticate.
-4. Approve the app in the browser window that opens.
-
-```bash
-claude mcp add --transport http opensuitemcp https://your-install.example.com/api/mcp
-```
-
-**Use a bearer token instead**
-
-1. In App Portal → Agent apps, create an app and choose Bearer auth. The token is copied to your clipboard once.
-2. Pass the key as a header when adding the server.
-
-```bash
-claude mcp add --transport http opensuitemcp https://your-install.example.com/api/mcp \
-  --header "Authorization: Bearer osmcp_…"
-```
-
 ### Cursor
 
 **Add it to mcp.json**
@@ -152,100 +128,31 @@ claude mcp add --transport http opensuitemcp https://your-install.example.com/ap
 }
 ```
 
-### VS Code (GitHub Copilot)
+### Gemini web app
 
-**Add it to .vscode/mcp.json**
-
-1. In App Portal → Agent apps, create an app and choose OAuth 2.1. It waits there until you finish below.
-2. Put this in .vscode/mcp.json, or run MCP: Open User Configuration for every workspace.
-3. Start the server from the editor, then approve the app when prompted.
-
-`.vscode/mcp.json`
-
-```json
-{
-  "servers": {
-    "opensuitemcp": {
-      "type": "http",
-      "url": "https://your-install.example.com/api/mcp"
-    }
-  }
-}
-```
-
-⚠️ VS Code's workspace file uses "servers"; the portable .mcp.json format uses "mcpServers" instead.
-
-**Use a bearer token instead**
-
-1. In App Portal → Agent apps, create an app and choose Bearer auth. The token is copied to your clipboard once.
-2. Add the key as a header.
-
-`.vscode/mcp.json`
-
-```json
-{
-  "servers": {
-    "opensuitemcp": {
-      "type": "http",
-      "url": "https://your-install.example.com/api/mcp",
-      "headers": {
-        "Authorization": "Bearer osmcp_…"
-      }
-    }
-  }
-}
-```
-
-### Gemini CLI
-
-**Add it to settings.json**
+**Add it as a custom app**
 
 1. In App Portal → Agent apps, create an app and choose OAuth 2.1. It waits there until you finish below.
-2. Put this in ~/.gemini/settings.json.
-3. Run /mcp auth opensuitemcp, then approve the app.
+2. Open Settings → Personal intelligence → Connected apps → Custom apps.
+3. Paste the server URL below and press Next.
+4. Press Next again to register automatically, or open Additional settings to paste a client ID and secret.
+5. Accept Google's privacy notice, approve the app on this install, then press Connect.
 
-`~/.gemini/settings.json`
+`Server URL`
 
-```json
-{
-  "mcpServers": {
-    "opensuitemcp": {
-      "httpUrl": "https://your-install.example.com/api/mcp",
-      "authProviderType": "dynamic_discovery"
-    }
-  }
-}
+```text
+https://your-install.example.com/api/mcp
 ```
 
-⚠️ Use "httpUrl", not "url". In Gemini CLI "url" means an SSE endpoint, and this server does not serve one.
+⚠️ Personal Google accounts only; custom apps are not available on Workspace accounts yet. Additional settings shows the redirect URI to register if you are using your own client ID and secret.
 
-**Use a bearer token instead**
-
-1. In App Portal → Agent apps, create an app and choose Bearer auth. The token is copied to your clipboard once.
-2. Add the key as a header.
-
-`~/.gemini/settings.json`
-
-```json
-{
-  "mcpServers": {
-    "opensuitemcp": {
-      "httpUrl": "https://your-install.example.com/api/mcp",
-      "headers": {
-        "Authorization": "Bearer osmcp_…"
-      }
-    }
-  }
-}
-```
-
-### ChatGPT and the OpenAI API
+### ChatGPT
 
 **Add it as a connector**
 
 1. In App Portal → Agent apps, create an app and choose OAuth 2.1. It waits there until you finish below.
-2. Add a custom connector and paste the server URL below.
-3. Approve the app when prompted.
+2. Add a custom connector and give it the server URL below.
+3. Approve the app on this install when ChatGPT sends you here.
 
 `MCP server URL`
 
@@ -253,19 +160,7 @@ claude mcp add --transport http opensuitemcp https://your-install.example.com/ap
 https://your-install.example.com/api/mcp
 ```
 
-**Use a bearer token instead**
-
-1. In App Portal → Agent apps, create an app and choose Bearer auth. The token is copied to your clipboard once.
-2. In the Responses API, pass the key on the MCP tool definition.
-
-```json
-{
-  "type": "mcp",
-  "server_label": "opensuitemcp",
-  "server_url": "https://your-install.example.com/api/mcp",
-  "authorization": "osmcp_…"
-}
-```
+⚠️ ChatGPT registers itself, so the client ID, secret and redirect URI it offers are optional. Leave them blank.
 
 ### Anything else
 
@@ -299,8 +194,8 @@ curl -sS https://your-install.example.com/api/mcp \
 
 | Client | Runs on | Reaches a LAN-only install |
 | --- | --- | --- |
-| Claude Code, Cursor, VS Code, Gemini CLI | Your machine | Yes |
-| Claude web/desktop/mobile, ChatGPT | Vendor servers | No — publish it, or use a key |
+| Cursor | Your machine | Yes |
+| Claude web/desktop/mobile, Gemini, ChatGPT | Vendor servers | No — publish it, or use a key |
 
 Claude's egress range is `160.79.104.0/21` if you would rather
 allowlist than publish.
@@ -325,7 +220,6 @@ and **App Portal → Agent apps** warns you when they are not:
 | OAuth 2.1 unavailable in the app | The install is not on HTTPS, or AUTH_URL is unset | Set AUTH_URL to the public URL. Use a bearer token meanwhile |
 | The client loops back to sign-in | AUTH_URL disagrees with the URL the client used | Make them match exactly, including scheme and port |
 | 401 on every call | The credential was revoked, or Agent apps are off | Check Agent apps → Agents, or ask an administrator |
-| Connects but lists no tools (Gemini CLI) | url was used instead of httpUrl | Change the key to httpUrl |
 | invalid_grant on refresh | The token was already used, or the app was revoked | Sign in again |
 | 400 with -32020 | Headers disagree with the body on 2026-07-28 | Send MCP-Protocol-Version, Mcp-Method and Mcp-Name consistently |
 
