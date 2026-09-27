@@ -106,18 +106,24 @@ export default async function AuthorizePage({
   // product is the one most likely meant. It is only a pre-selection: the
   // person still chooses, and nothing is bound until they do.
   const meant = matchConnectsFrom(prepared.context.client.name);
-  const agents: ConsentAgentOption[] = prepared.pending.map((grant) => ({
-    id: grant.id,
-    name: grant.name,
-    connectsFrom: grant.connectsFrom,
-    matchesClient: Boolean(meant) && grant.connectsFrom === meant,
-    personaName: grant.personaId
-      ? (personaNames.get(grant.personaId) ?? null)
-      : null,
-    accountLabel: grant.netsuiteAccountId
-      ? (accountLabels.get(grant.netsuiteAccountId) ?? grant.netsuiteAccountId)
-      : null,
-  }));
+  const agents: ConsentAgentOption[] = prepared.pending
+    .map((grant) => ({
+      id: grant.id,
+      name: grant.name,
+      connectsFrom: grant.connectsFrom,
+      matchesClient: Boolean(meant) && grant.connectsFrom === meant,
+      personaName: grant.personaId
+        ? (personaNames.get(grant.personaId) ?? null)
+        : null,
+      accountLabel: grant.netsuiteAccountId
+        ? (accountLabels.get(grant.netsuiteAccountId) ??
+          grant.netsuiteAccountId)
+        : null,
+    }))
+    // Apps made for the product now asking come first. They are not the only
+    // ones offered: the name a client reports is its own choice, so treating
+    // a miss as "not allowed" would lock someone out of the app they meant.
+    .sort((a, b) => Number(b.matchesClient) - Number(a.matchesClient));
 
   return (
     <Shell>
