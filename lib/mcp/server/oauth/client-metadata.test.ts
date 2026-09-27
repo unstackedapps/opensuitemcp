@@ -131,16 +131,16 @@ describe("registration requests", () => {
     );
   });
 
-  it("refuses an auth method it cannot verify", () => {
+  it("substitutes an auth method it cannot verify, rather than refusing", () => {
+    const result = parseClientMetadata({
+      client_name: "X",
+      redirect_uris: ["https://x.test/cb"],
+      token_endpoint_auth_method: "private_key_jwt",
+    });
+    assert.ok(result.ok);
     assert.equal(
-      expectFailure(
-        parseClientMetadata({
-          client_name: "X",
-          redirect_uris: ["https://x.test/cb"],
-          token_endpoint_auth_method: "private_key_jwt",
-        }),
-      ).error,
-      "invalid_client_metadata",
+      result.metadata.tokenEndpointAuthMethod,
+      "client_secret_basic",
     );
   });
 
@@ -280,5 +280,43 @@ describe("grant and response types a client cannot use here", () => {
       }),
     );
     assert.match(result.description, /code/);
+  });
+});
+
+describe("an auth method this server cannot do", () => {
+  it("registers a DCR client asking for private_key_jwt, with a secret", () => {
+    const result = parseClientMetadata({
+      client_name: "ChatGPT",
+      redirect_uris: ["https://chatgpt.com/connector_platform_oauth_redirect"],
+      token_endpoint_auth_method: "private_key_jwt",
+    });
+    assert.ok(result.ok);
+    assert.equal(
+      result.metadata.tokenEndpointAuthMethod,
+      "client_secret_basic",
+    );
+  });
+
+  it("falls a CIMD client back to none, because it holds no secret", () => {
+    const result = parseClientMetadata(
+      {
+        client_name: "Public",
+        redirect_uris: ["https://public.test/cb"],
+        token_endpoint_auth_method: "client_secret_jwt",
+      },
+      { unsupportedAuthMethodFallback: "none" },
+    );
+    assert.ok(result.ok);
+    assert.equal(result.metadata.tokenEndpointAuthMethod, "none");
+  });
+
+  it("keeps a method this server does support", () => {
+    const result = parseClientMetadata({
+      client_name: "Post",
+      redirect_uris: ["https://post.test/cb"],
+      token_endpoint_auth_method: "client_secret_post",
+    });
+    assert.ok(result.ok);
+    assert.equal(result.metadata.tokenEndpointAuthMethod, "client_secret_post");
   });
 });

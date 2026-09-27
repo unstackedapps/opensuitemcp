@@ -48,6 +48,14 @@ export async function POST(request: Request) {
 
   const parsed = parseClientMetadata(body, { fallbackName: "Unnamed client" });
   if (!parsed.ok) {
+    // A refused registration is otherwise invisible: the client shows its own
+    // wording and the install has no record of what was actually sent.
+    console.warn("[oauth/register] refused", {
+      reason: parsed.description,
+      clientName: (body as Record<string, unknown>)?.client_name,
+      authMethod: (body as Record<string, unknown>)?.token_endpoint_auth_method,
+      grantTypes: (body as Record<string, unknown>)?.grant_types,
+    });
     return oauthErrorResponse({
       error: parsed.error,
       description: parsed.description,
