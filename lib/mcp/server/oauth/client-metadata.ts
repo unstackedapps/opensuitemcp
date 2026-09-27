@@ -111,7 +111,16 @@ function readStringArray(value: unknown): string[] | null {
  */
 export function parseClientMetadata(
   body: unknown,
-  options: { fallbackName?: string } = {},
+  options: {
+    fallbackName?: string;
+    /**
+     * What to register when the client asks for a method this server cannot
+     * do. A CIMD client holds no secret, so it falls back to "none"; a client
+     * registering through DCR is issued one, so it falls back to RFC 7591's
+     * own default.
+     */
+    unsupportedAuthMethodFallback?: TokenEndpointAuthMethod;
+  } = {},
 ): ClientMetadataResult {
   if (!body || typeof body !== "object" || Array.isArray(body)) {
     return fail(
@@ -192,20 +201,22 @@ export function parseClientMetadata(
     );
   }
 
+  // Same reasoning as the grants and response types above: a client states
+  // how it would prefer to authenticate, and refusing the whole registration
+  // over a preference we cannot meet locks it out of a flow it could have
+  // completed. ChatGPT asks for one of these. Substitute a method we do
+  // support; /register and the authorize screen both read back what was
+  // registered, so the client is never left guessing.
   const rawAuthMethod = doc.token_endpoint_auth_method;
-  const tokenEndpointAuthMethod =
+  const requestedAuthMethod =
     rawAuthMethod === undefined ? "client_secret_basic" : rawAuthMethod;
-  if (
-    typeof tokenEndpointAuthMethod !== "string" ||
-    !SUPPORTED_AUTH_METHODS.includes(
-      tokenEndpointAuthMethod as TokenEndpointAuthMethod,
+  const tokenEndpointAuthMethod =
+    typeof requestedAuthMethod === "string" &&
+    SUPPORTED_AUTH_METHODS.includes(
+      requestedAuthMethod as TokenEndpointAuthMethod,
     )
-  ) {
-    return fail(
-      "invalid_client_metadata",
-      `token_endpoint_auth_method must be one of ${SUPPORTED_AUTH_METHODS.join(", ")}.`,
-    );
-  }
+      ? (requestedAuthMethod as TokenEndpointAuthMethod)
+      : (options.unsupportedAuthMethodFallback ?? "client_secret_basic");
 
   return {
     ok: true,
@@ -219,8 +230,7 @@ export function parseClientMetadata(
       // hour, and the client is free to ignore one it did not ask for.
       grantTypes: Array.from(new Set([...usableGrants, "refresh_token"])),
       responseTypes: usableResponseTypes,
-      tokenEndpointAuthMethod:
-        tokenEndpointAuthMethod as TokenEndpointAuthMethod,
+      tokenEndpointAuthMethod,
       scope: readString(doc.scope, MAX_NAME_LENGTH),
       softwareId: readString(doc.software_id, MAX_NAME_LENGTH),
     },
@@ -280,5 +290,7 @@ export function validateClientIdMetadataDocument(params: {
     );
   }
 
-  return parseClientMetadata(params.document);
+  return parseClientMetadata(params.document, {
+    unsupportedAuthMethodFallback: "none",
+  });
 }
