@@ -137,6 +137,11 @@ export function ConsentForm({
                       {agentDetail(agent)}
                     </span>
                   ) : null}
+                  {agent.matchesClient ? (
+                    <span className="ml-1.5 rounded bg-primary/15 px-1.5 py-0.5 text-[10px] text-primary">
+                      Match
+                    </span>
+                  ) : null}
                 </SelectItem>
               ))}
             </SelectContent>

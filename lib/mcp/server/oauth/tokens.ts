@@ -368,7 +368,12 @@ export async function revokeTokenByValue(params: {
   }
 
   if (row.token.kind === "refresh") {
+    // Revoking the refresh token ends the authorization, not just one token.
+    // Leaving clientId set left the app reading "Signed in" with nothing
+    // behind it, and the consent screen only offers unbound apps — so the
+    // only way back was deleting it. Same reset as reuse detection.
     await revokeTokensForGrant(row.grant.id);
+    await resetOAuthGrantToPending(row.grant.id);
     return;
   }
 
