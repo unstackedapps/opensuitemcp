@@ -36,6 +36,36 @@ export const KNOWN_CALLBACK_URLS: { label: string; url: string }[] = [
   },
 ];
 
+/** The path every install serves MCP on. */
+export const MCP_PATH = "/api/mcp";
+
+/** The cloud install, when nothing tells us which one we are rendering for. */
+export const CLOUD_ORIGIN = "https://app.opensuitemcp.com";
+
+/**
+ * Every shape a Server URL takes, so it is stated once at the top of the page
+ * rather than repeated under each client.
+ *
+ * `hostedOrigin` comes from the running install on the hosted docs, so a
+ * sandbox reader is shown app-sandbox and a cloud reader app. Null falls back
+ * to the cloud origin, which is what the markdown in this repo renders.
+ */
+export function buildServerUrlForms(
+  hostedOrigin?: string | null,
+): { label: string; url: string }[] {
+  return [
+    {
+      label: "OpenSuiteMCP cloud",
+      url: `${hostedOrigin ?? CLOUD_ORIGIN}${MCP_PATH}`,
+    },
+    {
+      label: "Self-hosted",
+      url: `https://opensuitemcp.mycompanydomain.com${MCP_PATH}`,
+    },
+    { label: "Local", url: `http://localhost:3000${MCP_PATH}` },
+  ];
+}
+
 /**
  * The AI products an agent app can be created for.
  *
@@ -274,8 +304,6 @@ export type ConnectMethod = {
 
 export type ConnectClient = {
   id: ConnectClientId;
-  /** Short label for a picker. */
-  label: string;
   /** Heading for a documentation page, where there is room to be explicit. */
   docHeading: string;
   /** Where the client runs, which decides whether it can reach a LAN install. */
@@ -294,8 +322,7 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
   return [
     {
       id: "claude",
-      label: "Claude web, desktop & mobile",
-      docHeading: "Claude — web, desktop and mobile",
+      docHeading: "Claude",
       runsOn: "vendor",
       signIn: {
         heading: "Add it as a custom connector",
@@ -314,11 +341,6 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
             steps: ["Authorize the app on the consent screen."],
           },
         ],
-        snippet: {
-          language: "text",
-          location: "MCP server URL",
-          code: serverUrl,
-        },
         note: "On Team or Enterprise, only an Owner can add a connector.",
       },
       // The connector dialog offers three OAuth registration methods and no
@@ -328,7 +350,6 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
     },
     {
       id: "cursor",
-      label: "Cursor",
       docHeading: "Cursor",
       runsOn: "device",
       signIn: {
@@ -384,8 +405,7 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
     },
     {
       id: "gemini",
-      label: "Gemini web app",
-      docHeading: "Gemini web app",
+      docHeading: "Gemini",
       runsOn: "vendor",
       signIn: {
         heading: "Add it as a custom app",
@@ -405,18 +425,12 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
           },
           { app: "Gemini", steps: ["Press Connect."] },
         ],
-        snippet: {
-          language: "text",
-          location: "Server URL",
-          code: serverUrl,
-        },
         note: "Personal Google accounts only; custom apps are not available on Workspace accounts yet. Additional settings shows the redirect URI to register if you are using your own client ID and secret.",
       },
       agentKey: null,
     },
     {
       id: "chatgpt",
-      label: "ChatGPT",
       docHeading: "ChatGPT",
       runsOn: "vendor",
       signIn: {
@@ -438,11 +452,6 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
             ],
           },
         ],
-        snippet: {
-          language: "text",
-          location: "Connection → Server URL",
-          code: serverUrl,
-        },
         note: "Advanced OAuth settings shows what ChatGPT discovered and lets you swap CIMD for DCR or your own client ID and secret. The discovered values work as they are.",
       },
       // Verified through the connector only. Whether a ChatGPT connector or
@@ -452,7 +461,6 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
     },
     {
       id: "other",
-      label: "Anything else",
       docHeading: "Anything else",
       runsOn: "device",
       signIn: {
