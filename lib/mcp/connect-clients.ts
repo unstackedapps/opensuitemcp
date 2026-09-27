@@ -39,9 +39,9 @@ export const KNOWN_CALLBACK_URLS: { label: string; url: string }[] = [
 /** Step one, whichever client and whichever method. */
 export const PREREQUISITE: Record<"signIn" | "agentKey", string> = {
   signIn:
-    "In OpenSuiteMCP: App Portal → Agent apps → New app. Choose OAuth 2.1 and save. It waits there until you finish below.",
+    "App Portal → Agent apps → New app. Choose OAuth 2.1 and save. It waits there until you finish below.",
   agentKey:
-    "In OpenSuiteMCP: App Portal → Agent apps → New app. Choose Bearer auth and save. The token is shown once — copy it.",
+    "App Portal → Agent apps → New app. Choose Bearer auth and save. The token is shown once — copy it.",
 };
 
 /**
@@ -185,9 +185,25 @@ export type ConnectSnippet = {
   code: string;
 };
 
+/** The name of this install, as a step group's heading says it. */
+export const THIS_APP = "OpenSuiteMCP";
+
+/**
+ * A run of steps taken in one application.
+ *
+ * Connecting always crosses between two: the app is created here, configured
+ * in the client, and approved back here. Grouping makes each hop a heading
+ * rather than a prefix repeated on every line.
+ */
+export type ConnectStepGroup = { app: string; steps: string[] };
+
 export type ConnectMethod = {
   heading: string;
-  steps: string[];
+  /**
+   * Groups after the opening one, which is always creating the app here and
+   * comes from PREREQUISITE.
+   */
+  groups: ConnectStepGroup[];
   snippet?: ConnectSnippet;
   /** Shown as a caution rather than a step. */
   note?: string;
@@ -220,12 +236,17 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
       runsOn: "vendor",
       signIn: {
         heading: "Add it as a custom connector",
-        steps: [
-          "In Claude: Customize → Connectors → Add → Add custom connector.",
-          "In Claude: Enter a name and the server URL below, then press Continue.",
-          "In Claude: Choose CIMD, DCR, or your own OAuth client. The third asks for a client ID and secret.",
-          "In Claude: Press Add, then Connect.",
-          "In OpenSuiteMCP: Approve the app on the consent screen.",
+        groups: [
+          {
+            app: "Claude",
+            steps: [
+              "Customize → Connectors → Add → Add custom connector.",
+              "Enter a name and the server URL below, then press Continue.",
+              "Choose CIMD, DCR, or your own OAuth client. The third asks for a client ID and secret.",
+              "Press Add, then Connect.",
+            ],
+          },
+          { app: THIS_APP, steps: ["Approve the app on the consent screen."] },
         ],
         snippet: {
           language: "text",
@@ -246,10 +267,18 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
       runsOn: "device",
       signIn: {
         heading: "Add it to mcp.json",
-        steps: [
-          "In Cursor: Settings → Customize → MCPs → New MCP Server. Cursor opens mcp.json.",
-          "In Cursor: Add the object below and save.",
-          "In OpenSuiteMCP: Approve the app on the consent screen Cursor opens.",
+        groups: [
+          {
+            app: "Cursor",
+            steps: [
+              "Settings → Customize → MCPs → New MCP Server. Cursor opens mcp.json.",
+              "Add the object below and save.",
+            ],
+          },
+          {
+            app: THIS_APP,
+            steps: ["Approve the app on the consent screen Cursor opens."],
+          },
         ],
         snippet: {
           language: "json",
@@ -263,7 +292,12 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
       },
       agentKey: {
         heading: "Use a bearer token instead",
-        steps: ["In Cursor: Add the key as a header in the same file."],
+        groups: [
+          {
+            app: "Cursor",
+            steps: ["Add the key as a header in the same file."],
+          },
+        ],
         snippet: {
           language: "json",
           location: ".cursor/mcp.json",
@@ -289,13 +323,18 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
       runsOn: "vendor",
       signIn: {
         heading: "Add it as a custom app",
-        steps: [
-          "In Gemini: Settings → Personal intelligence → Connected apps → Custom apps.",
-          "In Gemini: Paste the server URL below and press Next.",
-          "In Gemini: Press Next again to register automatically, or open Additional settings to paste a client ID and secret.",
-          "In Gemini: Accept Google's privacy notice.",
-          "In OpenSuiteMCP: Approve the app on the consent screen.",
-          "In Gemini: Press Connect.",
+        groups: [
+          {
+            app: "Gemini",
+            steps: [
+              "Settings → Personal intelligence → Connected apps → Custom apps.",
+              "Paste the server URL below and press Next.",
+              "Press Next again to register automatically, or open Additional settings to paste a client ID and secret.",
+              "Accept Google's privacy notice.",
+            ],
+          },
+          { app: THIS_APP, steps: ["Approve the app on the consent screen."] },
+          { app: "Gemini", steps: ["Press Connect."] },
         ],
         snippet: {
           language: "text",
@@ -313,12 +352,22 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
       runsOn: "vendor",
       signIn: {
         heading: "Create an MCP app",
-        steps: [
-          "In ChatGPT: Settings → Plugins → Browse plugins → Create app → Create MCP app.",
-          "In ChatGPT: Give it a Name, and paste the server URL below under Connection → Server URL.",
-          "In ChatGPT: Leave Authentication on OAuth.",
-          "In ChatGPT: Tick I understand and want to continue, then press Create.",
-          "In OpenSuiteMCP: Approve the app on the consent screen. You land back on the plugins page.",
+        groups: [
+          {
+            app: "ChatGPT",
+            steps: [
+              "Settings → Plugins → Browse plugins → Create app → Create MCP app.",
+              "Give it a Name, and paste the server URL below under Connection → Server URL.",
+              "Leave Authentication on OAuth.",
+              "Tick I understand and want to continue, then press Create.",
+            ],
+          },
+          {
+            app: THIS_APP,
+            steps: [
+              "Approve the app on the consent screen. You land back on the plugins page.",
+            ],
+          },
         ],
         snippet: {
           language: "text",
@@ -339,9 +388,14 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
       runsOn: "device",
       signIn: {
         heading: "Point it at the server URL",
-        steps: [
-          "In the client: Give it the server URL. It reads the 401, finds this install's authorization server, and opens the sign-in.",
-          "In OpenSuiteMCP: Approve the app on the consent screen.",
+        groups: [
+          {
+            app: "the client",
+            steps: [
+              "Give it the server URL. It reads the 401, finds this install's authorization server, and opens the sign-in.",
+            ],
+          },
+          { app: THIS_APP, steps: ["Approve the app on the consent screen."] },
         ],
         snippet: {
           language: "bash",
@@ -350,8 +404,11 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
       },
       agentKey: {
         heading: "Use a bearer token instead",
-        steps: [
-          "In the client: Send the key as a bearer token on every request.",
+        groups: [
+          {
+            app: "the client",
+            steps: ["Send the key as a bearer token on every request."],
+          },
         ],
         snippet: {
           language: "bash",

@@ -8,43 +8,29 @@
 Point Claude, Cursor, Gemini, ChatGPT or anything else that speaks MCP
 at your NetSuite workspace.
 
----
-
-## 1. Create the agent app
-
-In OpenSuiteMCP: **App Portal → Agent apps → New app**. Copy the
-**Server URL** from the same panel.
-
-**OAuth 2.1** — A person is setting this up, and the install is on HTTPS.
-
-**Bearer auth** — A scheduled job, CI, a client with no OAuth support, or no HTTPS.
-
-### If the connector asks for a client ID and secret
-
-Tick **This connector asks for a client ID and secret**, and give it the
-connector's callback URL:
-
-| Connector | Callback URL |
-| --- | --- |
-| Claude | `https://claude.ai/api/mcp/auth_callback` |
-| ChatGPT | `https://chatgpt.com/connector_platform_oauth_redirect` |
+Replace `https://your-install.example.com/api/mcp` with your Server URL, and `osmcp_…` with
+your token. **App Portal → Agent apps** shows both.
 
 ---
 
-## 2. Point the AI at it
-
-Replace `https://your-install.example.com/api/mcp` with your Server URL, and `osmcp_…` with your key.
-
-### Claude — web, desktop and mobile
+## Claude — web, desktop and mobile
 
 **Add it as a custom connector**
 
-1. In OpenSuiteMCP: App Portal → Agent apps → New app. Choose OAuth 2.1 and save. It waits there until you finish below.
-2. In Claude: Customize → Connectors → Add → Add custom connector.
-3. In Claude: Enter a name and the server URL below, then press Continue.
-4. In Claude: Choose CIMD, DCR, or your own OAuth client. The third asks for a client ID and secret.
-5. In Claude: Press Add, then Connect.
-6. In OpenSuiteMCP: Approve the app on the consent screen.
+*In OpenSuiteMCP*
+
+1. App Portal → Agent apps → New app. Choose OAuth 2.1 and save. It waits there until you finish below.
+
+*In Claude*
+
+2. Customize → Connectors → Add → Add custom connector.
+3. Enter a name and the server URL below, then press Continue.
+4. Choose CIMD, DCR, or your own OAuth client. The third asks for a client ID and secret.
+5. Press Add, then Connect.
+
+*In OpenSuiteMCP*
+
+6. Approve the app on the consent screen.
 
 `MCP server URL`
 
@@ -54,14 +40,22 @@ https://your-install.example.com/api/mcp
 
 ⚠️ On Team or Enterprise, only an Owner can add a connector.
 
-### Cursor
+## Cursor
 
 **Add it to mcp.json**
 
-1. In OpenSuiteMCP: App Portal → Agent apps → New app. Choose OAuth 2.1 and save. It waits there until you finish below.
-2. In Cursor: Settings → Customize → MCPs → New MCP Server. Cursor opens mcp.json.
-3. In Cursor: Add the object below and save.
-4. In OpenSuiteMCP: Approve the app on the consent screen Cursor opens.
+*In OpenSuiteMCP*
+
+1. App Portal → Agent apps → New app. Choose OAuth 2.1 and save. It waits there until you finish below.
+
+*In Cursor*
+
+2. Settings → Customize → MCPs → New MCP Server. Cursor opens mcp.json.
+3. Add the object below and save.
+
+*In OpenSuiteMCP*
+
+4. Approve the app on the consent screen Cursor opens.
 
 `.cursor/mcp.json`
 
@@ -77,8 +71,13 @@ https://your-install.example.com/api/mcp
 
 **Use a bearer token instead**
 
-1. In OpenSuiteMCP: App Portal → Agent apps → New app. Choose Bearer auth and save. The token is shown once — copy it.
-2. In Cursor: Add the key as a header in the same file.
+*In OpenSuiteMCP*
+
+1. App Portal → Agent apps → New app. Choose Bearer auth and save. The token is shown once — copy it.
+
+*In Cursor*
+
+2. Add the key as a header in the same file.
 
 `.cursor/mcp.json`
 
@@ -95,17 +94,28 @@ https://your-install.example.com/api/mcp
 }
 ```
 
-### Gemini web app
+## Gemini web app
 
 **Add it as a custom app**
 
-1. In OpenSuiteMCP: App Portal → Agent apps → New app. Choose OAuth 2.1 and save. It waits there until you finish below.
-2. In Gemini: Settings → Personal intelligence → Connected apps → Custom apps.
-3. In Gemini: Paste the server URL below and press Next.
-4. In Gemini: Press Next again to register automatically, or open Additional settings to paste a client ID and secret.
-5. In Gemini: Accept Google's privacy notice.
-6. In OpenSuiteMCP: Approve the app on the consent screen.
-7. In Gemini: Press Connect.
+*In OpenSuiteMCP*
+
+1. App Portal → Agent apps → New app. Choose OAuth 2.1 and save. It waits there until you finish below.
+
+*In Gemini*
+
+2. Settings → Personal intelligence → Connected apps → Custom apps.
+3. Paste the server URL below and press Next.
+4. Press Next again to register automatically, or open Additional settings to paste a client ID and secret.
+5. Accept Google's privacy notice.
+
+*In OpenSuiteMCP*
+
+6. Approve the app on the consent screen.
+
+*In Gemini*
+
+7. Press Connect.
 
 `Server URL`
 
@@ -115,16 +125,24 @@ https://your-install.example.com/api/mcp
 
 ⚠️ Personal Google accounts only; custom apps are not available on Workspace accounts yet. Additional settings shows the redirect URI to register if you are using your own client ID and secret.
 
-### ChatGPT
+## ChatGPT
 
 **Create an MCP app**
 
-1. In OpenSuiteMCP: App Portal → Agent apps → New app. Choose OAuth 2.1 and save. It waits there until you finish below.
-2. In ChatGPT: Settings → Plugins → Browse plugins → Create app → Create MCP app.
-3. In ChatGPT: Give it a Name, and paste the server URL below under Connection → Server URL.
-4. In ChatGPT: Leave Authentication on OAuth.
-5. In ChatGPT: Tick I understand and want to continue, then press Create.
-6. In OpenSuiteMCP: Approve the app on the consent screen. You land back on the plugins page.
+*In OpenSuiteMCP*
+
+1. App Portal → Agent apps → New app. Choose OAuth 2.1 and save. It waits there until you finish below.
+
+*In ChatGPT*
+
+2. Settings → Plugins → Browse plugins → Create app → Create MCP app.
+3. Give it a Name, and paste the server URL below under Connection → Server URL.
+4. Leave Authentication on OAuth.
+5. Tick I understand and want to continue, then press Create.
+
+*In OpenSuiteMCP*
+
+6. Approve the app on the consent screen. You land back on the plugins page.
 
 `Connection → Server URL`
 
@@ -134,13 +152,21 @@ https://your-install.example.com/api/mcp
 
 ⚠️ Advanced OAuth settings shows what ChatGPT discovered and lets you swap CIMD for DCR or your own client ID and secret. The discovered values work as they are.
 
-### Anything else
+## Anything else
 
 **Point it at the server URL**
 
-1. In OpenSuiteMCP: App Portal → Agent apps → New app. Choose OAuth 2.1 and save. It waits there until you finish below.
-2. In the client: Give it the server URL. It reads the 401, finds this install's authorization server, and opens the sign-in.
-3. In OpenSuiteMCP: Approve the app on the consent screen.
+*In OpenSuiteMCP*
+
+1. App Portal → Agent apps → New app. Choose OAuth 2.1 and save. It waits there until you finish below.
+
+*In the client*
+
+2. Give it the server URL. It reads the 401, finds this install's authorization server, and opens the sign-in.
+
+*In OpenSuiteMCP*
+
+3. Approve the app on the consent screen.
 
 ```bash
 curl -sS https://your-install.example.com/.well-known/oauth-protected-resource
@@ -148,8 +174,13 @@ curl -sS https://your-install.example.com/.well-known/oauth-protected-resource
 
 **Use a bearer token instead**
 
-1. In OpenSuiteMCP: App Portal → Agent apps → New app. Choose Bearer auth and save. The token is shown once — copy it.
-2. In the client: Send the key as a bearer token on every request.
+*In OpenSuiteMCP*
+
+1. App Portal → Agent apps → New app. Choose Bearer auth and save. The token is shown once — copy it.
+
+*In the client*
+
+2. Send the key as a bearer token on every request.
 
 ```bash
 curl -sS https://your-install.example.com/api/mcp \
@@ -159,6 +190,18 @@ curl -sS https://your-install.example.com/api/mcp \
   -H "Mcp-Method: tools/list" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
+
+---
+
+## If the connector asks for a client ID and secret
+
+Tick **This connector asks for a client ID and secret** when you create the
+app, and give it the connector's callback URL:
+
+| Connector | Callback URL |
+| --- | --- |
+| Claude | `https://claude.ai/api/mcp/auth_callback` |
+| ChatGPT | `https://chatgpt.com/connector_platform_oauth_redirect` |
 
 ---
 

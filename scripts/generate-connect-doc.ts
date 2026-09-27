@@ -18,14 +18,14 @@ import {
   CLAUDE_EGRESS_RANGE,
   CONNECT_TROUBLESHOOTING,
   type ConnectMethod,
+  type ConnectStepGroup,
   KEY_PLACEHOLDER,
   KNOWN_CALLBACK_URLS,
-  METHOD_GUIDANCE,
-  METHOD_NAMES,
   PREREQUISITE,
   REACHABILITY,
   SELF_HOST_REQUIREMENTS,
   SERVER_URL_PLACEHOLDER,
+  THIS_APP,
 } from "../lib/mcp/connect-clients";
 
 // Run from the repository root; tsx compiles this to CJS on Node 20, where
@@ -45,8 +45,24 @@ function table(head: string[], rows: string[][]): string {
 function method(entry: ConnectMethod, prerequisite: string): string {
   const out: string[] = [];
   out.push(`**${entry.heading}**`, "");
-  const steps = [prerequisite, ...entry.steps];
-  out.push(...steps.map((step, index) => `${index + 1}. ${step}`), "");
+
+  // The app is created here, configured in the client, and approved back
+  // here. One heading per hop, and the numbering runs straight through so a
+  // reader never loses their place across the boundary.
+  const groups: ConnectStepGroup[] = [
+    { app: THIS_APP, steps: [prerequisite] },
+    ...entry.groups,
+  ];
+  let n = 0;
+  for (const group of groups) {
+    out.push(`*In ${group.app}*`, "");
+    for (const step of group.steps) {
+      n += 1;
+      out.push(`${n}. ${step}`);
+    }
+    out.push("");
+  }
+
   if (entry.snippet) {
     if (entry.snippet.location) {
       out.push(`\`${entry.snippet.location}\``, "");
@@ -80,37 +96,15 @@ function render(): string {
     "Point Claude, Cursor, Gemini, ChatGPT or anything else that speaks MCP",
     "at your NetSuite workspace.",
     "",
-    "---",
-    "",
-    "## 1. Create the agent app",
-    "",
-    "In OpenSuiteMCP: **App Portal \u2192 Agent apps \u2192 New app**. Copy the",
-    "**Server URL** from the same panel.",
-    "",
-    `**${METHOD_NAMES.signIn}** \u2014 ${METHOD_GUIDANCE.signIn}`,
-    "",
-    `**${METHOD_NAMES.agentKey}** \u2014 ${METHOD_GUIDANCE.agentKey}`,
-    "",
-    "### If the connector asks for a client ID and secret",
-    "",
-    "Tick **This connector asks for a client ID and secret**, and give it the",
-    "connector's callback URL:",
-    "",
-    table(
-      ["Connector", "Callback URL"],
-      KNOWN_CALLBACK_URLS.map((row) => [row.label, `\`${row.url}\``]),
-    ),
+    `Replace \`${SERVER_URL}\` with your Server URL, and \`${KEY_PLACEHOLDER}\` with`,
+    "your token. **App Portal \u2192 Agent apps** shows both.",
     "",
     "---",
-    "",
-    "## 2. Point the AI at it",
-    "",
-    `Replace \`${SERVER_URL}\` with your Server URL, and \`${KEY_PLACEHOLDER}\` with your key.`,
     "",
   );
 
   for (const client of clients) {
-    out.push(`### ${client.docHeading}`, "");
+    out.push(`## ${client.docHeading}`, "");
     if (client.signIn) {
       out.push(method(client.signIn, PREREQUISITE.signIn));
     }
@@ -120,6 +114,18 @@ function render(): string {
   }
 
   out.push(
+    "---",
+    "",
+    "## If the connector asks for a client ID and secret",
+    "",
+    "Tick **This connector asks for a client ID and secret** when you create the",
+    "app, and give it the connector's callback URL:",
+    "",
+    table(
+      ["Connector", "Callback URL"],
+      KNOWN_CALLBACK_URLS.map((row) => [row.label, `\`${row.url}\``]),
+    ),
+    "",
     "---",
     "",
     "## Can the AI reach your install?",
