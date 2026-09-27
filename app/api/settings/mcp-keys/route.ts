@@ -106,6 +106,7 @@ export async function POST(request: Request) {
       name: parsed.name,
       netsuiteAccountId: parsed.netsuiteAccountId ?? null,
       personaId: requestedPersonaId,
+      connectsFrom: parsed.connectsFrom ?? null,
       expiresAt: parsed.expiresInDays
         ? new Date(Date.now() + parsed.expiresInDays * 86_400_000)
         : null,

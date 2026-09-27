@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { connectsFromLabel } from "@/lib/mcp/connect-clients";
 
 /** A waiting agent, already named and configured in the portal. */
 export type ConsentAgentOption = {
@@ -16,6 +17,10 @@ export type ConsentAgentOption = {
   name: string;
   personaName: string | null;
   accountLabel: string | null;
+  /** Which AI product it was created for, shown so two apps are tellable apart. */
+  connectsFrom: string | null;
+  /** True when that matches the client now asking, so it is pre-selected. */
+  matchesClient: boolean;
 };
 
 export type ConsentFormProps = {
@@ -55,7 +60,13 @@ export function ConsentForm({
   // whichever app happened to be waiting, because Authorize was already armed.
   // With one app there is nothing to choose; with more, choose.
   const [grantId, setGrantId] = useState(
-    agents.length === 1 ? (agents[0]?.id ?? "") : "",
+    agents.length === 1
+      ? (agents[0]?.id ?? "")
+      : // Exactly one app created for the product now asking is a safe
+        // pre-selection. Two would be a guess, so neither is chosen.
+        agents.filter((agent) => agent.matchesClient).length === 1
+        ? (agents.find((agent) => agent.matchesClient)?.id ?? "")
+        : "",
   );
   const chosen = agents.find((agent) => agent.id === grantId);
 
@@ -101,7 +112,11 @@ export function ConsentForm({
                     {agent.name}
                   </span>
                   <span className="block truncate text-muted-foreground text-xs">
-                    {[agent.personaName, agent.accountLabel]
+                    {[
+                      connectsFromLabel(agent.connectsFrom),
+                      agent.personaName,
+                      agent.accountLabel,
+                    ]
                       .filter(Boolean)
                       .join(" · ") || "No persona assigned"}
                   </span>

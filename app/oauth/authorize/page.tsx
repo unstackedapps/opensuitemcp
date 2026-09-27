@@ -9,6 +9,7 @@ import {
 } from "@/components/oauth/consent-form";
 import { Button } from "@/components/ui/button";
 import { getUserSettings } from "@/lib/db/queries";
+import { matchConnectsFrom } from "@/lib/mcp/connect-clients";
 import { listAgentPersonaOptions } from "@/lib/mcp/server/agent-personas";
 import {
   type AuthorizationContext,
@@ -101,9 +102,15 @@ export default async function AuthorizePage({
     ]),
   );
 
+  // A client says what it is when it registers, so an app created for that
+  // product is the one most likely meant. It is only a pre-selection: the
+  // person still chooses, and nothing is bound until they do.
+  const meant = matchConnectsFrom(prepared.context.client.name);
   const agents: ConsentAgentOption[] = prepared.pending.map((grant) => ({
     id: grant.id,
     name: grant.name,
+    connectsFrom: grant.connectsFrom,
+    matchesClient: Boolean(meant) && grant.connectsFrom === meant,
     personaName: grant.personaId
       ? (personaNames.get(grant.personaId) ?? null)
       : null,
