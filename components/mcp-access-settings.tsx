@@ -24,7 +24,6 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -195,7 +194,7 @@ export function McpAccessPanel({
   const [saving, setSaving] = useState(false);
   const [creatingOpen, setCreatingOpen] = useState(false);
   /**
-   * Credentials are shown once, on creation, like the key.
+   * Credentials are shown on creation, and read back from the app after.
    *
    * They exist only for connectors that demand an ID and secret instead of
    * registering themselves, and they belong to the app they were issued from:
@@ -956,7 +955,7 @@ export function McpAccessPanel({
 }
 
 /**
- * The client ID and secret, shown once.
+ * The client ID and secret, at the moment they are issued.
  *
  * Same bargain the bearer token makes, for the same reason: the secret is stored
  * only as a hash after this. It names the app it belongs to because that is
@@ -986,7 +985,6 @@ function CredentialsDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{issued?.name} is ready to connect</DialogTitle>
-          <DialogDescription>The secret is shown once.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3 py-1">

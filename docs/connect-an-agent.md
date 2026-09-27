@@ -98,7 +98,7 @@ shows yours, with a copy button.
 
 *In OpenSuiteMCP*
 
-1. App Portal → Agent apps → New app. Choose Bearer auth and save. The token is shown once — copy it.
+1. App Portal → Agent apps → New app. Choose Bearer auth and save, then copy the token.
 
 *In Cursor*
 
@@ -191,7 +191,7 @@ curl -sS https://your-install.example.com/api/mcp \
 
 *In OpenSuiteMCP*
 
-1. App Portal → Agent apps → New app. Choose Bearer auth and save. The token is shown once — copy it.
+1. App Portal → Agent apps → New app. Choose Bearer auth and save, then copy the token.
 
 *In the client*
 
