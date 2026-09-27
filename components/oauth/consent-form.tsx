@@ -43,6 +43,8 @@ export type ConsentAgentOption = {
   matchesClient: boolean;
   /** Already holds a credential. Choosing it replaces that credential. */
   connected: boolean;
+  /** The client holding it, so the row can name who loses it. */
+  heldBy: string | null;
 };
 
 export type ConsentFormProps = {
@@ -130,7 +132,7 @@ export function ConsentForm({
                 ) : null}
                 {agent.connected ? (
                   <span className="ml-1.5 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                    Reconnect
+                    {agent.heldBy ? `Held by ${agent.heldBy}` : "In use"}
                   </span>
                 ) : null}
                 {agent.matchesClient ? (
@@ -146,6 +148,12 @@ export function ConsentForm({
           You will be sent back to{" "}
           <span className="font-mono">{redirectHost}</span>.
         </p>
+        {agents.some((agent) => agent.connected) ? (
+          <p className="text-muted-foreground text-xs">
+            Choosing an app that already holds a credential signs the current
+            holder out of it.
+          </p>
+        ) : null}
       </div>
 
       {loopbackOnly ? (
