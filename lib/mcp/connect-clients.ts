@@ -251,27 +251,22 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
       signIn: {
         heading: "Add it as a custom connector",
         steps: [
-          "In Claude, open Settings → Connectors → Add custom connector.",
-          "Paste the server URL below and add the connector.",
-          "Claude opens this install. Approve the app you just created.",
+          "Open Customize → Connectors → Add → Add custom connector.",
+          "Enter a name and the server URL below, then press Continue.",
+          "Choose CIMD, DCR, or your own OAuth client. The third asks for a client ID and secret.",
+          "Press Add, then Connect, and approve the app on this install.",
         ],
         snippet: {
           language: "text",
-          location: "Remote MCP server URL",
+          location: "MCP server URL",
           code: serverUrl,
         },
-        note: "Leave Advanced settings blank unless the dialog demands a client ID and secret — if it does, tick that box when creating the agent app and it issues you one. On Team or Enterprise, only an Owner can add a connector.",
+        note: "On Team or Enterprise, only an Owner can add a connector.",
       },
-      agentKey: {
-        heading: "Use a bearer token instead",
-        steps: ["Add the key as a request header on the connector."],
-        snippet: {
-          language: "text",
-          location: "Request header",
-          code: `Authorization: Bearer ${KEY_PLACEHOLDER}`,
-        },
-        note: "Request-header auth is in beta and limited to some organizations. Where it is unavailable, sign-in is the only route.",
-      },
+      // The connector dialog offers three OAuth registration methods and no
+      // header field. Claude's request-header auth is an org-gated beta that
+      // has not been tried here, so it is not documented.
+      agentKey: null,
     },
     {
       id: "cursor",
@@ -281,8 +276,8 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
       signIn: {
         heading: "Add it to mcp.json",
         steps: [
-          "Put this in .cursor/mcp.json for one project, or ~/.cursor/mcp.json for all of them.",
-          "Cursor opens the sign-in. Approve the app you just created.",
+          "Open Settings → Customize → MCPs → New MCP Server. Cursor opens mcp.json.",
+          "Add the object below, then approve the app when Cursor opens the sign-in.",
         ],
         snippet: {
           language: "json",
@@ -296,7 +291,7 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
       },
       agentKey: {
         heading: "Use a bearer token instead",
-        steps: ["Add the key as a header."],
+        steps: ["Add the key as a header in the same file."],
         snippet: {
           language: "json",
           location: ".cursor/mcp.json",

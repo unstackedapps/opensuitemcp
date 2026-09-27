@@ -64,38 +64,26 @@ Replace `https://your-install.example.com/api/mcp` with your Server URL, and `os
 **Add it as a custom connector**
 
 1. In App Portal → Agent apps, create an app and choose OAuth 2.1. It waits there until you finish below.
-2. In Claude, open Settings → Connectors → Add custom connector.
-3. Paste the server URL below and add the connector.
-4. Claude opens this install. Approve the app you just created.
+2. Open Customize → Connectors → Add → Add custom connector.
+3. Enter a name and the server URL below, then press Continue.
+4. Choose CIMD, DCR, or your own OAuth client. The third asks for a client ID and secret.
+5. Press Add, then Connect, and approve the app on this install.
 
-`Remote MCP server URL`
+`MCP server URL`
 
 ```text
 https://your-install.example.com/api/mcp
 ```
 
-⚠️ Leave Advanced settings blank unless the dialog demands a client ID and secret — if it does, tick that box when creating the agent app and it issues you one. On Team or Enterprise, only an Owner can add a connector.
-
-**Use a bearer token instead**
-
-1. In App Portal → Agent apps, create an app and choose Bearer auth. The token is copied to your clipboard once.
-2. Add the key as a request header on the connector.
-
-`Request header`
-
-```text
-Authorization: Bearer osmcp_…
-```
-
-⚠️ Request-header auth is in beta and limited to some organizations. Where it is unavailable, sign-in is the only route.
+⚠️ On Team or Enterprise, only an Owner can add a connector.
 
 ### Cursor
 
 **Add it to mcp.json**
 
 1. In App Portal → Agent apps, create an app and choose OAuth 2.1. It waits there until you finish below.
-2. Put this in .cursor/mcp.json for one project, or ~/.cursor/mcp.json for all of them.
-3. Cursor opens the sign-in. Approve the app you just created.
+2. Open Settings → Customize → MCPs → New MCP Server. Cursor opens mcp.json.
+3. Add the object below, then approve the app when Cursor opens the sign-in.
 
 `.cursor/mcp.json`
 
@@ -112,7 +100,7 @@ Authorization: Bearer osmcp_…
 **Use a bearer token instead**
 
 1. In App Portal → Agent apps, create an app and choose Bearer auth. The token is copied to your clipboard once.
-2. Add the key as a header.
+2. Add the key as a header in the same file.
 
 `.cursor/mcp.json`
 
