@@ -292,7 +292,7 @@ export async function updateOAuthGrant(params: {
   const patch: {
     name?: string;
     description?: string | null;
-  connectsFrom?: string | null;
+    connectsFrom?: string | null;
     personaId?: string | null;
     netsuiteAccountId?: string | null;
   } = {};

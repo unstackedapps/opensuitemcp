@@ -69,6 +69,17 @@ export async function PATCH(
     ...(parsed.personaId === undefined
       ? {}
       : { personaId: requestedPersonaId }),
+    // These were parsed and then dropped, so editing a bearer app's note or
+    // pinned account saved nothing and reported success.
+    ...(parsed.description === undefined
+      ? {}
+      : { description: parsed.description }),
+    ...(parsed.connectsFrom === undefined
+      ? {}
+      : { connectsFrom: parsed.connectsFrom }),
+    ...(parsed.netsuiteAccountId === undefined
+      ? {}
+      : { netsuiteAccountId: parsed.netsuiteAccountId }),
   });
   if (!updated) {
     return NextResponse.json(

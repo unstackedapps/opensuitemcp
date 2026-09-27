@@ -112,6 +112,7 @@ export async function createMcpApiKey(params: {
   name: string;
   netsuiteAccountId?: string | null;
   description?: string | null;
+  connectsFrom?: string | null;
   /** Persona the agent is assigned from the start; null gives it no role. */
   personaId?: string | null;
   expiresAt?: Date | null;
@@ -127,6 +128,7 @@ export async function createMcpApiKey(params: {
       .values({
         userId: params.userId,
         description: params.description?.trim().slice(0, 256) || null,
+        connectsFrom: params.connectsFrom?.trim().slice(0, 64) || null,
         orgId: params.orgId,
         name: params.name,
         tokenId: minted.tokenId,
@@ -160,12 +162,14 @@ export async function updateMcpApiKey(params: {
   keyId: string;
   name?: string;
   description?: string | null;
+  connectsFrom?: string | null;
   personaId?: string | null;
   netsuiteAccountId?: string | null;
 }): Promise<McpApiKeySummary | null> {
   const patch: {
     name?: string;
     description?: string | null;
+    connectsFrom?: string | null;
     personaId?: string | null;
     netsuiteAccountId?: string | null;
   } = {};
@@ -174,6 +178,9 @@ export async function updateMcpApiKey(params: {
   }
   if (params.description !== undefined) {
     patch.description = params.description?.trim().slice(0, 256) || null;
+  }
+  if (params.connectsFrom !== undefined) {
+    patch.connectsFrom = params.connectsFrom?.trim().slice(0, 64) || null;
   }
   if (params.netsuiteAccountId !== undefined) {
     patch.netsuiteAccountId = params.netsuiteAccountId?.trim() || null;
