@@ -114,7 +114,7 @@ export default async function AuthorizePage({
     name: grant.name,
     connectsFrom: grant.connectsFrom,
     connected,
-    matchesClient: !connected && Boolean(meant) && grant.connectsFrom === meant,
+    matchesClient: Boolean(meant) && grant.connectsFrom === meant,
     personaName: grant.personaId
       ? (personaNames.get(grant.personaId) ?? null)
       : null,
@@ -123,17 +123,17 @@ export default async function AuthorizePage({
       : null,
   });
 
-  // Connectable first, then the ones already in use. A miss on the product is
-  // never hidden: the name a client reports is its own choice, so treating one
-  // as "not allowed" would lock someone out of the app they meant.
-  const agents: ConsentAgentOption[] = [
-    ...prepared.pending.map((grant) => toOption(grant, false)),
-    ...prepared.connected.map((grant) => toOption(grant, true)),
-  ].sort(
-    (a, b) =>
-      Number(a.connected) - Number(b.connected) ||
-      Number(b.matchesClient) - Number(a.matchesClient),
-  );
+  // Unconnected first, then the ones already holding a credential — all of
+  // them selectable. A miss on the product is never hidden either: the name a
+  // client reports is its own choice, so treating one as "not allowed" would
+  // lock someone out of the app they meant.
+  const agents: ConsentAgentOption[] = prepared.pending
+    .map((grant) => toOption(grant, Boolean(grant.clientId)))
+    .sort(
+      (a, b) =>
+        Number(a.connected) - Number(b.connected) ||
+        Number(b.matchesClient) - Number(a.matchesClient),
+    );
 
   return (
     <Shell>

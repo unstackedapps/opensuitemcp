@@ -7,11 +7,15 @@ import {
   touchOAuthClient,
 } from "@/lib/mcp/server/oauth/clients";
 import { consumeAuthorizationCode } from "@/lib/mcp/server/oauth/codes";
-import { connectOAuthGrant } from "@/lib/mcp/server/oauth/grants";
+import {
+  clientIdForGrant,
+  connectOAuthGrant,
+} from "@/lib/mcp/server/oauth/grants";
 import { oauthErrorResponse } from "@/lib/mcp/server/oauth/responses";
 import {
   type IssuedTokenPair,
   issueTokenPair,
+  revokeTokensForGrant,
   rotateRefreshToken,
 } from "@/lib/mcp/server/oauth/tokens";
 import { writeOrgAuditLog } from "@/lib/org/audit";
@@ -111,8 +115,15 @@ async function exchangeAuthorizationCode(params: {
   }
 
   // The agent already exists; this only binds it to the client that asked.
-  // A null here means it was revoked or claimed between consent and exchange,
-  // and minting against it would hand out a token nobody can see or revoke.
+  // A null here means it was revoked between consent and exchange, and
+  // minting against it would hand out a token nobody can see or revoke.
+  //
+  // An app bound to an earlier client may be bound again: that client may
+  // have been removed at the other end without telling us. Whatever it still
+  // holds is revoked first, so the app has one holder at a time.
+  const previousClientId = consumed.code.grantId
+    ? await clientIdForGrant(consumed.code.grantId)
+    : null;
   const grant = await connectOAuthGrant(consumed.code);
   if (!grant) {
     return fail(
@@ -129,6 +140,10 @@ async function exchangeAuthorizationCode(params: {
     grantId: grant.id,
     userId: grant.userId,
   });
+
+  if (previousClientId && previousClientId !== params.clientId) {
+    await revokeTokensForGrant(grant.id);
+  }
 
   const tokens = await issueTokenPair({ grantId: grant.id });
   void touchOAuthClient(params.clientRowId);

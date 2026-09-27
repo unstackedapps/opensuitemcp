@@ -41,7 +41,7 @@ export type ConsentAgentOption = {
   connectsFrom: string | null;
   /** True when that matches the client now asking, so it is pre-selected. */
   matchesClient: boolean;
-  /** Already bound to a client. Shown, never selectable. */
+  /** Already holds a credential. Choosing it replaces that credential. */
   connected: boolean;
 };
 
@@ -81,14 +81,15 @@ export function ConsentForm({
   // Pre-selecting the first app meant a client that registered itself bound to
   // whichever app happened to be waiting, because Authorize was already armed.
   // With one app there is nothing to choose; with more, choose.
-  const free = agents.filter((agent) => !agent.connected);
+  // Prefer an app that has never been connected, then one made for the
+  // product now asking. Two candidates is a guess, so nothing is chosen.
+  const fresh = agents.filter((agent) => !agent.connected);
+  const preferred = fresh.length > 0 ? fresh : agents;
   const [grantId, setGrantId] = useState(
-    free.length === 1
-      ? (free[0]?.id ?? "")
-      : // Exactly one app created for the product now asking is a safe
-        // pre-selection. Two would be a guess, so neither is chosen.
-        free.filter((agent) => agent.matchesClient).length === 1
-        ? (free.find((agent) => agent.matchesClient)?.id ?? "")
+    preferred.length === 1
+      ? (preferred[0]?.id ?? "")
+      : preferred.filter((agent) => agent.matchesClient).length === 1
+        ? (preferred.find((agent) => agent.matchesClient)?.id ?? "")
         : "",
   );
 
@@ -119,11 +120,7 @@ export function ConsentForm({
           </SelectTrigger>
           <SelectContent>
             {agents.map((agent) => (
-              <SelectItem
-                disabled={agent.connected}
-                key={agent.id}
-                value={agent.id}
-              >
+              <SelectItem key={agent.id} value={agent.id}>
                 {agent.name}
                 {agentDetail(agent) ? (
                   <span className="text-muted-foreground">
@@ -133,7 +130,7 @@ export function ConsentForm({
                 ) : null}
                 {agent.connected ? (
                   <span className="ml-1.5 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                    In use
+                    Reconnect
                   </span>
                 ) : null}
                 {agent.matchesClient ? (
