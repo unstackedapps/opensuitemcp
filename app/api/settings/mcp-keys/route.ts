@@ -134,7 +134,14 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: "Invalid request", details: error.errors },
+        {
+          // Naming the field is the difference between a person fixing the
+          // form and reporting that it does not work.
+          error: error.errors[0]
+            ? `${error.errors[0].path.join(".") || "request"}: ${error.errors[0].message}`
+            : "Invalid request",
+          details: error.errors,
+        },
         { status: 400 },
       );
     }

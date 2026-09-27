@@ -274,7 +274,8 @@ export function McpAccessPanel({
             netsuiteAccountId: draft.netsuiteAccountId,
             connectsFrom: draft.connectsFrom || null,
             issueClientCredentials: signingIn && draft.issueClientCredentials,
-            callbackUrl: draft.callbackUrl,
+            // Only when it means something. An empty string is not a URL.
+            callbackUrl: draft.callbackUrl.trim() || undefined,
           }),
         });
         const payload = await response.json();

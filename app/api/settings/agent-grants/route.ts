@@ -26,8 +26,17 @@ const createSchema = z.object({
   connectsFrom: z.string().trim().min(1).max(64),
   /** For a connector that demands an ID and secret rather than registering. */
   issueClientCredentials: z.boolean().optional(),
-  /** Where that connector returns. Required when issuing credentials. */
-  callbackUrl: z.string().trim().url().max(512).optional(),
+  /**
+   * Where that connector returns. Required when issuing credentials.
+   *
+   * Empty is allowed and means absent: the dialog clears this field for a
+   * product whose callback we cannot know, and an empty string reaching a
+   * bare .url() is how "Invalid request" appeared on a form with nothing
+   * wrong with it.
+   */
+  callbackUrl: z
+    .union([z.literal(""), z.string().trim().url().max(512)])
+    .optional(),
 });
 
 export async function POST(request: Request) {
@@ -104,7 +113,14 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: "Invalid request", details: error.errors },
+        {
+          // Naming the field is the difference between a person fixing the
+          // form and reporting that it does not work.
+          error: error.errors[0]
+            ? `${error.errors[0].path.join(".") || "request"}: ${error.errors[0].message}`
+            : "Invalid request",
+          details: error.errors,
+        },
         { status: 400 },
       );
     }
