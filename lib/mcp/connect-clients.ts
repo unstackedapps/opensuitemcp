@@ -30,6 +30,10 @@
  */
 export const KNOWN_CALLBACK_URLS: { label: string; url: string }[] = [
   { label: "Claude", url: "https://claude.ai/api/mcp/auth_callback" },
+  {
+    label: "ChatGPT",
+    url: "https://chatgpt.com/connector_platform_oauth_redirect",
+  },
 ];
 
 /** Step one, whichever client and whichever method. */
@@ -339,17 +343,20 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
       docHeading: "ChatGPT",
       runsOn: "vendor",
       signIn: {
-        heading: "Add it as a connector",
+        heading: "Create an MCP app",
         steps: [
-          "Add a custom connector and give it the server URL below.",
-          "Approve the app on this install when ChatGPT sends you here.",
+          "Open Settings \u2192 Plugins \u2192 Browse plugins \u2192 Create app \u2192 Create MCP app.",
+          "Give it a Name, and paste the server URL below under Connection \u2192 Server URL.",
+          "Leave Authentication on OAuth.",
+          "Tick I understand and want to continue, then press Create.",
+          "Approve the app on this install. You land back on the plugins page.",
         ],
         snippet: {
           language: "text",
-          location: "MCP server URL",
+          location: "Connection \u2192 Server URL",
           code: serverUrl,
         },
-        note: "ChatGPT registers itself, so the client ID, secret and redirect URI it offers are optional. Leave them blank.",
+        note: "Advanced OAuth settings shows what ChatGPT discovered and lets you swap CIMD for DCR or your own client ID and secret. The discovered values work as they are.",
       },
       // Verified through the connector only. Whether a ChatGPT connector or
       // the Responses API will carry a bearer header has not been tried here,
