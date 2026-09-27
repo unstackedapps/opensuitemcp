@@ -246,7 +246,10 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
               "Press Add, then Connect.",
             ],
           },
-          { app: THIS_APP, steps: ["Approve the app on the consent screen."] },
+          {
+            app: THIS_APP,
+            steps: ["Authorize the app on the consent screen."],
+          },
         ],
         snippet: {
           language: "text",
@@ -277,7 +280,7 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
           },
           {
             app: THIS_APP,
-            steps: ["Approve the app on the consent screen Cursor opens."],
+            steps: ["Authorize the app on the consent screen Cursor opens."],
           },
         ],
         snippet: {
@@ -333,7 +336,10 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
               "Accept Google's privacy notice.",
             ],
           },
-          { app: THIS_APP, steps: ["Approve the app on the consent screen."] },
+          {
+            app: THIS_APP,
+            steps: ["Authorize the app on the consent screen."],
+          },
           { app: "Gemini", steps: ["Press Connect."] },
         ],
         snippet: {
@@ -365,7 +371,7 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
           {
             app: THIS_APP,
             steps: [
-              "Approve the app on the consent screen. You land back on the plugins page.",
+              "Authorize the app on the consent screen. You land back on the plugins page.",
             ],
           },
         ],
@@ -395,7 +401,10 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
               "Give it the server URL. It reads the 401, finds this install's authorization server, and opens the sign-in.",
             ],
           },
-          { app: THIS_APP, steps: ["Approve the app on the consent screen."] },
+          {
+            app: THIS_APP,
+            steps: ["Authorize the app on the consent screen."],
+          },
         ],
         snippet: {
           language: "bash",

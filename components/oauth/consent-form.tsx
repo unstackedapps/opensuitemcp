@@ -121,7 +121,7 @@ export function ConsentForm({
           <AlertTriangle aria-hidden className="mt-0.5 size-4 shrink-0" />
           <span>
             This agent runs on your own computer, so it is identified only by
-            the port it is listening on. Approve it if you just started a
+            the port it is listening on. Authorize it if you just started a
             sign-in yourself; close this page if you did not.
           </span>
         </p>

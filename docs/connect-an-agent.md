@@ -30,7 +30,7 @@ your token. **App Portal → Agent apps** shows both.
 
 *In OpenSuiteMCP*
 
-6. Approve the app on the consent screen.
+6. Authorize the app on the consent screen.
 
 `MCP server URL`
 
@@ -55,7 +55,7 @@ https://your-install.example.com/api/mcp
 
 *In OpenSuiteMCP*
 
-4. Approve the app on the consent screen Cursor opens.
+4. Authorize the app on the consent screen Cursor opens.
 
 `.cursor/mcp.json`
 
@@ -111,7 +111,7 @@ https://your-install.example.com/api/mcp
 
 *In OpenSuiteMCP*
 
-6. Approve the app on the consent screen.
+6. Authorize the app on the consent screen.
 
 *In Gemini*
 
@@ -142,7 +142,7 @@ https://your-install.example.com/api/mcp
 
 *In OpenSuiteMCP*
 
-6. Approve the app on the consent screen. You land back on the plugins page.
+6. Authorize the app on the consent screen. You land back on the plugins page.
 
 `Connection → Server URL`
 
@@ -166,7 +166,7 @@ https://your-install.example.com/api/mcp
 
 *In OpenSuiteMCP*
 
-3. Approve the app on the consent screen.
+3. Authorize the app on the consent screen.
 
 ```bash
 curl -sS https://your-install.example.com/.well-known/oauth-protected-resource
