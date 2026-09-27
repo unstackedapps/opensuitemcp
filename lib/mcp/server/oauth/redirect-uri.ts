@@ -9,11 +9,53 @@
  * `http://localhost/callback` and `http://127.0.0.1/callback`, while the browser
  * is actually sent to whichever port it bound this session.
  *
+ * A native client may also register a private-use scheme, which RFC 8252
+ * section 7.1 allows and Cursor uses. Those match exactly.
+ *
  * Nothing else is relaxed. Scheme, host, path and query must all agree, so a
  * registered redirect can never be widened into an open redirect.
  */
 
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
+
+/**
+ * Schemes a browser can be made to execute or read rather than hand to an app.
+ * None is a legitimate redirect target, and an authorization code is appended
+ * to whatever we redirect to.
+ */
+const DANGEROUS_SCHEMES = new Set([
+  "javascript:",
+  "data:",
+  "vbscript:",
+  "file:",
+  "blob:",
+  "about:",
+]);
+
+/**
+ * A private-use URI scheme, which RFC 8252 section 7.1 allows a native client
+ * to register: the OS hands the redirect to the app that owns the scheme.
+ * Cursor uses `cursor://anysphere.cursor-mcp/oauth/callback`.
+ *
+ * These match exactly — there is no port to relax, and nothing about them is
+ * widened.
+ */
+export function isPrivateUseRedirectUri(uri: string): boolean {
+  const parsed = parse(uri);
+  if (!parsed || parsed.hash) {
+    return false;
+  }
+  if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+    return false;
+  }
+  if (DANGEROUS_SCHEMES.has(parsed.protocol)) {
+    return false;
+  }
+  // "x:" is a scheme; "x:" with nothing after it is not a destination.
+  return (
+    parsed.protocol.length > 2 && (parsed.hostname + parsed.pathname).length > 0
+  );
+}
 
 function parse(uri: string): URL | null {
   try {
@@ -35,9 +77,10 @@ export function isLoopbackRedirectUri(uri: string): boolean {
 /**
  * Shape check applied when a client registers, before anything is stored.
  *
- * HTTPS anywhere, or plain HTTP on loopback for a native client. A fragment is
- * rejected outright per RFC 6749 section 3.1.2 — the authorization response is
- * appended to the query, and a fragment already on the URI would strand it.
+ * HTTPS anywhere, plain HTTP on loopback, or a private-use scheme — the three
+ * shapes RFC 8252 gives a native client. A fragment is rejected outright per
+ * RFC 6749 section 3.1.2 — the authorization response is appended to the
+ * query, and a fragment already on the URI would strand it.
  */
 export function isAllowedRedirectUriShape(uri: string): boolean {
   const parsed = parse(uri);
@@ -47,7 +90,10 @@ export function isAllowedRedirectUriShape(uri: string): boolean {
   if (parsed.protocol === "https:") {
     return true;
   }
-  return parsed.protocol === "http:" && LOOPBACK_HOSTS.has(parsed.hostname);
+  if (parsed.protocol === "http:") {
+    return LOOPBACK_HOSTS.has(parsed.hostname);
+  }
+  return isPrivateUseRedirectUri(uri);
 }
 
 /** Does one presented redirect URI match one registered redirect URI? */
@@ -100,15 +146,18 @@ export function resolveRedirectUri(
 }
 
 /**
- * True when every redirect a client registered is a loopback address.
+ * True when every redirect a client registered points back at this machine.
  *
  * The authorization spec asks the consent screen to warn in this case: any
- * local process can bind a port and claim to be the client, so the person is
- * trusting their own machine rather than a named host.
+ * local process can bind a port, or register a URI scheme handler, and claim
+ * to be the client. The person is trusting their own machine rather than a
+ * named host, and that is as true of `cursor://` as it is of `127.0.0.1`.
  */
 export function isLoopbackOnlyClient(registered: readonly string[]): boolean {
   return (
     registered.length > 0 &&
-    registered.every((uri) => isLoopbackRedirectUri(uri))
+    registered.every(
+      (uri) => isLoopbackRedirectUri(uri) || isPrivateUseRedirectUri(uri),
+    )
   );
 }
