@@ -8,10 +8,30 @@ import {
 } from "@/app/oauth/authorize/actions";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { connectsFromLabel } from "@/lib/mcp/connect-clients";
 
 /** A waiting agent, already named and configured in the portal. */
+function agentDetail(agent: {
+  connectsFrom: string | null;
+  personaName: string | null;
+  accountLabel: string | null;
+}): string {
+  return [
+    connectsFromLabel(agent.connectsFrom),
+    agent.personaName,
+    agent.accountLabel,
+  ]
+    .filter(Boolean)
+    .join(" \u00b7 ");
+}
+
 export type ConsentAgentOption = {
   id: string;
   name: string;
@@ -98,32 +118,29 @@ export function ConsentForm({
         </dl>
       ) : (
         <div className="space-y-2">
-          <Label className="text-xs">Connect as</Label>
-          <RadioGroup onValueChange={setGrantId} value={grantId}>
-            {agents.map((agent) => (
-              <Label
-                className="flex cursor-pointer items-center gap-3 rounded-md border px-3 py-2.5 text-sm has-[:checked]:border-primary/60 has-[:checked]:bg-muted/50"
-                htmlFor={`agent-${agent.id}`}
-                key={agent.id}
-              >
-                <RadioGroupItem id={`agent-${agent.id}`} value={agent.id} />
-                <span className="min-w-0">
-                  <span className="block truncate font-medium">
-                    {agent.name}
-                  </span>
-                  <span className="block truncate text-muted-foreground text-xs">
-                    {[
-                      connectsFromLabel(agent.connectsFrom),
-                      agent.personaName,
-                      agent.accountLabel,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ") || "No persona assigned"}
-                  </span>
-                </span>
-              </Label>
-            ))}
-          </RadioGroup>
+          <Label className="text-xs" htmlFor="consent-agent">
+            Connect as
+          </Label>
+          {/* A list, not a stack of cards: an org can have a great many apps
+              waiting, and a radio each turns the screen into a scroll. */}
+          <Select onValueChange={setGrantId} value={grantId}>
+            <SelectTrigger className="w-full text-sm" id="consent-agent">
+              <SelectValue placeholder="Choose an agent app" />
+            </SelectTrigger>
+            <SelectContent>
+              {agents.map((agent) => (
+                <SelectItem key={agent.id} value={agent.id}>
+                  {agent.name}
+                  {agentDetail(agent) ? (
+                    <span className="text-muted-foreground">
+                      {" · "}
+                      {agentDetail(agent)}
+                    </span>
+                  ) : null}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <p className="text-muted-foreground text-xs">
             You will be sent back to{" "}
             <span className="font-mono">{redirectHost}</span>.

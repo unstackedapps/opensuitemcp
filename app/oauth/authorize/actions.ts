@@ -93,6 +93,14 @@ export async function submitConsent(
   const grantId = (formData.get("grant_id") as string | null)?.trim() || null;
   const chosen = prepared.pending.find((grant) => grant.id === grantId);
   if (!chosen) {
+    // The one silent failure on this screen: the person sees a sentence and
+    // the install keeps no record of which app they picked or what was
+    // actually waiting.
+    console.warn("[oauth/authorize] chosen app is not pending", {
+      grantId,
+      pending: prepared.pending.map((grant) => grant.id),
+      client: prepared.context.client.name,
+    });
     return {
       error:
         "That app is no longer waiting to be connected. Reload this page and try again.",
