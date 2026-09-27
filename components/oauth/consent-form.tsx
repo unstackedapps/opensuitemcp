@@ -51,8 +51,13 @@ export function ConsentForm({
     submitConsent,
     null,
   );
-  const [grantId, setGrantId] = useState(agents[0]?.id ?? "");
-  const chosen = agents.find((agent) => agent.id === grantId) ?? agents[0];
+  // Pre-selecting the first app meant a client that registered itself bound to
+  // whichever app happened to be waiting, because Authorize was already armed.
+  // With one app there is nothing to choose; with more, choose.
+  const [grantId, setGrantId] = useState(
+    agents.length === 1 ? (agents[0]?.id ?? "") : "",
+  );
+  const chosen = agents.find((agent) => agent.id === grantId);
 
   return (
     <form action={formAction} className="flex flex-col gap-6">

@@ -2,10 +2,12 @@
  * How each popular AI client is pointed at an OpenSuiteMCP install.
  *
  * They all speak the same protocol and every one of them asks for it
- * differently: a URL in a dialog, a CLI flag, `mcpServers`, `servers`, `url`,
- * `httpUrl`. The differences are not interesting but they are load-bearing —
- * Gemini CLI's `url` means SSE, so an MCP server pasted there simply never
- * connects — so they are written down once, here, rather than rediscovered.
+ * differently: a URL in a dialog, a JSON file, a key called `mcpServers`. The
+ * differences are not interesting but they are load-bearing, so they are
+ * written down once, here, rather than rediscovered.
+ *
+ * Only clients that have connected end to end against a real install belong in
+ * this file. See ConnectClientId.
  *
  * Both ways start in the same place: the agent is created in the portal, named
  * and given a persona, and only then is a client pointed at it. What differs is
@@ -28,10 +30,6 @@
  */
 export const KNOWN_CALLBACK_URLS: { label: string; url: string }[] = [
   { label: "Claude", url: "https://claude.ai/api/mcp/auth_callback" },
-  {
-    label: "ChatGPT",
-    url: "https://chatgpt.com/connector_platform_oauth_redirect",
-  },
 ];
 
 /** Step one, whichever client and whichever method. */
@@ -136,13 +134,9 @@ export type ReachabilityRow = {
 };
 
 export const REACHABILITY: ReachabilityRow[] = [
+  { clients: "Cursor", runsOn: "Your machine", lanOnly: "Yes" },
   {
-    clients: "Claude Code, Cursor, VS Code, Gemini CLI",
-    runsOn: "Your machine",
-    lanOnly: "Yes",
-  },
-  {
-    clients: "Claude web/desktop/mobile, ChatGPT",
+    clients: "Claude web/desktop/mobile, Gemini, ChatGPT",
     runsOn: "Vendor servers",
     lanOnly: "No — publish it, or use a key",
   },
@@ -179,11 +173,6 @@ export const CONNECT_TROUBLESHOOTING: TroubleshootingRow[] = [
     fix: "Check Agent apps → Agents, or ask an administrator",
   },
   {
-    symptom: "Connects but lists no tools (Gemini CLI)",
-    cause: "url was used instead of httpUrl",
-    fix: "Change the key to httpUrl",
-  },
-  {
     symptom: "invalid_grant on refresh",
     cause: "The token was already used, or the app was revoked",
     fix: "Sign in again",
@@ -200,12 +189,18 @@ export const SELF_HOST_REQUIREMENTS = [
   "The install is served over HTTPS. OAuth 2.1 permits plain HTTP only on loopback; bearer tokens have no such requirement.",
 ];
 
+/**
+ * Only clients we have connected end to end against a real install.
+ *
+ * Claude Code, VS Code and Gemini CLI were documented from their own docs and
+ * never tested here; every vendor we did test needed a server fix first, so
+ * the untested ones were removed rather than guessed at. Add one back only
+ * after it has actually connected.
+ */
 export type ConnectClientId =
   | "claude"
-  | "claude-code"
   | "cursor"
-  | "vscode"
-  | "gemini-cli"
+  | "gemini"
   | "chatgpt"
   | "other";
 
@@ -233,7 +228,8 @@ export type ConnectClient = {
   /** Where the client runs, which decides whether it can reach a LAN install. */
   runsOn: "vendor" | "device";
   signIn: ConnectMethod | null;
-  agentKey: ConnectMethod;
+  /** Null where the client has no way to send a header, as Gemini does not. */
+  agentKey: ConnectMethod | null;
 };
 
 /** One spelling of each placeholder, so the three renderings cannot disagree. */
@@ -271,32 +267,6 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
           code: `Authorization: Bearer ${KEY_PLACEHOLDER}`,
         },
         note: "Request-header auth is in beta and limited to some organizations. Where it is unavailable, sign-in is the only route.",
-      },
-    },
-    {
-      id: "claude-code",
-      label: "Claude Code",
-      docHeading: "Claude Code",
-      runsOn: "device",
-      signIn: {
-        heading: "Add the server, then sign in",
-        steps: [
-          "Run the command below.",
-          "Run /mcp, choose opensuitemcp, and authenticate.",
-          "Approve the app in the browser window that opens.",
-        ],
-        snippet: {
-          language: "bash",
-          code: `claude mcp add --transport http opensuitemcp ${serverUrl}`,
-        },
-      },
-      agentKey: {
-        heading: "Use a bearer token instead",
-        steps: ["Pass the key as a header when adding the server."],
-        snippet: {
-          language: "bash",
-          code: `claude mcp add --transport http opensuitemcp ${serverUrl} \\\n  --header "Authorization: Bearer ${KEY_PLACEHOLDER}"`,
-        },
       },
     },
     {
@@ -342,135 +312,49 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
       },
     },
     {
-      id: "vscode",
-      label: "VS Code (GitHub Copilot)",
-      docHeading: "VS Code (GitHub Copilot)",
-      runsOn: "device",
+      id: "gemini",
+      label: "Gemini web app",
+      docHeading: "Gemini web app",
+      runsOn: "vendor",
       signIn: {
-        heading: "Add it to .vscode/mcp.json",
+        heading: "Add it as a custom app",
         steps: [
-          "Put this in .vscode/mcp.json, or run MCP: Open User Configuration for every workspace.",
-          "Start the server from the editor, then approve the app when prompted.",
+          "Open Settings \u2192 Personal intelligence \u2192 Connected apps \u2192 Custom apps.",
+          "Paste the server URL below and press Next.",
+          "Press Next again to register automatically, or open Additional settings to paste a client ID and secret.",
+          "Accept Google's privacy notice, approve the app on this install, then press Connect.",
         ],
         snippet: {
-          language: "json",
-          location: ".vscode/mcp.json",
-          code: JSON.stringify(
-            { servers: { opensuitemcp: { type: "http", url: serverUrl } } },
-            null,
-            2,
-          ),
+          language: "text",
+          location: "Server URL",
+          code: serverUrl,
         },
-        note: 'VS Code\'s workspace file uses "servers"; the portable .mcp.json format uses "mcpServers" instead.',
+        note: "Personal Google accounts only; custom apps are not available on Workspace accounts yet. Additional settings shows the redirect URI to register if you are using your own client ID and secret.",
       },
-      agentKey: {
-        heading: "Use a bearer token instead",
-        steps: ["Add the key as a header."],
-        snippet: {
-          language: "json",
-          location: ".vscode/mcp.json",
-          code: JSON.stringify(
-            {
-              servers: {
-                opensuitemcp: {
-                  type: "http",
-                  url: serverUrl,
-                  headers: { Authorization: `Bearer ${KEY_PLACEHOLDER}` },
-                },
-              },
-            },
-            null,
-            2,
-          ),
-        },
-      },
-    },
-    {
-      id: "gemini-cli",
-      label: "Gemini CLI",
-      docHeading: "Gemini CLI",
-      runsOn: "device",
-      signIn: {
-        heading: "Add it to settings.json",
-        steps: [
-          "Put this in ~/.gemini/settings.json.",
-          "Run /mcp auth opensuitemcp, then approve the app.",
-        ],
-        snippet: {
-          language: "json",
-          location: "~/.gemini/settings.json",
-          code: JSON.stringify(
-            {
-              mcpServers: {
-                opensuitemcp: {
-                  httpUrl: serverUrl,
-                  authProviderType: "dynamic_discovery",
-                },
-              },
-            },
-            null,
-            2,
-          ),
-        },
-        note: 'Use "httpUrl", not "url". In Gemini CLI "url" means an SSE endpoint, and this server does not serve one.',
-      },
-      agentKey: {
-        heading: "Use a bearer token instead",
-        steps: ["Add the key as a header."],
-        snippet: {
-          language: "json",
-          location: "~/.gemini/settings.json",
-          code: JSON.stringify(
-            {
-              mcpServers: {
-                opensuitemcp: {
-                  httpUrl: serverUrl,
-                  headers: { Authorization: `Bearer ${KEY_PLACEHOLDER}` },
-                },
-              },
-            },
-            null,
-            2,
-          ),
-        },
-      },
+      agentKey: null,
     },
     {
       id: "chatgpt",
-      label: "ChatGPT & the OpenAI API",
-      docHeading: "ChatGPT and the OpenAI API",
+      label: "ChatGPT",
+      docHeading: "ChatGPT",
       runsOn: "vendor",
       signIn: {
         heading: "Add it as a connector",
         steps: [
-          "Add a custom connector and paste the server URL below.",
-          "Approve the app when prompted.",
+          "Add a custom connector and give it the server URL below.",
+          "Approve the app on this install when ChatGPT sends you here.",
         ],
         snippet: {
           language: "text",
           location: "MCP server URL",
           code: serverUrl,
         },
+        note: "ChatGPT registers itself, so the client ID, secret and redirect URI it offers are optional. Leave them blank.",
       },
-      agentKey: {
-        heading: "Use a bearer token instead",
-        steps: [
-          "In the Responses API, pass the key on the MCP tool definition.",
-        ],
-        snippet: {
-          language: "json",
-          code: JSON.stringify(
-            {
-              type: "mcp",
-              server_label: "opensuitemcp",
-              server_url: serverUrl,
-              authorization: KEY_PLACEHOLDER,
-            },
-            null,
-            2,
-          ),
-        },
-      },
+      // Verified through the connector only. Whether a ChatGPT connector or
+      // the Responses API will carry a bearer header has not been tried here,
+      // so nothing is claimed.
+      agentKey: null,
     },
     {
       id: "other",

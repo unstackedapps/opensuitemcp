@@ -79,8 +79,8 @@ function render(): string {
     "",
     "# Connect an agent",
     "",
-    "Point Claude, Cursor, VS Code, Gemini CLI, ChatGPT or anything else that",
-    "speaks MCP at your NetSuite workspace.",
+    "Point Claude, Cursor, Gemini, ChatGPT or anything else that speaks MCP",
+    "at your NetSuite workspace.",
     "",
     "Two steps: **create the app**, then **point your AI at it**.",
     "",
@@ -135,7 +135,9 @@ function render(): string {
     if (client.signIn) {
       out.push(method(client.signIn, PREREQUISITE.signIn));
     }
-    out.push(method(client.agentKey, PREREQUISITE.agentKey));
+    if (client.agentKey) {
+      out.push(method(client.agentKey, PREREQUISITE.agentKey));
+    }
   }
 
   out.push(
