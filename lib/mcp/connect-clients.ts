@@ -91,15 +91,33 @@ export function buildServerUrlForms(
 /**
  * The AI products an agent app can be created for.
  *
- * The same list the documentation is built from, so the picker cannot drift
- * from the clients we have actually connected. "Other" is not here: it is the
- * absence of a choice plus a name the person types.
+ * A label for the person's own list and the consent screen's pre-selection —
+ * not a claim that we have connected each one. The documentation lists only
+ * what has been connected end to end, and that is a shorter list on purpose.
+ *
+ * "Other (custom)" is a real value rather than a second text field: a name
+ * typed beside a dropdown left the dialog lopsided, and the note field is
+ * already there for whatever it is.
  */
 export const CONNECTS_FROM_OPTIONS: { id: string; label: string }[] = [
   { id: "claude", label: "Claude" },
+  { id: "claude-code", label: "Claude Code" },
+  { id: "chatgpt", label: "ChatGPT" },
   { id: "cursor", label: "Cursor" },
   { id: "gemini", label: "Gemini" },
-  { id: "chatgpt", label: "ChatGPT" },
+  { id: "gemini-cli", label: "Gemini CLI" },
+  { id: "copilot", label: "GitHub Copilot" },
+  { id: "windsurf", label: "Windsurf" },
+  { id: "zed", label: "Zed" },
+  { id: "cline", label: "Cline" },
+  { id: "continue", label: "Continue" },
+  { id: "goose", label: "Goose" },
+  { id: "librechat", label: "LibreChat" },
+  { id: "perplexity", label: "Perplexity" },
+  { id: "grok", label: "Grok" },
+  { id: "ollama", label: "Ollama" },
+  { id: "n8n", label: "n8n" },
+  { id: "other", label: "Other (custom)" },
 ];
 
 /**

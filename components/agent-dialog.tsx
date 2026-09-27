@@ -22,10 +22,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { AVA_PERSONA_ID } from "@/lib/ai/personas/ids";
 import {
   CALLBACK_PRESETS,
   CONNECTS_FROM_OPTIONS,
+  connectsFromLabel,
   METHOD_NAMES,
 } from "@/lib/mcp/connect-clients";
 
@@ -63,19 +65,12 @@ export type AgentDraft = {
   connectsFrom: string;
 };
 
-/** The picker's "anything else" row, which reveals a name field. */
-const OTHER_CLIENT = "__other__";
-
-function isCustomClient(value: string): boolean {
-  return (
-    value !== "" && !CONNECTS_FROM_OPTIONS.some((option) => option.id === value)
-  );
-}
-
 /** What an existing app holds, for the half of the dialog it can fill. */
 export type AgentAppState = {
   kind: "key" | "grant";
   connectionLabel: string;
+  /** Set once at creation; the dialog shows it read-only afterwards. */
+  connectsFrom: string | null;
   hasClientCredentials: boolean;
   /** Masked token, or how it signed in. */
   credential: string;
@@ -98,7 +93,6 @@ type AgentDialogProps = {
   initial?: AgentDraft;
   saving: boolean;
   onSubmit: (draft: AgentDraft) => void;
-  serverUrl: string;
   /** Edit mode: everything the app already has. */
   app?: AgentAppState | null;
   credentials?: AgentCredentials | null;
@@ -145,7 +139,6 @@ export function AgentDialog({
   initial,
   saving,
   onSubmit,
-  serverUrl,
   app,
   credentials,
   busy,
@@ -178,6 +171,9 @@ export function AgentDialog({
   }, [credentials]);
 
   const creating = mode === "create";
+  // Set once. A saved app belongs to the product it was made for; one made
+  // before this field existed can still be labelled.
+  const lockedClient = Boolean(app?.connectsFrom);
   const trimmed = draft.name.trim();
   const needsCallback =
     creating && draft.method === "signin" && draft.issueClientCredentials;
@@ -209,54 +205,42 @@ export function AgentDialog({
           </Field>
 
           <Field htmlFor="agent-client" label="Connects from">
-            <Select
-              onValueChange={(value) =>
-                setDraft((d) => ({ ...d, connectsFrom: value }))
-              }
-              value={
-                isCustomClient(draft.connectsFrom)
-                  ? OTHER_CLIENT
-                  : draft.connectsFrom
-              }
-            >
-              <SelectTrigger className="w-full text-sm" id="agent-client">
-                <SelectValue placeholder="Choose" />
-              </SelectTrigger>
-              <SelectContent>
-                {CONNECTS_FROM_OPTIONS.map((option) => (
-                  <SelectItem key={option.id} value={option.id}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-                <SelectItem value={OTHER_CLIENT}>Other</SelectItem>
-              </SelectContent>
-            </Select>
+            {lockedClient ? (
+              <Input
+                id="agent-client"
+                readOnly
+                value={connectsFromLabel(draft.connectsFrom)}
+              />
+            ) : (
+              <Select
+                onValueChange={(value) =>
+                  setDraft((d) => ({ ...d, connectsFrom: value }))
+                }
+                value={draft.connectsFrom}
+              >
+                <SelectTrigger className="w-full text-sm" id="agent-client">
+                  <SelectValue placeholder="Choose" />
+                </SelectTrigger>
+                <SelectContent>
+                  {CONNECTS_FROM_OPTIONS.map((option) => (
+                    <SelectItem key={option.id} value={option.id}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </Field>
 
-          {isCustomClient(draft.connectsFrom) ? (
-            <Field htmlFor="agent-client-other" label="Which one">
-              <Input
-                id="agent-client-other"
-                maxLength={64}
-                onChange={(event) =>
-                  setDraft((d) => ({ ...d, connectsFrom: event.target.value }))
-                }
-                placeholder="Grok"
-                value={
-                  draft.connectsFrom === OTHER_CLIENT ? "" : draft.connectsFrom
-                }
-              />
-            </Field>
-          ) : null}
-
           <Field htmlFor="agent-description" label="Note">
-            <Input
+            <Textarea
+              className="min-h-16 resize-none"
               id="agent-description"
               maxLength={256}
               onChange={(event) =>
                 setDraft((d) => ({ ...d, description: event.target.value }))
               }
-              placeholder="My personal Claude account"
+              rows={2}
               value={draft.description}
             />
           </Field>
@@ -424,12 +408,6 @@ export function AgentDialog({
                 </div>
               ) : null}
 
-              <Row
-                label="Server URL"
-                onCopy={() => onCopy?.(serverUrl, "Server URL")}
-                value={serverUrl}
-              />
-
               {app.kind === "key" ? (
                 <Row
                   action={
@@ -485,12 +463,6 @@ export function AgentDialog({
                   ) : null}
                 </>
               ) : null}
-
-              {app.kind === "grant" && !app.hasClientCredentials ? (
-                <p className="text-muted-foreground text-xs">
-                  {app.credential} — no secret to copy.
-                </p>
-              ) : null}
             </div>
           ) : null}
         </div>
@@ -498,11 +470,10 @@ export function AgentDialog({
         <DialogFooter className="sm:justify-between">
           {app ? (
             <Button
-              className="text-destructive hover:text-destructive"
+              className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
               onClick={onRevoke}
-              size="sm"
               type="button"
-              variant="ghost"
+              variant="outline"
             >
               Revoke
             </Button>
@@ -513,7 +484,7 @@ export function AgentDialog({
             <Button
               onClick={() => onOpenChange(false)}
               type="button"
-              variant="ghost"
+              variant="outline"
             >
               Cancel
             </Button>
