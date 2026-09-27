@@ -136,6 +136,7 @@ export async function createPendingOAuthGrant(params: {
         clientId: null,
         name: params.name.trim().slice(0, 128),
         description: params.description?.trim().slice(0, 256) || null,
+        connectsFrom: params.connectsFrom?.trim().slice(0, 64) || null,
         personaId: params.personaId,
         netsuiteAccountId: params.netsuiteAccountId,
         scope: params.scope,
