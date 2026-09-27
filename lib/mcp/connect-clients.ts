@@ -174,7 +174,7 @@ export const PREREQUISITE: Record<"signIn" | "agentKey", string> = {
   signIn:
     "App Portal → Agent apps → New app. Choose OAuth 2.1 and save. It waits there until you finish below.",
   agentKey:
-    "App Portal → Agent apps → New app. Choose Bearer auth and save. The token is shown once — copy it.",
+    "App Portal → Agent apps → New app. Choose Bearer auth and save, then copy the token.",
 };
 
 /**
