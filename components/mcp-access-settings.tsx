@@ -41,7 +41,10 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { AVA_PERSONA_ID } from "@/lib/ai/personas/ids";
 import { CONNECT_AGENT_DOCS_URL } from "@/lib/constants";
-import { KNOWN_CALLBACK_URLS } from "@/lib/mcp/connect-clients";
+import {
+  connectsFromLabel,
+  KNOWN_CALLBACK_URLS,
+} from "@/lib/mcp/connect-clients";
 import type { AgentConnectionKind } from "@/lib/mcp/server/oauth/grants";
 import type { ConnectPreflight } from "@/lib/mcp/server/oauth/preflight";
 import { fetcher } from "@/lib/utils";
@@ -51,6 +54,7 @@ type McpKeySummary = {
   id: string;
   name: string;
   description: string | null;
+  connectsFrom: string | null;
   maskedToken: string;
   copyable: boolean;
   netsuiteAccountId: string | null;
@@ -69,6 +73,7 @@ type McpKeySummary = {
  * owns them, and the list renders them together.
  */
 type McpGrantSummary = {
+  connectsFrom: string | null;
   id: string;
   name: string;
   description: string | null;
@@ -128,6 +133,8 @@ type AgentRow = {
   copyable: boolean;
   /** Set when this app issued a client ID for a connector that wanted one. */
   issuedClientId: string | null;
+  /** Which AI product it is for: a known id, free text, or unset. */
+  connectsFrom: string | null;
 };
 
 const CONNECTION_LABEL: Record<AgentConnectionKind, string> = {
@@ -487,6 +494,7 @@ export function McpAccessPanel({
             description: editing.description ?? "",
             personaId: editing.personaId ?? AVA_PERSONA_ID,
             netsuiteAccountId: editing.netsuiteAccountId,
+            connectsFrom: editing.connectsFrom ?? "",
             issueClientCredentials: false,
             callbackUrl: KNOWN_CALLBACK_URLS[0].url,
             // Settled at creation and not offered again, but the dialog's draft
@@ -524,6 +532,7 @@ export function McpAccessPanel({
       status: key.status,
       copyable: key.copyable,
       issuedClientId: null,
+      connectsFrom: key.connectsFrom ?? null,
     })),
     ...(data.grants ?? []).map((grant) => ({
       id: grant.id,
@@ -535,6 +544,7 @@ export function McpAccessPanel({
         ? `Signed in · ${grant.clientName}`
         : "Waiting for an app to sign in",
       issuedClientId: grant.issuedClientId,
+      connectsFrom: grant.connectsFrom ?? null,
       personaId: grant.personaId,
       netsuiteAccountId: grant.netsuiteAccountId,
       lastUsedAt: grant.lastUsedAt,
@@ -558,7 +568,12 @@ export function McpAccessPanel({
     .filter(
       (row) =>
         !needle ||
-        [row.name, row.description, personaLabel(row.personaId, personas)]
+        [
+          row.name,
+          row.description,
+          connectsFromLabel(row.connectsFrom),
+          personaLabel(row.personaId, personas),
+        ]
           .filter(Boolean)
           .some((field) => (field as string).toLowerCase().includes(needle)),
     )
@@ -760,6 +775,11 @@ export function McpAccessPanel({
                       <Badge variant="outline">
                         {CONNECTION_LABEL[row.connectionKind]}
                       </Badge>
+                      {row.connectsFrom ? (
+                        <Badge variant="outline">
+                          {connectsFromLabel(row.connectsFrom)}
+                        </Badge>
+                      ) : null}
                       <Badge variant="secondary">
                         {personaLabel(row.personaId, personas)}
                       </Badge>

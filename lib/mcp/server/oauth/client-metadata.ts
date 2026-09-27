@@ -143,13 +143,22 @@ export function parseClientMetadata(
       `At most ${MAX_REDIRECT_URIS} redirect URIs may be registered.`,
     );
   }
-  for (const uri of redirectUris) {
-    if (!isAllowedRedirectUriShape(uri)) {
-      return fail(
-        "invalid_redirect_uri",
-        `${uri} is not usable: a redirect URI must be https, or http on a loopback address, and must not carry a fragment.`,
-      );
-    }
+  // Keep the ones we can honour rather than refusing the client outright.
+  // Cursor registers three addresses and one unsupported scheme among them
+  // locked it out of the two that were fine.
+  //
+  // This only ever narrows what the client may redirect to: a dropped URI is
+  // one we will never accept at /authorize either. The registration response
+  // echoes redirect_uris, so the client is told exactly what it got, and
+  // matching stays exact against that stored list.
+  const usableRedirectUris = redirectUris.filter((uri) =>
+    isAllowedRedirectUriShape(uri),
+  );
+  if (usableRedirectUris.length === 0) {
+    return fail(
+      "invalid_redirect_uri",
+      `None of the redirect URIs are usable (${redirectUris.join(", ")}). One must be https, http on a loopback address, or a private-use scheme, and must not carry a fragment.`,
+    );
   }
 
   const clientName =
@@ -224,7 +233,7 @@ export function parseClientMetadata(
       clientName,
       clientUri: readHttpsUri(doc.client_uri),
       logoUri: readHttpsUri(doc.logo_uri),
-      redirectUris,
+      redirectUris: usableRedirectUris,
       // A client that asks only for authorization_code still gets refresh
       // tokens offered; withholding them would force a fresh consent every
       // hour, and the client is free to ignore one it did not ask for.

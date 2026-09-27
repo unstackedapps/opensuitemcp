@@ -47,6 +47,7 @@ async function main() {
       personaId: null,
       netsuiteAccountId: null,
       description: `note for ${name}`,
+      connectsFrom: null,
       scope: "mcp",
     });
 

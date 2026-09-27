@@ -687,6 +687,12 @@ export const mcpApiKey = pgTable(
     name: varchar("name", { length: 128 }).notNull(),
     /** Free text from its owner: which laptop, which account, whose Claude. */
     description: varchar("description", { length: 256 }),
+    /**
+     * Which AI product this app is for — a known id from
+     * lib/mcp/connect-clients.ts, or whatever the person typed for anything
+     * else. Null on apps made before it was asked for.
+     */
+    connectsFrom: varchar("connectsFrom", { length: 64 }),
     tokenId: varchar("tokenId", { length: 32 }).notNull(),
     tokenHash: text("tokenHash").notNull(),
     /**
@@ -932,6 +938,12 @@ export const oauthGrant = pgTable(
     name: varchar("name", { length: 128 }).notNull(),
     /** Free text from its owner: which laptop, which account, whose Claude. */
     description: varchar("description", { length: 256 }),
+    /**
+     * Which AI product this app is for — a known id from
+     * lib/mcp/connect-clients.ts, or whatever the person typed for anything
+     * else. Null on apps made before it was asked for.
+     */
+    connectsFrom: varchar("connectsFrom", { length: 64 }),
     /** Pins the grant to one NetSuite account; null follows the active one. */
     netsuiteAccountId: varchar("netsuiteAccountId", { length: 64 }),
     personaId: varchar("personaId", { length: 128 }),

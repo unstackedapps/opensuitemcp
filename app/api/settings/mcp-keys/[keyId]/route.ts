@@ -13,6 +13,7 @@ const patchSchema = z.object({
   name: z.string().trim().min(1).max(128).optional(),
   personaId: z.string().trim().max(128).optional().nullable(),
   description: z.string().trim().max(256).optional().nullable(),
+  connectsFrom: z.string().trim().max(64).optional().nullable(),
   netsuiteAccountId: z.string().trim().max(64).optional().nullable(),
 });
 

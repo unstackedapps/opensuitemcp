@@ -18,6 +18,8 @@ export type McpApiKeySummary = {
   id: string;
   name: string;
   description: string | null;
+  /** Which AI product this app is for. */
+  connectsFrom: string | null;
   tokenId: string;
   maskedToken: string;
   /** Whether the key can still be copied, or was minted before that existed. */
@@ -56,6 +58,7 @@ function toSummary(row: McpApiKey): McpApiKeySummary {
     id: row.id,
     name: row.name,
     description: row.description,
+    connectsFrom: row.connectsFrom,
     tokenId: row.tokenId,
     maskedToken: maskMcpApiKey(row.tokenId),
     copyable: Boolean(row.tokenCipher),

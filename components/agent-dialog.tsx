@@ -23,7 +23,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AVA_PERSONA_ID } from "@/lib/ai/personas/ids";
-import { KNOWN_CALLBACK_URLS, METHOD_NAMES } from "@/lib/mcp/connect-clients";
+import {
+  CONNECTS_FROM_OPTIONS,
+  KNOWN_CALLBACK_URLS,
+  METHOD_NAMES,
+} from "@/lib/mcp/connect-clients";
 
 export type AgentPersonaOption = {
   id: string;
@@ -52,7 +56,21 @@ export type AgentDraft = {
   issueClientCredentials: boolean;
   /** Where that connector expects to be sent back. Required with credentials. */
   callbackUrl: string;
+  /**
+   * Which AI product this app is for: a CONNECTS_FROM_OPTIONS id, or free text
+   * for anything else. Empty means it was not said.
+   */
+  connectsFrom: string;
 };
+
+/** The picker's "anything else" row, which reveals a name field. */
+const OTHER_CLIENT = "__other__";
+
+function isCustomClient(value: string): boolean {
+  return (
+    value !== "" && !CONNECTS_FROM_OPTIONS.some((option) => option.id === value)
+  );
+}
 
 /** What an existing app holds, for the half of the dialog it can fill. */
 export type AgentAppState = {
@@ -115,6 +133,7 @@ const EMPTY: AgentDraft = {
   method: "key",
   issueClientCredentials: false,
   callbackUrl: KNOWN_CALLBACK_URLS[0].url,
+  connectsFrom: "",
 };
 
 export function AgentDialog({
@@ -188,6 +207,47 @@ export function AgentDialog({
               value={draft.name}
             />
           </Field>
+
+          <Field htmlFor="agent-client" label="Connects from">
+            <Select
+              onValueChange={(value) =>
+                setDraft((d) => ({ ...d, connectsFrom: value }))
+              }
+              value={
+                isCustomClient(draft.connectsFrom)
+                  ? OTHER_CLIENT
+                  : draft.connectsFrom
+              }
+            >
+              <SelectTrigger className="w-full text-sm" id="agent-client">
+                <SelectValue placeholder="Choose" />
+              </SelectTrigger>
+              <SelectContent>
+                {CONNECTS_FROM_OPTIONS.map((option) => (
+                  <SelectItem key={option.id} value={option.id}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+                <SelectItem value={OTHER_CLIENT}>Other</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+
+          {isCustomClient(draft.connectsFrom) ? (
+            <Field htmlFor="agent-client-other" label="Which one">
+              <Input
+                id="agent-client-other"
+                maxLength={64}
+                onChange={(event) =>
+                  setDraft((d) => ({ ...d, connectsFrom: event.target.value }))
+                }
+                placeholder="Grok"
+                value={
+                  draft.connectsFrom === OTHER_CLIENT ? "" : draft.connectsFrom
+                }
+              />
+            </Field>
+          ) : null}
 
           <Field htmlFor="agent-description" label="Note">
             <Input
