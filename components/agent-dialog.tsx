@@ -583,7 +583,7 @@ function MethodOption({
 }) {
   return (
     <Label
-      className="flex cursor-pointer items-center gap-2.5 rounded-md border px-3 py-2.5 text-sm has-[:checked]:border-primary/60 has-[:checked]:bg-muted/50"
+      className="flex cursor-pointer items-center gap-2.5 rounded-md border px-3 py-2.5 text-sm has-checked:border-primary/60 has-checked:bg-muted/50"
       htmlFor={`agent-method-${value}`}
     >
       <RadioGroupItem id={`agent-method-${value}`} value={value} />
