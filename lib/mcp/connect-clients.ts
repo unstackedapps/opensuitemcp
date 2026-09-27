@@ -37,26 +37,39 @@
  * Gemini's carries both the Google user id and the install host.
  */
 export const KNOWN_CALLBACK_URLS: {
+  /** Matches a CONNECTS_FROM_OPTIONS id, so choosing a product fills this in. */
+  id: string;
   label: string;
   url: string | null;
   note?: string;
 }[] = [
-  { label: "Claude", url: "https://claude.ai/api/mcp/auth_callback" },
   {
+    id: "claude",
+    label: "Claude",
+    url: "https://claude.ai/api/mcp/auth_callback",
+  },
+  {
+    id: "chatgpt",
     label: "ChatGPT",
     url: "https://chatgpt.com/connector_platform_oauth_redirect",
   },
   {
+    id: "gemini",
     label: "Gemini",
     url: null,
     note: "Unique to your account. Copy it from Additional settings.",
   },
 ];
 
-/** The ones with an address we can offer as a one-click preset. */
-export const CALLBACK_PRESETS = KNOWN_CALLBACK_URLS.filter(
-  (entry): entry is { label: string; url: string } => entry.url !== null,
-);
+/**
+ * The callback a product sends people back to, or null where it mints one per
+ * account and only it can tell you.
+ */
+export function callbackUrlFor(connectsFrom: string): string | null {
+  return (
+    KNOWN_CALLBACK_URLS.find((entry) => entry.id === connectsFrom)?.url ?? null
+  );
+}
 
 /** The path every install serves MCP on. */
 export const MCP_PATH = "/api/mcp";

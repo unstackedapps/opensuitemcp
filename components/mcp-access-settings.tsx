@@ -40,7 +40,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { AVA_PERSONA_ID } from "@/lib/ai/personas/ids";
 import { CONNECT_AGENT_DOCS_URL } from "@/lib/constants";
-import { CALLBACK_PRESETS, connectsFromLabel } from "@/lib/mcp/connect-clients";
+import { connectsFromLabel } from "@/lib/mcp/connect-clients";
 import type { AgentConnectionKind } from "@/lib/mcp/server/oauth/grants";
 import type { ConnectPreflight } from "@/lib/mcp/server/oauth/preflight";
 import { fetcher } from "@/lib/utils";
@@ -493,7 +493,7 @@ export function McpAccessPanel({
             netsuiteAccountId: editing.netsuiteAccountId,
             connectsFrom: editing.connectsFrom ?? "",
             issueClientCredentials: false,
-            callbackUrl: CALLBACK_PRESETS[0].url,
+            callbackUrl: "",
             // Settled at creation and not offered again, but the dialog's draft
             // is one shape either way.
             method: editing.kind === "grant" ? "signin" : "key",

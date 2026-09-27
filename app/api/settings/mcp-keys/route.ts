@@ -22,7 +22,9 @@ const createSchema = z.object({
   netsuiteAccountId: z.string().trim().max(64).optional().nullable(),
   personaId: z.string().trim().max(128).optional().nullable(),
   description: z.string().trim().max(256).optional().nullable(),
-  connectsFrom: z.string().trim().max(64).optional().nullable(),
+  // Required at creation and set once after, so an app always says which
+  // product it is for. Existing apps predate it and are labelled by PATCH.
+  connectsFrom: z.string().trim().min(1).max(64),
   expiresInDays: z.number().int().min(1).max(3650).optional().nullable(),
 });
 
@@ -106,7 +108,7 @@ export async function POST(request: Request) {
       name: parsed.name,
       netsuiteAccountId: parsed.netsuiteAccountId ?? null,
       personaId: requestedPersonaId,
-      connectsFrom: parsed.connectsFrom ?? null,
+      connectsFrom: parsed.connectsFrom,
       expiresAt: parsed.expiresInDays
         ? new Date(Date.now() + parsed.expiresInDays * 86_400_000)
         : null,

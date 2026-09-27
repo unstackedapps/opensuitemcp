@@ -25,8 +25,8 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { AVA_PERSONA_ID } from "@/lib/ai/personas/ids";
 import {
-  CALLBACK_PRESETS,
   CONNECTS_FROM_OPTIONS,
+  callbackUrlFor,
   connectsFromLabel,
   METHOD_NAMES,
 } from "@/lib/mcp/connect-clients";
@@ -127,7 +127,7 @@ const EMPTY: AgentDraft = {
   personaId: AVA_PERSONA_ID,
   method: "key",
   issueClientCredentials: false,
-  callbackUrl: CALLBACK_PRESETS[0].url,
+  callbackUrl: "",
   connectsFrom: "",
 };
 
@@ -216,7 +216,11 @@ export function AgentDialog({
             ) : (
               <Select
                 onValueChange={(value) =>
-                  setDraft((d) => ({ ...d, connectsFrom: value }))
+                  setDraft((d) => ({
+                    ...d,
+                    connectsFrom: value,
+                    callbackUrl: callbackUrlFor(value) ?? "",
+                  }))
                 }
                 value={draft.connectsFrom}
               >
@@ -358,29 +362,6 @@ export function AgentDialog({
                     placeholder="Callback URL"
                     value={draft.callbackUrl}
                   />
-                  {CALLBACK_PRESETS.map((entry) => (
-                    <Button
-                      className="shrink-0"
-                      key={entry.url}
-                      onClick={() =>
-                        setDraft((d) => ({ ...d, callbackUrl: entry.url }))
-                      }
-                      size="sm"
-                      type="button"
-                      variant="outline"
-                    >
-                      {entry.label}
-                    </Button>
-                  ))}
-                  <Button
-                    className="shrink-0"
-                    onClick={() => setDraft((d) => ({ ...d, callbackUrl: "" }))}
-                    size="sm"
-                    type="button"
-                    variant="outline"
-                  >
-                    Custom
-                  </Button>
                 </div>
               ) : null}
             </div>
@@ -506,6 +487,9 @@ export function AgentDialog({
               disabled={
                 !trimmed ||
                 saving ||
+                // Set once, so it has to be right at creation. Asking later
+                // is not an option the dialog offers.
+                (creating && !draft.connectsFrom) ||
                 (needsCallback && !draft.callbackUrl.trim())
               }
               onClick={() =>
