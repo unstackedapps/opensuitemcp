@@ -538,7 +538,7 @@ export function McpAccessPanel({
       description: grant.description,
       connectionKind: grant.connectionKind,
       credential: grant.clientName
-        ? `Signed in · ${grant.clientName}`
+        ? `Credential held by ${grant.clientName}`
         : "Waiting for an app to sign in",
       issuedClientId: grant.issuedClientId,
       connectsFrom: grant.connectsFrom ?? null,
@@ -762,7 +762,7 @@ export function McpAccessPanel({
                       {row.status === "active" ? null : (
                         <Badge variant="outline">
                           {row.status === "pending"
-                            ? "Awaiting connection"
+                            ? "Never connected"
                             : row.status === "expired"
                               ? "Expired"
                               : "Archived"}

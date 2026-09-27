@@ -159,26 +159,24 @@ export async function createPendingOAuthGrant(params: {
  * whatever is using it, and making a second one is the safer reading.
  */
 /**
- * Apps already bound to a client, for the consent screen to show greyed out.
+ * Every app this person may point a client at.
  *
- * Display only. The list of apps that may actually be chosen stays
- * listPendingOAuthGrants, so a tampered grant_id naming a connected app finds
- * nothing — these are never an allowlist.
+ * Bound apps are included. A client removed at the other end never tells us,
+ * so "already connected" is only ever "we issued tokens and heard nothing
+ * since" — treating that as unavailable left Caleb with two apps, both bound
+ * to a connector he had deleted, and no way to connect anything.
+ *
+ * Connecting one that is already bound replaces the binding and revokes what
+ * the previous client held.
  */
-export async function listConnectedOAuthGrants(
+export async function listConnectableOAuthGrants(
   userId: string,
 ): Promise<OAuthGrantSummary[]> {
   try {
     const rows = await db
       .select()
       .from(oauthGrant)
-      .where(
-        and(
-          eq(oauthGrant.userId, userId),
-          isNotNull(oauthGrant.clientId),
-          isNull(oauthGrant.revokedAt),
-        ),
-      )
+      .where(and(eq(oauthGrant.userId, userId), isNull(oauthGrant.revokedAt)))
       .orderBy(asc(oauthGrant.createdAt));
     return rows.map((row) => toSummary(row, null, null));
   } catch (_error) {
@@ -215,6 +213,34 @@ export async function listPendingOAuthGrants(
  * is the caller's cue to fail the token exchange rather than mint against a
  * row somebody else already claimed.
  */
+/** Which client an app is bound to, read before a rebind replaces it. */
+export async function clientIdForGrant(
+  grantId: string,
+): Promise<string | null> {
+  try {
+    const [row] = await db
+      .select({ clientId: oauthGrant.clientId })
+      .from(oauthGrant)
+      .where(eq(oauthGrant.id, grantId))
+      .limit(1);
+    return row?.clientId ?? null;
+  } catch (_error) {
+    throw new ChatSDKError("bad_request:database", "Failed to read the agent");
+  }
+}
+
+/**
+ * Bind an app to the client that just authorized, replacing any earlier one.
+ *
+ * Rebinding is allowed on purpose. A client that is removed at the other end
+ * — Claude's connector, say — tells us nothing: it keeps the tokens and never
+ * calls the revocation endpoint, so an app would otherwise stay bound to a
+ * client that is gone and could never be connected again. Refusing here would
+ * turn every app into a one-shot.
+ *
+ * The tokens issued to the previous client are revoked in the same breath, so
+ * a rebind hands access over rather than sharing it.
+ */
 export async function connectOAuthGrant(
   code: OAuthAuthorizationCode,
 ): Promise<OAuthGrant | null> {
@@ -226,7 +252,6 @@ export async function connectOAuthGrant(
         and(
           eq(oauthGrant.id, code.grantId),
           eq(oauthGrant.userId, code.userId),
-          isNull(oauthGrant.clientId),
           isNull(oauthGrant.revokedAt),
         ),
       )

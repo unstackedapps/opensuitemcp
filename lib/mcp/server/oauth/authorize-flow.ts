@@ -10,11 +10,7 @@ import {
   validateAuthorizeRequest,
 } from "./authorize-request";
 import { resolveOAuthClient } from "./clients";
-import {
-  listConnectedOAuthGrants,
-  listPendingOAuthGrants,
-  type OAuthGrantSummary,
-} from "./grants";
+import { listConnectableOAuthGrants, type OAuthGrantSummary } from "./grants";
 import { isLoopbackOnlyClient } from "./redirect-uri";
 
 /**
@@ -52,8 +48,6 @@ export type PrepareOutcome =
       kind: "ok";
       context: AuthorizationContext;
       pending: OAuthGrantSummary[];
-      /** Already bound elsewhere. Shown greyed out; never selectable. */
-      connected: OAuthGrantSummary[];
     }
   /** Nothing may be sent to the client; render the reason. */
   | { kind: "fatal"; title: string; description: string }
@@ -166,12 +160,9 @@ export async function prepareAuthorization(params: {
   // is offered a list of exactly one. A client that registered itself carries
   // no binding and is offered everything waiting.
   const issuedFor = resolved.client.row.grantId;
-  const waiting = await listPendingOAuthGrants(params.user.id);
-  // Display only: the screen shows every app, with the ones in use greyed
-  // out, so a person is not left wondering where the other one went.
-  const connected = issuedFor
-    ? []
-    : await listConnectedOAuthGrants(params.user.id);
+  // Every app, bound or not. A bound one may be connected again: the client
+  // it was bound to may be long gone without ever having said so.
+  const waiting = await listConnectableOAuthGrants(params.user.id);
   const pending = issuedFor
     ? waiting.filter((grant) => grant.id === issuedFor)
     : waiting;
@@ -190,16 +181,13 @@ export async function prepareAuthorization(params: {
     return {
       kind: "blocked",
       title: "Nothing is waiting to connect",
-      description:
-        connected.length > 0
-          ? `${context.client.name} asked to connect, and every agent app you have is already connected to something. Create another under App Portal → Agent apps, or revoke one you no longer use.`
-          : `${context.client.name} asked to connect, but you have no agent set up for sign-in. Create one under App Portal → Agent apps, choose OAuth 2.1 as its connection method, then add this connector again.`,
+      description: `${context.client.name} asked to connect, but you have no agent set up for sign-in. Create one under App Portal → Agent apps, choose OAuth 2.1 as its connection method, then add this connector again.`,
       context,
       openAgentAccess: true,
     };
   }
 
-  return { kind: "ok", context, pending, connected };
+  return { kind: "ok", context, pending };
 }
 
 /** The deny path, and the cancel button on a blocked screen. */
