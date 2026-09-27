@@ -119,15 +119,16 @@ shows yours, with a copy button.
 2. Settings → Personal intelligence → Connected apps → Custom apps.
 3. Paste the server URL above and press Next.
 4. Press Next again to register automatically, or open Additional settings to paste a client ID and secret.
-5. Accept Google's privacy notice.
+5. Accept Google's privacy notice and press Connect.
+6. Press Agree and Continue on Google's privacy and terms notice.
 
 *In OpenSuiteMCP*
 
-6. Authorize the app on the consent screen.
+7. Authorize the app on the consent screen.
 
 *In Gemini*
 
-7. Press Connect.
+8. You land back on the app, which lists what it can reach. Press Connect.
 
 ⚠️ Personal Google accounts only; custom apps are not available on Workspace accounts yet. Additional settings shows the redirect URI to register if you are using your own client ID and secret.
 

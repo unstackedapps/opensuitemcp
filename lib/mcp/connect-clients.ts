@@ -469,14 +469,20 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
               "Settings → Personal intelligence → Connected apps → Custom apps.",
               "Paste the server URL above and press Next.",
               "Press Next again to register automatically, or open Additional settings to paste a client ID and secret.",
-              "Accept Google's privacy notice.",
+              "Accept Google's privacy notice and press Connect.",
+              "Press Agree and Continue on Google's privacy and terms notice.",
             ],
           },
           {
             app: THIS_APP,
             steps: ["Authorize the app on the consent screen."],
           },
-          { app: "Gemini", steps: ["Press Connect."] },
+          {
+            app: "Gemini",
+            steps: [
+              "You land back on the app, which lists what it can reach. Press Connect.",
+            ],
+          },
         ],
         note: "Personal Google accounts only; custom apps are not available on Workspace accounts yet. Additional settings shows the redirect URI to register if you are using your own client ID and secret.",
       },
