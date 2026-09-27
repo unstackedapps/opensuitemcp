@@ -41,6 +41,8 @@ export type ConsentAgentOption = {
   connectsFrom: string | null;
   /** True when that matches the client now asking, so it is pre-selected. */
   matchesClient: boolean;
+  /** Already bound to a client. Shown, never selectable. */
+  connected: boolean;
 };
 
 export type ConsentFormProps = {
@@ -79,16 +81,16 @@ export function ConsentForm({
   // Pre-selecting the first app meant a client that registered itself bound to
   // whichever app happened to be waiting, because Authorize was already armed.
   // With one app there is nothing to choose; with more, choose.
+  const free = agents.filter((agent) => !agent.connected);
   const [grantId, setGrantId] = useState(
-    agents.length === 1
-      ? (agents[0]?.id ?? "")
+    free.length === 1
+      ? (free[0]?.id ?? "")
       : // Exactly one app created for the product now asking is a safe
         // pre-selection. Two would be a guess, so neither is chosen.
-        agents.filter((agent) => agent.matchesClient).length === 1
-        ? (agents.find((agent) => agent.matchesClient)?.id ?? "")
+        free.filter((agent) => agent.matchesClient).length === 1
+        ? (free.find((agent) => agent.matchesClient)?.id ?? "")
         : "",
   );
-  const chosen = agents.find((agent) => agent.id === grantId);
 
   return (
     <form action={formAction} className="flex flex-col gap-6">
@@ -105,53 +107,49 @@ export function ConsentForm({
         </p>
       </div>
 
-      {agents.length === 1 ? (
-        <dl className="space-y-1.5 rounded-md border bg-muted/40 px-3 py-2.5 text-xs">
-          <Row label="Connect as" value={chosen?.name ?? ""} />
-          {chosen?.personaName ? (
-            <Row label="Persona" value={chosen.personaName} />
-          ) : null}
-          {chosen?.accountLabel ? (
-            <Row label="NetSuite account" value={chosen.accountLabel} />
-          ) : null}
-          <Row label="Returns to" mono value={redirectHost} />
-        </dl>
-      ) : (
-        <div className="space-y-2">
-          <Label className="text-xs" htmlFor="consent-agent">
-            Connect as
-          </Label>
-          {/* A list, not a stack of cards: an org can have a great many apps
+      <div className="space-y-2">
+        <Label className="text-xs" htmlFor="consent-agent">
+          Connect as
+        </Label>
+        {/* A list, not a stack of cards: an org can have a great many apps
               waiting, and a radio each turns the screen into a scroll. */}
-          <Select onValueChange={setGrantId} value={grantId}>
-            <SelectTrigger className="w-full text-sm" id="consent-agent">
-              <SelectValue placeholder="Choose an agent app" />
-            </SelectTrigger>
-            <SelectContent>
-              {agents.map((agent) => (
-                <SelectItem key={agent.id} value={agent.id}>
-                  {agent.name}
-                  {agentDetail(agent) ? (
-                    <span className="text-muted-foreground">
-                      {" · "}
-                      {agentDetail(agent)}
-                    </span>
-                  ) : null}
-                  {agent.matchesClient ? (
-                    <span className="ml-1.5 rounded bg-primary/15 px-1.5 py-0.5 text-[10px] text-primary">
-                      Match
-                    </span>
-                  ) : null}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <p className="text-muted-foreground text-xs">
-            You will be sent back to{" "}
-            <span className="font-mono">{redirectHost}</span>.
-          </p>
-        </div>
-      )}
+        <Select onValueChange={setGrantId} value={grantId}>
+          <SelectTrigger className="w-full text-sm" id="consent-agent">
+            <SelectValue placeholder="Choose an agent app" />
+          </SelectTrigger>
+          <SelectContent>
+            {agents.map((agent) => (
+              <SelectItem
+                disabled={agent.connected}
+                key={agent.id}
+                value={agent.id}
+              >
+                {agent.name}
+                {agentDetail(agent) ? (
+                  <span className="text-muted-foreground">
+                    {" · "}
+                    {agentDetail(agent)}
+                  </span>
+                ) : null}
+                {agent.connected ? (
+                  <span className="ml-1.5 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                    In use
+                  </span>
+                ) : null}
+                {agent.matchesClient ? (
+                  <span className="ml-1.5 rounded bg-primary/15 px-1.5 py-0.5 text-[10px] text-primary">
+                    Match
+                  </span>
+                ) : null}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-muted-foreground text-xs">
+          You will be sent back to{" "}
+          <span className="font-mono">{redirectHost}</span>.
+        </p>
+      </div>
 
       {loopbackOnly ? (
         <p className="flex gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-amber-700 text-xs dark:text-amber-400">
@@ -190,24 +188,5 @@ export function ConsentForm({
         </Button>
       </div>
     </form>
-  );
-}
-
-function Row({
-  label,
-  value,
-  mono,
-}: {
-  label: string;
-  value: string;
-  mono?: boolean;
-}) {
-  return (
-    <div className="flex items-baseline justify-between gap-3">
-      <dt className="shrink-0 text-muted-foreground">{label}</dt>
-      <dd className={`min-w-0 truncate ${mono ? "font-mono" : "font-medium"}`}>
-        {value}
-      </dd>
-    </div>
   );
 }

@@ -106,24 +106,34 @@ export default async function AuthorizePage({
   // product is the one most likely meant. It is only a pre-selection: the
   // person still chooses, and nothing is bound until they do.
   const meant = matchConnectsFrom(prepared.context.client.name);
-  const agents: ConsentAgentOption[] = prepared.pending
-    .map((grant) => ({
-      id: grant.id,
-      name: grant.name,
-      connectsFrom: grant.connectsFrom,
-      matchesClient: Boolean(meant) && grant.connectsFrom === meant,
-      personaName: grant.personaId
-        ? (personaNames.get(grant.personaId) ?? null)
-        : null,
-      accountLabel: grant.netsuiteAccountId
-        ? (accountLabels.get(grant.netsuiteAccountId) ??
-          grant.netsuiteAccountId)
-        : null,
-    }))
-    // Apps made for the product now asking come first. They are not the only
-    // ones offered: the name a client reports is its own choice, so treating
-    // a miss as "not allowed" would lock someone out of the app they meant.
-    .sort((a, b) => Number(b.matchesClient) - Number(a.matchesClient));
+  const toOption = (
+    grant: (typeof prepared.pending)[number],
+    connected: boolean,
+  ): ConsentAgentOption => ({
+    id: grant.id,
+    name: grant.name,
+    connectsFrom: grant.connectsFrom,
+    connected,
+    matchesClient: !connected && Boolean(meant) && grant.connectsFrom === meant,
+    personaName: grant.personaId
+      ? (personaNames.get(grant.personaId) ?? null)
+      : null,
+    accountLabel: grant.netsuiteAccountId
+      ? (accountLabels.get(grant.netsuiteAccountId) ?? grant.netsuiteAccountId)
+      : null,
+  });
+
+  // Connectable first, then the ones already in use. A miss on the product is
+  // never hidden: the name a client reports is its own choice, so treating one
+  // as "not allowed" would lock someone out of the app they meant.
+  const agents: ConsentAgentOption[] = [
+    ...prepared.pending.map((grant) => toOption(grant, false)),
+    ...prepared.connected.map((grant) => toOption(grant, true)),
+  ].sort(
+    (a, b) =>
+      Number(a.connected) - Number(b.connected) ||
+      Number(b.matchesClient) - Number(a.matchesClient),
+  );
 
   return (
     <Shell>

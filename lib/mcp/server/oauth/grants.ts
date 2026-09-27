@@ -158,6 +158,34 @@ export async function createPendingOAuthGrant(params: {
  * again: re-pointing a live agent at a different client would silently break
  * whatever is using it, and making a second one is the safer reading.
  */
+/**
+ * Apps already bound to a client, for the consent screen to show greyed out.
+ *
+ * Display only. The list of apps that may actually be chosen stays
+ * listPendingOAuthGrants, so a tampered grant_id naming a connected app finds
+ * nothing — these are never an allowlist.
+ */
+export async function listConnectedOAuthGrants(
+  userId: string,
+): Promise<OAuthGrantSummary[]> {
+  try {
+    const rows = await db
+      .select()
+      .from(oauthGrant)
+      .where(
+        and(
+          eq(oauthGrant.userId, userId),
+          isNotNull(oauthGrant.clientId),
+          isNull(oauthGrant.revokedAt),
+        ),
+      )
+      .orderBy(asc(oauthGrant.createdAt));
+    return rows.map((row) => toSummary(row, null, null));
+  } catch (_error) {
+    throw new ChatSDKError("bad_request:database", "Failed to list agents");
+  }
+}
+
 export async function listPendingOAuthGrants(
   userId: string,
 ): Promise<OAuthGrantSummary[]> {
