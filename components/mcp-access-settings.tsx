@@ -273,6 +273,7 @@ export function McpAccessPanel({
             description: draft.description || null,
             personaId: draft.personaId,
             netsuiteAccountId: draft.netsuiteAccountId,
+            connectsFrom: draft.connectsFrom || null,
             issueClientCredentials: signingIn && draft.issueClientCredentials,
             callbackUrl: draft.callbackUrl,
           }),
@@ -756,6 +757,11 @@ export function McpAccessPanel({
                 >
                   <div className="min-w-0 space-y-1">
                     <p className="truncate font-medium text-sm">{row.name}</p>
+                    {row.description ? (
+                      <p className="truncate text-muted-foreground text-xs">
+                        {row.description}
+                      </p>
+                    ) : null}
                     <p className="truncate font-mono text-muted-foreground text-xs">
                       {row.credential}
                     </p>
