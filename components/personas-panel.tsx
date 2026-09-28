@@ -3,6 +3,7 @@
 import {
   Eye,
   EyeOff,
+  Files,
   Loader2,
   Pencil,
   Plus,
@@ -21,7 +22,6 @@ import {
 } from "react";
 import useSWR from "swr";
 import { ConfirmDestructiveDialog } from "@/components/confirm-destructive-dialog";
-import { CloneIcon } from "@/components/icons";
 import { Response } from "@/components/message-elements/response";
 import { OnboardingPanelSkeleton } from "@/components/onboarding/onboarding-panel-skeleton";
 import { PersonaDetailsLink } from "@/components/persona-details-dialog";
@@ -614,7 +614,7 @@ export function PersonasPanel({
                             type="button"
                             variant="ghost"
                           >
-                            <CloneIcon size={16} />
+                            <Files className="size-4" />
                           </Button>
                         </>
                       )
@@ -706,7 +706,7 @@ export function PersonasPanel({
                                 type="button"
                                 variant="ghost"
                               >
-                                <CloneIcon size={16} />
+                                <Files className="size-4" />
                               </Button>
                               <Button
                                 aria-label={`Delete ${persona.name}`}
