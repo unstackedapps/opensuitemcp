@@ -585,15 +585,16 @@ export function PersonasPanel({
                     actions={
                       isGuest ? null : (
                         <>
+                          {/* Sized to match the Details link beside it. */}
                           <Button
                             aria-label={`Skills for ${persona.name}`}
-                            className="hover:bg-foreground/10 dark:hover:bg-foreground/15"
+                            className="h-7 px-0 text-xs"
                             onClick={() => {
                               void openBuiltinEditor(persona);
                             }}
                             size="sm"
                             type="button"
-                            variant="ghost"
+                            variant="link"
                           >
                             Skills
                             {(personaSkillIds[persona.id]?.length ?? 0) > 0
