@@ -3,6 +3,7 @@
 import {
   Blocks,
   ChevronDown,
+  Download,
   ExternalLink,
   Eye,
   EyeOff,
@@ -30,6 +31,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { parseSkillFrontmatter, readSkillZip } from "@/lib/ai/skills/bundle";
 import {
   applySkillModeChange,
   resolveSkillMode,
@@ -68,14 +70,25 @@ type CatalogSkill = {
   connectionLabel?: string;
 };
 
+type AgentAuthor = {
+  keyId: string;
+  keyName: string;
+  connectsFrom?: string | null;
+  netsuiteAccountId?: string | null;
+  at: string;
+};
+
 type CustomSkill = {
   id: string;
   name: string;
   content: string;
+  description?: string;
   updatedAt: string;
   enabled?: boolean;
   managedByOrg?: boolean;
   slug?: string;
+  agentAuthor?: AgentAuthor;
+  files?: string[];
   /**
    * Declared here as well as on the server: this panel PUTs the whole list
    * back on every save, so a field the client type omits is dropped from
@@ -391,37 +404,57 @@ function customSkillAuthor(skill: CustomSkill): string {
   if (skill.managedByOrg) {
     return "Organization";
   }
+  if (skill.agentAuthor) {
+    const { keyName, connectsFrom } = skill.agentAuthor;
+    return connectsFrom ? `${keyName} · ${connectsFrom}` : keyName;
+  }
   return skill.authoredBy === "agent" ? "An agent" : "You";
 }
+
+type SkillDraftFiles = Array<{ path: string; content: string }>;
 
 type CustomSkillEditorProps = {
   initialName?: string;
   initialContent?: string;
+  initialDescription?: string;
+  initialFiles?: SkillDraftFiles;
   title: string;
   onCancel: () => void;
-  onSave: (name: string, content: string) => Promise<void>;
+  onSave: (draft: {
+    name: string;
+    content: string;
+    description: string;
+    files: SkillDraftFiles;
+  }) => Promise<void>;
 };
 
 function CustomSkillEditor({
   initialName = "",
   initialContent = "",
+  initialDescription = "",
+  initialFiles,
   title,
   onCancel,
   onSave,
 }: CustomSkillEditorProps) {
   const [name, setName] = useState(initialName);
   const [content, setContent] = useState(initialContent);
+  const [description, setDescription] = useState(initialDescription);
+  const [files, setFiles] = useState<SkillDraftFiles>(initialFiles ?? []);
   const [isSaving, setIsSaving] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const fileInputId = useId();
   const nameInputId = useId();
+  const descriptionInputId = useId();
   const contentInputId = useId();
 
   useEffect(() => {
     setName(initialName);
     setContent(initialContent);
+    setDescription(initialDescription);
+    setFiles(initialFiles ?? []);
     setShowPreview(false);
-  }, [initialName, initialContent]);
+  }, [initialName, initialContent, initialDescription, initialFiles]);
 
   const handleSave = async () => {
     const trimmedContent = content.trim();
@@ -435,7 +468,12 @@ function CustomSkillEditor({
 
     setIsSaving(true);
     try {
-      await onSave(name.trim() || "Custom skill", trimmedContent);
+      await onSave({
+        name: name.trim() || "Custom skill",
+        content: trimmedContent,
+        description: description.trim(),
+        files,
+      });
     } catch (error) {
       toast({
         type: "error",
@@ -459,35 +497,111 @@ function CustomSkillEditor({
             sessions when enabled.
           </p>
         </div>
-        <div className="space-y-2">
-          <Label htmlFor={nameInputId}>Name</Label>
-          <Input
-            id={nameInputId}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="Custom skill"
-            value={name}
-          />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor={nameInputId}>Name</Label>
+            <Input
+              id={nameInputId}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Custom skill"
+              value={name}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor={descriptionInputId}>Description</Label>
+            <Input
+              id={descriptionInputId}
+              maxLength={280}
+              onChange={(event) => setDescription(event.target.value)}
+              placeholder="What this skill is for"
+              value={description}
+            />
+          </div>
         </div>
+        {files.length > 0 ? (
+          <div className="space-y-2">
+            <Label>Reference files</Label>
+            <ul className="flex flex-col gap-1 rounded-md border border-border/60 p-2">
+              {files.map((file) => (
+                <li
+                  className="flex items-center justify-between gap-2 text-muted-foreground text-xs"
+                  key={file.path}
+                >
+                  <span className="truncate font-mono">{file.path}</span>
+                  <Button
+                    aria-label={`Remove ${file.path}`}
+                    className="size-6 shrink-0"
+                    onClick={() => {
+                      setFiles((current) =>
+                        current.filter((entry) => entry.path !== file.path),
+                      );
+                    }}
+                    size="icon"
+                    type="button"
+                    variant="ghost"
+                  >
+                    <Trash2 className="size-3" />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
         <div className="flex min-h-0 flex-1 flex-col space-y-2">
           <div className="flex items-center justify-between gap-2">
             <Label htmlFor={contentInputId}>Content</Label>
             <div>
               <Input
-                accept=".md"
+                accept=".md,.zip"
                 className="hidden"
                 id={fileInputId}
                 onChange={(event) => {
                   const file = event.target.files?.[0];
+                  event.target.value = "";
                   if (!file) {
                     return;
                   }
+
+                  // A zip is a skill folder: SKILL.md plus what it points at.
+                  if (file.name.toLowerCase().endsWith(".zip")) {
+                    void file.arrayBuffer().then((buffer) => {
+                      const result = readSkillZip(new Uint8Array(buffer));
+                      if (!result.ok) {
+                        toast({ type: "error", description: result.error });
+                        return;
+                      }
+                      const parsed = parseSkillFrontmatter(
+                        result.bundle.content,
+                      );
+                      setContent(result.bundle.content);
+                      setFiles(result.bundle.files);
+                      if (parsed.name && !name.trim()) {
+                        setName(parsed.name);
+                      } else if (!name.trim()) {
+                        setName(file.name.replace(/\.zip$/i, ""));
+                      }
+                      if (parsed.description && !description.trim()) {
+                        setDescription(parsed.description);
+                      }
+                      toast({
+                        type: "success",
+                        description: `Imported ${file.name}${result.bundle.files.length > 0 ? ` with ${result.bundle.files.length} reference file${result.bundle.files.length === 1 ? "" : "s"}` : ""}`,
+                      });
+                    });
+                    return;
+                  }
+
                   const reader = new FileReader();
                   reader.onload = () => {
                     const text = reader.result;
                     if (typeof text === "string") {
+                      const parsed = parseSkillFrontmatter(text);
                       setContent(text);
                       if (!name.trim()) {
-                        setName(file.name.replace(/\.md$/i, ""));
+                        setName(parsed.name || file.name.replace(/\.md$/i, ""));
+                      }
+                      if (parsed.description && !description.trim()) {
+                        setDescription(parsed.description);
                       }
                       toast({
                         type: "success",
@@ -496,7 +610,6 @@ function CustomSkillEditor({
                     }
                   };
                   reader.readAsText(file, "UTF-8");
-                  event.target.value = "";
                 }}
                 type="file"
               />
@@ -507,7 +620,7 @@ function CustomSkillEditor({
                 variant="outline"
               >
                 <Upload className="mr-1.5 size-3.5" />
-                Import .md
+                Import .md or .zip
               </Button>
               <Button
                 aria-label={showPreview ? "Edit skill" : "Preview skill"}
@@ -612,6 +725,7 @@ export function SkillsPanel({
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingSkill, setEditingSkill] = useState<CustomSkill | null>(null);
   const [seedSkill, setSeedSkill] = useState<CustomSkill | null>(null);
+  const [editorFiles, setEditorFiles] = useState<SkillDraftFiles>([]);
   const [personaSkillIds, setPersonaSkillIds] = useState<
     Record<string, string[]>
   >({});
@@ -916,36 +1030,79 @@ export function SkillsPanel({
       id: crypto.randomUUID(),
       name: `${skill.name} copy`,
       content: skill.content,
+      description: skill.description,
       updatedAt: new Date().toISOString(),
       enabled: true,
     });
+    setEditorFiles([]);
     setEditorOpen(true);
+    if (skill.files?.length) {
+      void fetch(`/api/skills/${encodeURIComponent(skill.id)}/files`)
+        .then((response) => (response.ok ? response.json() : null))
+        .then((payload) => {
+          if (Array.isArray(payload?.files)) {
+            setEditorFiles(payload.files);
+          }
+        });
+    }
   };
 
-  const handleSaveCustomSkill = async (name: string, content: string) => {
+  const handleSaveCustomSkill = async (draft: {
+    name: string;
+    content: string;
+    description: string;
+    files: SkillDraftFiles;
+  }) => {
     if (editingSkill?.managedByOrg) {
       return;
     }
+    const { name, content, description, files } = draft;
     const previous = customSkills;
     const now = new Date().toISOString();
+    const skillId = editingSkill?.id ?? seedSkill?.id ?? crypto.randomUUID();
 
     const next = editingSkill
       ? customSkills.map((skill) =>
           skill.id === editingSkill.id
-            ? { ...skill, name, content, updatedAt: now }
+            ? {
+                ...skill,
+                name,
+                content,
+                description: description || undefined,
+                files: files.map((file) => file.path),
+                updatedAt: now,
+              }
             : skill,
         )
       : [
           ...customSkills,
           {
-            id: crypto.randomUUID(),
+            id: skillId,
             name,
             content,
+            description: description || undefined,
+            files: files.map((file) => file.path),
             updatedAt: now,
             enabled: true,
             slug: slugifySkillName(name),
           },
         ];
+
+    // Reference files live in their own table, so they are written separately
+    // and only when the bundle actually changed.
+    try {
+      await fetch(`/api/skills/${encodeURIComponent(skillId)}/files`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ files }),
+      });
+    } catch {
+      toast({
+        type: "error",
+        description: "Failed to save the skill's reference files",
+      });
+      return;
+    }
 
     setCustomSkills(next);
     await runPersist({ customSkills: next }, () => setCustomSkills(previous));
@@ -1172,11 +1329,16 @@ export function SkillsPanel({
     return (
       <CustomSkillEditor
         initialContent={editingSkill?.content ?? seedSkill?.content ?? ""}
+        initialDescription={
+          editingSkill?.description ?? seedSkill?.description ?? ""
+        }
+        initialFiles={editorFiles}
         initialName={editingSkill?.name ?? seedSkill?.name ?? ""}
         onCancel={() => {
           setEditorOpen(false);
           setEditingSkill(null);
           setSeedSkill(null);
+          setEditorFiles([]);
         }}
         onSave={handleSaveCustomSkill}
         title={
@@ -1377,6 +1539,18 @@ export function SkillsPanel({
                 <SkillRow
                   actions={
                     <>
+                      <Button
+                        aria-label={`Download ${skill.name}`}
+                        className="size-7"
+                        onClick={() => {
+                          window.location.href = `/api/skills/${encodeURIComponent(skill.id)}/export`;
+                        }}
+                        size="icon"
+                        type="button"
+                        variant="ghost"
+                      >
+                        <Download className="size-3.5" />
+                      </Button>
                       <Button
                         aria-label={`Clone ${skill.name}`}
                         className="size-7"

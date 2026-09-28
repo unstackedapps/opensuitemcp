@@ -26,18 +26,23 @@ import { validateToolArgs } from "./tools/validate-args";
 /** Discovery results are per-user, so they must never be cached across keys. */
 const PRIVATE_CACHE = { ttlMs: 60_000, cacheScope: "private" as const };
 
+/**
+ * What a connecting client is told once, at initialize.
+ *
+ * Kept short on purpose. This arrives as one block in a system prompt and
+ * competes with everything else there, so it carries only what a model cannot
+ * learn from the tool list: who it is acting as, and the two habits — read the
+ * persona, record the work — that nothing in a tool name implies. Everything
+ * else belongs in the tool's own description, which is re-read on every
+ * tools/list rather than once per connection.
+ */
 const SERVER_INSTRUCTIONS = [
-  "This server exposes one OpenSuiteMCP user's NetSuite workspace. Every call acts as that user, with their permissions and their connected NetSuite account.",
-  "Call osmcp_whoami first to confirm the acting identity, the active NetSuite account, and the persona this key is assigned.",
-  "If osmcp_whoami reports a persona, read it with osmcp_get_persona and work as that specialist. You can write a new one with osmcp_create_persona and adopt it with osmcp_set_agent_persona, which also sheds the current one when called with no id.",
-  "Skills are the NetSuite practice a specialist works by. Read them with osmcp_list_skills and osmcp_get_skill, and write what you establish back with osmcp_create_skill, so the next session starts where this one ended. A skill you write is invoked by name rather than applied to every chat turn its owner types. osmcp_update_skill revises your own work and only your own; osmcp_clone_skill and osmcp_clone_persona copy anyone else's into something you may revise.",
-  "osmcp_pair_skills sets the skills a persona carries, builtin or custom. In the OpenSuiteMCP app those skills are injected for every turn that persona works. Over this connection they are a reading list: osmcp_get_persona names them, and you read each with osmcp_get_skill and apply it yourself.",
-  "If a NetSuite tool fails, call osmcp_connection_status. A dead authorization needs a person to reconnect the account in the OpenSuiteMCP UI and will not recover on retry.",
-  "Tools marked readOnlyHint never change NetSuite data. Tools without it may modify records, so confirm before calling one. The hint is derived from the tool name and is deliberately cautious: an unrecognised name is announced as a write.",
-  "Tool results carry both readable text and structuredContent; prefer structuredContent for rows and columns.",
-  "This server does not push notifications, so a tool appearing or disappearing is something you must ask about. tools/list and osmcp_whoami both return toolsDigest, a short fingerprint of your tool surface: compare it against the last one you saw and only re-read tools/list when it differs.",
-  "NetSuite ships a library of prompts written for NetSuite work. Before composing your own approach to a request, call osmcp_list_prompts to see whether an established one fits. Square brackets in a prompt are blanks to fill, never text to use as written.",
-  "Work nobody watched is work nobody can check. For a task of any length, open a thread with osmcp_create_chat and record each step with osmcp_append_chat, so the person who owns this workspace can read what you did.",
+  "This server is one OpenSuiteMCP user's NetSuite workspace. Every call acts as that user, with their permissions, their connected account, and their tool policy.",
+  "Start by calling osmcp_whoami. It reports who you are acting as, which NetSuite account is active, and which persona this connection is assigned.",
+  "Work as that persona. Read it with osmcp_get_persona, read the skills it carries with osmcp_get_skill, and follow them.",
+  "Record what you do. Open a thread with osmcp_create_chat at the start of any task worth reviewing, and add each step with osmcp_append_chat as you go — the person who owns this workspace reads those threads, and work that leaves no thread leaves no record.",
+  "What you learn is worth keeping. osmcp_create_skill saves a procedure you established so the next session starts from it, and osmcp_pair_skills attaches it to the persona that needs it.",
+  "Read each tool's own description before first use; they carry the rules that matter. tools/list and osmcp_whoami both return toolsDigest, so compare that string instead of re-reading the list.",
 ].join(" ");
 
 export type DispatchOutcome = {

@@ -35,14 +35,18 @@ export async function syncCommunitySkills(): Promise<boolean> {
   });
 
   // Deduplicate by leaf slug (last wins if collision across buckets)
-  const bySlug = new Map<string, string>();
+  const bySlug = new Map<string, (typeof skills)[number]>();
   for (const skill of skills) {
-    bySlug.set(skill.slug, skill.markdown);
+    bySlug.set(skill.slug, skill);
   }
 
   const wrote = writeSkillPack(
     skillsDir,
-    [...bySlug.entries()].map(([localId, markdown]) => ({ localId, markdown })),
+    [...bySlug.entries()].map(([localId, skill]) => ({
+      localId,
+      markdown: skill.markdown,
+      files: skill.files,
+    })),
   );
 
   console.log(

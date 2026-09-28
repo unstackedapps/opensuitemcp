@@ -93,6 +93,10 @@ const whoami: McpToolDefinition = {
       principal.personaId,
       settings?.customPersonas,
     );
+    const carriedByPersona = pairedSkillIdsFor(
+      normalizePersonaSkillIds(settings?.personaSkillIds),
+      persona.id,
+    );
 
     return toolResult({
       user: {
@@ -123,6 +127,20 @@ const whoami: McpToolDefinition = {
         digest: toolSurfaceDigest(surface),
       },
       timezone: settings?.timezone ?? "UTC",
+      /**
+       * The instructions a client receives at initialize arrive once and
+       * compete with everything else in its system prompt. This is the call
+       * every session makes first, so the habits nothing in a tool name
+       * implies are repeated here, where they are read every time.
+       */
+      nextSteps: [
+        `Read your persona with osmcp_get_persona and work as ${persona.name}.`,
+        carriedByPersona.length > 0
+          ? `${persona.name} carries ${carriedByPersona.length} skill${carriedByPersona.length === 1 ? "" : "s"}. Read each with osmcp_get_skill before starting.`
+          : "Call osmcp_list_skills for the practice this workspace has established, and osmcp_get_skill to read one.",
+        "Open a thread with osmcp_create_chat before starting a task, and add each step with osmcp_append_chat as you work. Threads are how this user reviews what you did.",
+        "When you establish something worth keeping, save it with osmcp_create_skill and attach it to a persona with osmcp_pair_skills.",
+      ],
     });
   },
 };
@@ -342,7 +360,11 @@ const listSkills: McpToolDefinition = {
         mode: skill.mode,
         slug: skill.slug,
         authoredBy: skill.authoredBy ?? "user",
+        writtenBy: skill.agentAuthor
+          ? `${skill.agentAuthor.keyName}${skill.agentAuthor.connectsFrom ? ` (${skill.agentAuthor.connectsFrom})` : ""}`
+          : null,
         managedByOrg: skill.managedByOrg === true,
+        files: skill.files?.length ?? 0,
         carriedBy: personasCarryingSkill(personaSkillIds, skill.id),
       }));
 
@@ -355,7 +377,9 @@ const listSkills: McpToolDefinition = {
         "mode",
         "slug",
         "authoredBy",
+        "writtenBy",
         "managedByOrg",
+        "files",
         "carriedBy",
       ],
       rows,
@@ -435,7 +459,7 @@ const getSkill: McpToolDefinition = {
   name: "osmcp_get_skill",
   title: "Get skill",
   description:
-    "Read the full instructions of one skill listed by osmcp_list_skills. A skill is NetSuite practice written for an assistant to follow; apply it to your own work on this workspace. A skill the user has switched off reads as not found.",
+    "Read the full instructions of one skill listed by osmcp_list_skills. A skill is NetSuite practice written for an assistant to follow; apply it to your own work on this workspace. `files` lists reference material beside this document — read one with osmcp_read_skill_file when the instructions point at it. A skill the user has switched off reads as not found.",
   inputSchema: {
     type: "object",
     properties: {
@@ -474,11 +498,15 @@ const getSkill: McpToolDefinition = {
       {
         id: found.skill.id,
         name: found.skill.name,
+        description: found.skill.description,
         source: found.skill.source,
         mode: found.skill.mode,
         content: found.content,
+        files: found.skill.files ?? [],
       },
-      found.content,
+      found.skill.files?.length
+        ? `${found.content}\n\nFiles in this skill: ${found.skill.files.join(", ")}. Read one with osmcp_read_skill_file when this document points at it.`
+        : found.content,
     );
   },
 };

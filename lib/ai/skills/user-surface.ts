@@ -1,14 +1,23 @@
 import "server-only";
 
+import type { AgentAuthor } from "@/lib/ai/skills/catalog";
 import {
+  communitySkillDir,
   getCommunitySkillContent,
   getConnectedSkillContent,
   getOracleSkillContent,
   listCommunityCatalogSkills,
   listConnectedCatalogSkills,
   listOracleCatalogSkills,
+  listSkillPackFiles,
   normalizeUserSkillSettings,
+  oracleSkillDir,
+  parseConnectedSkillId,
+  readSkillPackFile,
+  skillDescription,
 } from "@/lib/ai/skills/catalog";
+import { connectedSkillDir } from "@/lib/ai/skills/sync-connected";
+import { readSkillFile as readStoredSkillFile } from "@/lib/db/skill-files";
 import {
   listEnabledOrgConnectedSkillSources,
   resolveConnectedSkillsScopeId,
@@ -35,6 +44,10 @@ export type ResolvedUserSkill = {
   authoredBy?: "agent";
   /** Custom only: published by an org admin, so read-only to its members. */
   managedByOrg?: boolean;
+  /** Custom only: which agent wrote it, when one did. */
+  agentAuthor?: AgentAuthor;
+  /** Reference files beside SKILL.md, by path. */
+  files?: string[];
 };
 
 type SettingsRow = Parameters<typeof normalizeUserSkillSettings>[0];
@@ -155,6 +168,30 @@ export async function resolveUserSkillSurface(params: {
 
   const resolved: ResolvedUserSkill[] = [];
 
+  const packFilesFor = (skill: (typeof catalog)[number]): string[] => {
+    const dir =
+      skill.source === "oracle"
+        ? oracleSkillDir(skill.id)
+        : skill.source === "community"
+          ? communitySkillDir(skill.id)
+          : skill.source === "connected"
+            ? (() => {
+                const parsed = parseConnectedSkillId(skill.id);
+                return parsed
+                  ? connectedSkillDir(
+                      resolveConnectedSkillsScopeId(
+                        params.userId,
+                        params.orgId,
+                      ),
+                      parsed.sourceId,
+                      parsed.slug,
+                    )
+                  : null;
+              })()
+            : null;
+    return dir ? listSkillPackFiles(dir) : [];
+  };
+
   for (const skill of [...catalog, ...connectedSkills]) {
     const kind = skill.source;
     // `builtin` is declared in CatalogSkill but never emitted; skip defensively
@@ -176,6 +213,7 @@ export async function resolveUserSkillSurface(params: {
       }),
       slug: skill.slug ?? null,
       sourceId: skill.sourceId ?? null,
+      ...(packFilesFor(skill).length > 0 ? { files: packFilesFor(skill) } : {}),
     });
   }
 
@@ -183,7 +221,7 @@ export async function resolveUserSkillSurface(params: {
     resolved.push({
       id: skill.id,
       name: skill.name,
-      description: "Custom skill",
+      description: skillDescription(skill) ?? "Custom skill",
       source: "custom",
       mode: resolveSkillMode({
         skillId: skill.id,
@@ -196,6 +234,8 @@ export async function resolveUserSkillSurface(params: {
       sourceId: null,
       ...(skill.authoredBy === "agent" ? { authoredBy: "agent" as const } : {}),
       ...(skill.managedByOrg ? { managedByOrg: true } : {}),
+      ...(skill.agentAuthor ? { agentAuthor: skill.agentAuthor } : {}),
+      ...(skill.files?.length ? { files: skill.files } : {}),
     });
   }
 
@@ -207,6 +247,50 @@ export async function resolveUserSkillSurface(params: {
  * switched it off. Off is reported the same as missing on purpose: a caller
  * should not be able to read a skill it cannot see in the listing.
  */
+/**
+ * One reference file from a skill, whatever source it came from.
+ *
+ * Custom skills keep their files in `UserSkillFile`; Oracle, Community and
+ * Connected keep the folder the repo laid out. Both answer the same question,
+ * so the caller does not branch on source.
+ */
+export async function readUserSkillFile(params: {
+  userId: string;
+  orgId: string | null;
+  settings: SettingsRow;
+  skill: ResolvedUserSkill;
+  path: string;
+}): Promise<string | null> {
+  switch (params.skill.source) {
+    case "oracle": {
+      const dir = oracleSkillDir(params.skill.id);
+      return dir ? readSkillPackFile(dir, params.path) : null;
+    }
+    case "community": {
+      const dir = communitySkillDir(params.skill.id);
+      return dir ? readSkillPackFile(dir, params.path) : null;
+    }
+    case "connected": {
+      const parsed = parseConnectedSkillId(params.skill.id);
+      if (!parsed) {
+        return null;
+      }
+      const dir = connectedSkillDir(
+        resolveConnectedSkillsScopeId(params.userId, params.orgId),
+        parsed.sourceId,
+        parsed.slug,
+      );
+      return dir ? readSkillPackFile(dir, params.path) : null;
+    }
+    default:
+      return await readStoredSkillFile({
+        userId: params.userId,
+        skillId: params.skill.id,
+        path: params.path,
+      });
+  }
+}
+
 export async function readUserSkillContent(params: {
   userId: string;
   orgId: string | null;

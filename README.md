@@ -24,6 +24,9 @@ _Main chat UI._
 - **Skills say who wrote them** — the Skills panel credits an agent-written skill, and an agent may revise only its own
 - **Deleting tells you what it releases** — removing a skill names the personas that carried it; removing a persona leaves its skills in place
 - **Markdown renders** — the eye toggle previews a persona or skill as it reads
+- **A skill can be a folder** — `SKILL.md` plus the reference files it points at. Import and download one as a `.zip`; an agent reads a reference only when the instructions call for it
+- **Skills carry a description** — shown in the Skills panel, and what an agent reads when choosing between them
+- **Skills say which agent wrote them** — the app name and the product it connected from, not just “an agent”
 
 ## What’s in 5.5
 
@@ -86,7 +89,9 @@ Open **Skills** from the App Portal (or the sidebar). Four sources, three invoca
 
 A skill written by a connected agent is credited to the agent and starts as **Slash**, so it applies when you invoke it or when a persona carrying it is working. A skill you add yourself starts as **Auto**.
 
-**Clone** copies any skill — including one your organization published — into one you own.
+**Clone** copies any skill — including one your organization published — into one you own. **Import .md or .zip** loads a skill folder; the download button returns it.
+
+A skill can carry reference files beside its `SKILL.md`, the way Oracle and Community packs do. Up to 32 files, 64,000 characters each, 256,000 for the whole skill.
 
 Shared packs are **not** vendored in git. Sync them with:
 

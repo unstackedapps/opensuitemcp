@@ -267,6 +267,13 @@
       "when": 1790219120197,
       "tag": "0037_persona_skill_pairings",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1790222720197,
+      "tag": "0038_user_skill_files",
+      "breakpoints": true
     }
   ]
 }

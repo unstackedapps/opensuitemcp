@@ -16,13 +16,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Skills carry an `authoredBy` stamp.** The Skills panel credits an agent-written skill to the agent, and `osmcp_list_skills` reports it alongside `managedByOrg` and `carriedBy`. An agent may revise or delete what agents wrote — never a skill a person wrote, and never one an organization administrator published
 - **Markdown renders where it is read.** An eye toggle in the persona editor, the persona details dialog and the skill editor switches between the source and the rendered document
 
+- **A skill can be a folder, not only a document.** `SKILL.md` is the entry point and the material it points at — intake questions, troubleshooting tables, worked patterns — sits in files beside it. `osmcp_get_skill` returns the entry point and names the rest; `osmcp_read_skill_file` reads one when the instructions call for it, rather than pulling everything in advance. A person imports a folder as a `.zip` in **Skills** and downloads one the same way. Up to 32 files, 64,000 characters each, 256,000 for the whole skill
+- **Skills carry a description.** One line, shown in the Skills panel and returned by `osmcp_list_skills`. An agent choosing which skills a persona should carry was reading 32 entries that all said “Custom skill” and had to open each one. Skills written before the field existed fall back to their `SKILL.md` frontmatter
+- **Skills say which agent wrote them.** The app's name and the product it connected from, with the NetSuite account it was acting against and when — rather than the bare word “agent”. `osmcp_list_skills` reports it as `writtenBy`
+- **A skill can be downloaded.** A skill with references comes back as a `.zip` of the folder; one without comes back as a single `SKILL.md`, with frontmatter so a re-import keeps its name and description
+
 ### 📝 Changed
 
+- **What a connecting agent is told is shorter and in priority order.** The instructions sent at `initialize` had grown to eleven sentences, arriving once, in a system prompt competing with everything else — and recording work was the ninth of them. They are six now, and what a tool's own description already says was removed rather than repeated. The habits that nothing in a tool name implies — read your persona, open a thread, save what you establish — are also returned by `osmcp_whoami` as `nextSteps`, which is the one call every session makes first
 - **Deleting names what it releases.** Removing a skill lists the personas that carried it, in the app and in the tool result, and they keep working without it. Removing a persona releases its pairings and leaves every skill in the library. Switching a paired skill **Off** asks first, because a persona carrying an off skill would inject nothing
 - **Pairings are stored once, keyed by persona.** A built-in persona is a prompt file on disk with nowhere to hold a field, so the map covers built-in and custom alike and every read site does one lookup
 
 ### 🐛 Fixed
 
+- **A synced skill keeps the files beside its SKILL.md.** The Connected, Oracle and Community syncs walked a repo, took `SKILL.md`, and discarded everything else in the folder — so a pack whose instructions say “run `references/intake.md`” arrived pointing at a file this install had thrown away. Text files beside a SKILL.md are now synced with it
 - **An organization's published skills no longer eat your own allowance.** The Skills panel sends org-published and personal skills back as one array, and the whole array was capped at 32 — so five published skills silently reduced a member to 27 of their own, and the 28th save returned a bare `400`. The cap counts personal skills, on both the panel and the MCP path, and says so when it bites
 - **`README.md` describes the release it ships with.** `## What’s in 5.3` headed 5.5 content and the file went 5.3 → 5.2 → 5.0, so two releases had no section at all. 5.3, 5.4 and 5.5 are written, and the promotion checklist in `docs/getting-started.md` now requires the section before a release reaches public `main`
 - **Changelog version links resolve.** Eleven version headings had no link reference and rendered as literal brackets
@@ -30,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 📦 Database
 
 - Migration `0037_persona_skill_pairings` — `UserSettings.personaSkillIds` (`pnpm db:migrate`)
+- Migration `0038_user_skill_files` — `UserSkillFile`, the reference files beside a custom skill's SKILL.md. A table rather than another JSONB field, because the settings row is read on every chat turn and a bundle's references are large and read rarely
 
 ---
 

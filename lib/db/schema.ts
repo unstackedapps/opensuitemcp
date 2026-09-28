@@ -244,6 +244,40 @@ export const userSettings = pgTable("UserSettings", {
 
 export type UserSettings = InferSelectModel<typeof userSettings>;
 
+/**
+ * Reference files beside a custom skill's SKILL.md.
+ *
+ * A table rather than another JSONB field on UserSettings: that row is read on
+ * every chat turn, and a bundle's references are large and read rarely — only
+ * when a skill actually points at one. Keeping them here is what makes the
+ * progressive disclosure real instead of cosmetic.
+ */
+export const userSkillFile = pgTable(
+  "UserSkillFile",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    userId: uuid("userId")
+      .notNull()
+      .references(() => user.id),
+    /** `CustomSkill.id` in UserSettings.customSkills. */
+    skillId: varchar("skillId", { length: 128 }).notNull(),
+    /** Relative to the skill folder, e.g. `references/intake.md`. */
+    path: varchar("path", { length: 256 }).notNull(),
+    content: text("content").notNull(),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  },
+  (table) => ({
+    userSkillFileUnique: uniqueIndex("UserSkillFile_user_skill_path_unique").on(
+      table.userId,
+      table.skillId,
+      table.path,
+    ),
+  }),
+);
+
+export type UserSkillFile = InferSelectModel<typeof userSkillFile>;
+
 export type OrgRole = "owner" | "admin" | "member";
 
 export type OrgLlmProviderModeConfig = {
