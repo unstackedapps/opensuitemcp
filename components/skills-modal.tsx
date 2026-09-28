@@ -231,6 +231,8 @@ type SkillRowProps = {
     | { kind: "inline"; content: string };
   /** Personas that bring this skill into a turn. */
   carriedBy?: PairedPersona[];
+  /** Reference file paths beside SKILL.md. */
+  files?: string[];
   variant?: "list" | "card";
 };
 
@@ -247,6 +249,7 @@ function SkillRow({
   hideMode,
   preview,
   carriedBy,
+  files,
   variant = "list",
 }: SkillRowProps) {
   const [expanded, setExpanded] = useState(false);
@@ -326,6 +329,12 @@ function SkillRow({
             {author}
             <span className="mx-1.5 text-border">·</span>
             {formatSkillDate(updatedAt)}
+            {files && files.length > 0 ? (
+              <>
+                <span className="mx-1.5 text-border">·</span>
+                {files.length} file{files.length === 1 ? "" : "s"}
+              </>
+            ) : null}
             {carriedBy && carriedBy.length > 0 ? (
               <>
                 <span className="mx-1.5 text-border">·</span>
@@ -363,6 +372,24 @@ function SkillRow({
             <pre className="max-h-64 overflow-auto whitespace-pre-wrap wrap-break-word px-3 py-3 font-mono text-[11px] text-muted-foreground leading-relaxed">
               {content}
             </pre>
+          ) : null}
+          {files && files.length > 0 ? (
+            <div className="border-border/60 border-t px-3 py-2">
+              <p className="mb-1 text-[11px] text-muted-foreground/80">
+                SKILL.md · {files.length} reference file
+                {files.length === 1 ? "" : "s"}
+              </p>
+              <ul className="flex flex-col gap-0.5">
+                {files.map((path) => (
+                  <li
+                    className="truncate font-mono text-[11px] text-muted-foreground"
+                    key={path}
+                  >
+                    {path}
+                  </li>
+                ))}
+              </ul>
+            </div>
           ) : null}
         </div>
       ) : null}
@@ -1610,6 +1637,7 @@ export function SkillsPanel({
                     </>
                   }
                   author={customSkillAuthor(skill)}
+                  files={skill.files}
                   carriedBy={personasCarrying(
                     skill.id,
                     personaSkillIds,
