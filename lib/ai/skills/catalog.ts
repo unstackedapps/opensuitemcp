@@ -1,5 +1,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
+import { parseSkillFrontmatter } from "./bundle";
+import { MAX_SKILL_FILES, normalizeSkillFilePath } from "./ids";
 import {
   isSlashableMode,
   normalizeSkillModes,
@@ -18,6 +20,7 @@ import {
 } from "./sync-connected";
 import { getOracleSkillsDir } from "./sync-oracle";
 
+export { MAX_SKILL_FILES, normalizeSkillFilePath } from "./ids";
 export type { ConnectedSkillSource } from "./sync-connected";
 export type SkillAuthor =
   | "Oracle NetSuite"
@@ -60,7 +63,34 @@ export type CustomSkill = {
    * agent rewriting a person's skill has nothing to read without this.
    */
   authoredBy?: "agent";
+  /**
+   * Which agent, so a team can review what an agent left behind. `authoredBy`
+   * stays the guardrail's field; this one is the record.
+   */
+  agentAuthor?: AgentAuthor;
+  /** One line, shown in the picker and returned to an agent choosing skills. */
+  description?: string;
+  /**
+   * Reference files beside SKILL.md, by path. Names only — the bodies live in
+   * `UserSkillFile` so a settings read does not carry them.
+   */
+  files?: string[];
 };
+
+/** Who wrote something over MCP, for review rather than for the guardrail. */
+export type AgentAuthor = {
+  /** `McpApiKey.id` or `OAuthGrant.id`. */
+  keyId: string;
+  /** The app's name as its owner typed it. */
+  keyName: string;
+  /** Which AI product the app connects from, when it said. */
+  connectsFrom?: string | null;
+  /** NetSuite account the agent was acting against. */
+  netsuiteAccountId?: string | null;
+  at: string;
+};
+
+export const MAX_SKILL_DESCRIPTION = 280;
 
 export type UserSkillSettings = {
   /** Oracle/community skill ids enabled for the session */
@@ -78,32 +108,6 @@ function titleFromSkillId(id: string): string {
     .split("-")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
-}
-
-function parseSkillFrontmatter(raw: string): {
-  name?: string;
-  description?: string;
-} {
-  if (!raw.startsWith("---")) {
-    return {};
-  }
-  const end = raw.indexOf("\n---", 3);
-  if (end === -1) {
-    return {};
-  }
-  const block = raw.slice(3, end);
-  const nameMatch = block.match(/^name:\s*(.+)$/m);
-  const descMatch = block.match(/^description:\s*(.+)$/m);
-  const name = nameMatch?.[1]?.trim().replace(/^["']|["']$/g, "");
-  let description = descMatch?.[1]?.trim().replace(/^["']|["']$/g, "");
-  // Folded/literal descriptions are rare; keep first line if huge.
-  if (description && description.length > 280) {
-    description = `${description.slice(0, 277)}...`;
-  }
-  return {
-    name: name || undefined,
-    description: description || undefined,
-  };
 }
 
 const ALWAYS_ON_SKILL_ID = "netsuite-ai-connector-instructions";
@@ -209,6 +213,67 @@ export function getCommunitySkillContent(skillId: string): string | null {
     return null;
   }
   return readCommunitySkillBody(slug);
+}
+
+/**
+ * Reference files beside a pack skill's SKILL.md, by path.
+ *
+ * Disk-backed skills — Oracle, Community, Connected — keep their folder as the
+ * repo laid it out, so the files SKILL.md points at are already there.
+ */
+export function listSkillPackFiles(skillDir: string): string[] {
+  if (!existsSync(skillDir)) {
+    return [];
+  }
+  const out: string[] = [];
+  const walk = (dir: string, prefix: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (out.length >= MAX_SKILL_FILES) {
+        return;
+      }
+      const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        walk(path.join(dir, entry.name), relative);
+        continue;
+      }
+      if (entry.name === "SKILL.md") {
+        continue;
+      }
+      out.push(relative);
+    }
+  };
+  walk(skillDir, "");
+  return out.sort((left, right) => left.localeCompare(right));
+}
+
+export function readSkillPackFile(
+  skillDir: string,
+  filePath: string,
+): string | null {
+  const safe = normalizeSkillFilePath(filePath);
+  if (!safe) {
+    return null;
+  }
+  const target = path.join(skillDir, safe);
+  if (!path.resolve(target).startsWith(path.resolve(skillDir))) {
+    return null;
+  }
+  if (!existsSync(target) || !statSync(target).isFile()) {
+    return null;
+  }
+  return readFileSync(target, "utf8");
+}
+
+export function oracleSkillDir(skillId: string): string | null {
+  if (!skillId || /[\\/:]|\.\./.test(skillId)) {
+    return null;
+  }
+  return path.join(getOracleSkillsDir(), skillId);
+}
+
+export function communitySkillDir(skillId: string): string | null {
+  const slug = communitySlugFromId(skillId);
+  return slug ? path.join(getCommunitySkillsDir(), slug) : null;
 }
 
 export function listOracleCatalogSkills(): CatalogSkill[] {
@@ -369,6 +434,73 @@ function normalizeConnectedSources(raw: unknown): ConnectedSkillSource[] {
     }));
 }
 
+export function normalizeAgentAuthor(value: unknown): AgentAuthor | undefined {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  const keyId = typeof record.keyId === "string" ? record.keyId.trim() : "";
+  if (!keyId || keyId.length > 128) {
+    return undefined;
+  }
+  const keyName =
+    typeof record.keyName === "string"
+      ? record.keyName.trim().slice(0, 128)
+      : "";
+  return {
+    keyId,
+    keyName: keyName || "Agent",
+    ...(typeof record.connectsFrom === "string" && record.connectsFrom.trim()
+      ? { connectsFrom: record.connectsFrom.trim().slice(0, 64) }
+      : {}),
+    ...(typeof record.netsuiteAccountId === "string" &&
+    record.netsuiteAccountId.trim()
+      ? { netsuiteAccountId: record.netsuiteAccountId.trim().slice(0, 64) }
+      : {}),
+    at: typeof record.at === "string" ? record.at : new Date().toISOString(),
+  };
+}
+
+/** Reference paths beside SKILL.md, kept relative and free of traversal. */
+export function normalizeSkillFilePaths(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const seen = new Set<string>();
+  for (const entry of value) {
+    const filePath = normalizeSkillFilePath(entry);
+    if (filePath) {
+      seen.add(filePath);
+    }
+    if (seen.size >= MAX_SKILL_FILES) {
+      break;
+    }
+  }
+  return [...seen];
+}
+
+/**
+ * A skill's one-line description.
+ *
+ * Skills written before the field existed, and every SKILL.md imported from a
+ * repo, carry it in frontmatter instead — so that is read before giving up.
+ */
+export function skillDescription(skill: {
+  description?: unknown;
+  content?: unknown;
+}): string | undefined {
+  const explicit =
+    typeof skill.description === "string" ? skill.description.trim() : "";
+  if (explicit) {
+    return explicit.slice(0, MAX_SKILL_DESCRIPTION);
+  }
+  const content = typeof skill.content === "string" ? skill.content : "";
+  const fromFrontmatter = parseSkillFrontmatter(content).description;
+  return fromFrontmatter
+    ? fromFrontmatter.slice(0, MAX_SKILL_DESCRIPTION)
+    : undefined;
+}
+
 function assignCustomSkillSlugs(skills: CustomSkill[]): CustomSkill[] {
   const used = new Set<string>();
   return skills.map((skill) => {
@@ -433,6 +565,15 @@ export function normalizeUserSkillSettings(
             // next save. authoredBy is what the agent write guardrail reads.
             ...(skill.authoredBy === "agent"
               ? { authoredBy: "agent" as const }
+              : {}),
+            ...(normalizeAgentAuthor(skill.agentAuthor)
+              ? { agentAuthor: normalizeAgentAuthor(skill.agentAuthor) }
+              : {}),
+            ...(skillDescription(skill)
+              ? { description: skillDescription(skill) }
+              : {}),
+            ...(Array.isArray(skill.files) && skill.files.length > 0
+              ? { files: normalizeSkillFilePaths(skill.files) }
               : {}),
           }))
       : [];

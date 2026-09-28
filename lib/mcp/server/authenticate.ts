@@ -39,6 +39,8 @@ export type McpPrincipal = {
    */
   keyId: string;
   keyName: string;
+  /** Which AI product the app was created for, when its owner said. */
+  connectsFrom: string | null;
   /** Account this key is pinned to; null follows the user's active account. */
   pinnedNetSuiteAccountId: string | null;
   /** Persona this agent is assigned; null means it has no assigned role. */
@@ -158,6 +160,7 @@ function keyPrincipal(authenticated: AuthenticatedMcpKey): McpPrincipal {
     credentialKind: "key",
     keyId: authenticated.key.id,
     keyName: authenticated.key.name,
+    connectsFrom: authenticated.key.connectsFrom ?? null,
     pinnedNetSuiteAccountId: authenticated.key.netsuiteAccountId,
     personaId: authenticated.key.personaId,
   };
@@ -172,6 +175,7 @@ function grantPrincipal(authenticated: AuthenticatedOAuthGrant): McpPrincipal {
     credentialKind: "oauth",
     keyId: authenticated.grant.id,
     keyName: authenticated.grant.name,
+    connectsFrom: authenticated.grant.connectsFrom ?? null,
     pinnedNetSuiteAccountId: authenticated.grant.netsuiteAccountId,
     personaId: authenticated.grant.personaId,
   };

@@ -49,7 +49,11 @@ export async function syncOracleSkills(): Promise<boolean> {
 
   const pack = skills
     .filter((skill) => skill.slug.startsWith("netsuite-"))
-    .map((skill) => ({ localId: skill.slug, markdown: skill.markdown }));
+    .map((skill) => ({
+      localId: skill.slug,
+      markdown: skill.markdown,
+      files: skill.files,
+    }));
 
   const wrote = writeSkillPack(skillsDir, pack);
   const ok = oracleSkillsLookHealthy(skillsDir);

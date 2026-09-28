@@ -38,7 +38,18 @@ export type FetchedSkillMd = {
   /** Path of the SKILL.md relative to the sync root path */
   relativeDir: string;
   markdown: string;
+  /**
+   * Text files beside SKILL.md, by path relative to the skill folder.
+   *
+   * A skill pack is a folder, not a file: SKILL.md routinely points at
+   * `references/intake.md` and the like. Syncing only SKILL.md left every one
+   * of those links pointing at something this install had thrown away.
+   */
+  files?: Array<{ path: string; content: string }>;
 };
+
+/** Reference files one synced skill may carry. */
+const MAX_SYNCED_SKILL_FILES = 32;
 
 export function githubHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
@@ -291,9 +302,17 @@ export async function listSkillMdFiles(options: {
         const relativeDir = rootPath
           ? parentPath.replace(new RegExp(`^${escapeRegExp(rootPath)}/?`), "")
           : parentPath;
+        const files = await fetchSkillSiblings(
+          options.owner,
+          options.repo,
+          parentPath,
+          ref,
+          headers,
+        );
         skills.push({
           slug,
           relativeDir: relativeDir || slug,
+          ...(files.length > 0 ? { files } : {}),
           markdown:
             markdown.length > MAX_SKILL_BODY_CHARS
               ? markdown.slice(0, MAX_SKILL_BODY_CHARS)
@@ -315,6 +334,74 @@ export async function listSkillMdFiles(options: {
   return { ref, skills };
 }
 
+/**
+ * Every text file under a skill folder except SKILL.md itself.
+ *
+ * Binary is skipped rather than refused: a pack may carry a diagram beside its
+ * instructions, and a skill that syncs without the picture is better than one
+ * that does not sync.
+ */
+async function fetchSkillSiblings(
+  owner: string,
+  repo: string,
+  skillDir: string,
+  ref: string,
+  headers: Record<string, string>,
+): Promise<Array<{ path: string; content: string }>> {
+  const out: Array<{ path: string; content: string }> = [];
+
+  async function walk(dirPath: string): Promise<void> {
+    if (out.length >= MAX_SYNCED_SKILL_FILES) {
+      return;
+    }
+    let listing: unknown;
+    try {
+      listing = await fetchContentsJson(owner, repo, dirPath, ref, headers);
+    } catch {
+      return;
+    }
+    const items = Array.isArray(listing) ? listing : [listing];
+    for (const item of items) {
+      if (out.length >= MAX_SYNCED_SKILL_FILES) {
+        return;
+      }
+      if (item.type === "dir") {
+        await walk(item.path);
+        continue;
+      }
+      if (item.type !== "file" || item.name === "SKILL.md") {
+        continue;
+      }
+      if (!TEXT_FILE_PATTERN.test(item.name)) {
+        continue;
+      }
+      const relative = item.path.slice(skillDir.length + 1);
+      const body = await fetchSkillMarkdown(
+        owner,
+        repo,
+        item.path,
+        ref,
+        headers,
+      );
+      if (!body) {
+        continue;
+      }
+      out.push({
+        path: relative,
+        content:
+          body.length > MAX_SKILL_BODY_CHARS
+            ? body.slice(0, MAX_SKILL_BODY_CHARS)
+            : body,
+      });
+    }
+  }
+
+  await walk(skillDir);
+  return out;
+}
+
+const TEXT_FILE_PATTERN = /\.(md|markdown|txt|json|ya?ml|csv|sql|ts|js|py)$/i;
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -324,7 +411,11 @@ function escapeRegExp(value: string): string {
  */
 export function writeSkillPack(
   destDir: string,
-  skills: Array<{ localId: string; markdown: string }>,
+  skills: Array<{
+    localId: string;
+    markdown: string;
+    files?: Array<{ path: string; content: string }>;
+  }>,
 ): number {
   if (skills.length === 0) {
     throw new Error("Refusing to write an empty skill pack");
@@ -345,6 +436,16 @@ export function writeSkillPack(
     const skillDir = path.join(destDir, skill.localId);
     mkdirSync(skillDir, { recursive: true });
     writeFileSync(path.join(skillDir, "SKILL.md"), skill.markdown, "utf8");
+    for (const file of skill.files ?? []) {
+      const target = path.join(skillDir, file.path);
+      // The path came from a repo listing, so it is already relative; resolve
+      // anyway, because a pack is third-party content.
+      if (!path.resolve(target).startsWith(path.resolve(skillDir))) {
+        continue;
+      }
+      mkdirSync(path.dirname(target), { recursive: true });
+      writeFileSync(target, file.content, "utf8");
+    }
     seen.add(skill.localId);
     wrote += 1;
   }

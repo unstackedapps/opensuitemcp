@@ -90,16 +90,17 @@ export async function syncConnectedSkillSource(options: {
     }
 
     // Dedupe slugs within one connection (nested collisions → last wins)
-    const bySlug = new Map<string, string>();
+    const bySlug = new Map<string, (typeof skills)[number]>();
     for (const skill of skills) {
-      bySlug.set(skill.slug, skill.markdown);
+      bySlug.set(skill.slug, skill);
     }
 
     writeSkillPack(
       destDir,
-      [...bySlug.entries()].map(([localId, markdown]) => ({
+      [...bySlug.entries()].map(([localId, skill]) => ({
         localId,
-        markdown,
+        markdown: skill.markdown,
+        files: skill.files,
       })),
     );
 
@@ -186,6 +187,23 @@ export function readConnectedSkillMarkdown(
     return null;
   }
   return readFileSync(filePath, "utf8");
+}
+
+/** The skill's own folder, so its reference files can be listed and read. */
+export function connectedSkillDir(
+  userId: string,
+  sourceId: string,
+  slug: string,
+): string | null {
+  if (
+    !slug ||
+    slug.includes("..") ||
+    slug.includes("/") ||
+    slug.includes("\\")
+  ) {
+    return null;
+  }
+  return path.join(getConnectedSourceDir(userId, sourceId), slug);
 }
 
 export function connectedSkillFileMtime(

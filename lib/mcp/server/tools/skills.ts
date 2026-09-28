@@ -25,8 +25,12 @@ import {
   skillWriteRefusal,
 } from "@/lib/ai/skills/authoring";
 import {
+  type AgentAuthor,
   type CustomSkill,
+  MAX_SKILL_DESCRIPTION,
+  normalizeSkillFilePath,
   normalizeUserSkillSettings,
+  skillDescription,
 } from "@/lib/ai/skills/catalog";
 import {
   applySkillModeChange,
@@ -36,13 +40,22 @@ import {
 import {
   type ResolvedUserSkill,
   readUserSkillContent,
+  readUserSkillFile,
   resolveUserSkillSurface,
 } from "@/lib/ai/skills/user-surface";
 import { getUserSettings, upsertUserSettings } from "@/lib/db/queries";
+import { deleteSkillFiles } from "@/lib/db/skill-files";
 import { validateOrgSkillSettingsPatch } from "@/lib/org/enforcement";
 import { generateUUID } from "@/lib/utils";
 import type { McpPrincipal } from "../authenticate";
 import { type McpToolDefinition, toolError, toolResult } from "./types";
+
+const READ_ONLY = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: false,
+} as const;
 
 const WRITE = {
   readOnlyHint: false,
@@ -54,6 +67,19 @@ const WRITE = {
 function readString(args: Record<string, unknown>, key: string): string {
   const value = args[key];
   return typeof value === "string" ? value.trim() : "";
+}
+
+/** Which agent wrote this, so a person reviewing later knows what to ask. */
+function agentAuthorFor(principal: McpPrincipal): AgentAuthor {
+  return {
+    keyId: principal.keyId,
+    keyName: principal.keyName,
+    ...(principal.connectsFrom ? { connectsFrom: principal.connectsFrom } : {}),
+    ...(principal.pinnedNetSuiteAccountId
+      ? { netsuiteAccountId: principal.pinnedNetSuiteAccountId }
+      : {}),
+    at: new Date().toISOString(),
+  };
 }
 
 type SkillState = {
@@ -148,6 +174,10 @@ function describeSkill(
       customEnabled: skill.enabled,
     }),
     authoredBy: skill.authoredBy ?? "user",
+    ...(skillDescription(skill)
+      ? { description: skillDescription(skill) }
+      : {}),
+    ...(skill.files?.length ? { files: skill.files } : {}),
   };
 }
 
@@ -196,6 +226,11 @@ const createSkill: McpToolDefinition = {
         type: "string",
         description:
           "The skill as markdown: the procedure, the checks that catch a bad result, the record types and saved searches it relies on, and the cases where it does not apply. Write it as instructions addressed to whoever follows it.",
+      },
+      description: {
+        type: "string",
+        description:
+          "One line naming what this skill is for, shown in the user's Skills panel and returned by osmcp_list_skills. Write it so another agent can choose between skills without opening each one.",
       },
       mode: {
         type: "string",
@@ -250,13 +285,19 @@ const createSkill: McpToolDefinition = {
       paired = resolved.persona;
     }
 
+    const described = readString(args, "description").slice(
+      0,
+      MAX_SKILL_DESCRIPTION,
+    );
     const skill: CustomSkill = {
       id: generateUUID(),
       name: draft.name,
       content: draft.content,
+      ...(described ? { description: described } : {}),
       updatedAt: new Date().toISOString(),
       enabled: draft.mode === "auto",
       authoredBy: "agent",
+      agentAuthor: agentAuthorFor(principal),
     };
 
     const applied = applySkillModeChange({
@@ -386,9 +427,13 @@ const cloneSkill: McpToolDefinition = {
       id: generateUUID(),
       name: draft.name,
       content: draft.content,
+      ...(found.skill.description && found.skill.description !== "Custom skill"
+        ? { description: found.skill.description }
+        : {}),
       updatedAt: new Date().toISOString(),
       enabled: draft.mode === "auto",
       authoredBy: "agent",
+      agentAuthor: agentAuthorFor(principal),
     };
 
     const applied = applySkillModeChange({
@@ -450,6 +495,10 @@ const updateSkill: McpToolDefinition = {
         type: "string",
         description: "Replacement markdown for the whole skill.",
       },
+      description: {
+        type: "string",
+        description: "New one-line summary.",
+      },
       mode: {
         type: "string",
         enum: ["slash", "auto"],
@@ -480,11 +529,17 @@ const updateSkill: McpToolDefinition = {
 
     const name = readString(args, "name");
     const content = readString(args, "content");
+    const described = readString(args, "description").slice(
+      0,
+      MAX_SKILL_DESCRIPTION,
+    );
     const modeArg = args.mode;
     const wantsMode =
       typeof modeArg === "string" && isSkillInvocationMode(modeArg);
-    if (!(name || content || wantsMode)) {
-      return toolError("Pass at least one of `name`, `content`, or `mode`.");
+    if (!(name || content || described || wantsMode)) {
+      return toolError(
+        "Pass at least one of `name`, `content`, `description`, or `mode`.",
+      );
     }
     if (modeArg !== undefined && !wantsMode) {
       return toolError("`mode` must be `slash` or `auto`.");
@@ -519,8 +574,10 @@ const updateSkill: McpToolDefinition = {
       ...existing,
       ...(name ? { name } : {}),
       ...(content ? { content } : {}),
+      ...(described ? { description: described } : {}),
       updatedAt: new Date().toISOString(),
       authoredBy: "agent",
+      agentAuthor: agentAuthorFor(principal),
     };
 
     const applied = applySkillModeChange({
@@ -621,6 +678,7 @@ const deleteSkill: McpToolDefinition = {
       skillModes,
       ...(carriedBy.length > 0 ? { personaSkillIds } : {}),
     });
+    await deleteSkillFiles({ userId: principal.userId, skillIds: [skillId] });
 
     const released = personaNames(carriedBy, state.customPersonas);
 
@@ -727,10 +785,79 @@ const pairSkills: McpToolDefinition = {
   },
 };
 
+const readSkillFileTool: McpToolDefinition = {
+  name: "osmcp_read_skill_file",
+  title: "Read a skill reference file",
+  description:
+    "Read one reference file beside a skill's SKILL.md. A skill is a folder: SKILL.md is the entry point, and the material it points at — intake questions, troubleshooting tables, worked patterns — sits in files beside it. osmcp_get_skill lists them; read one when SKILL.md tells you to, rather than pulling them all in advance.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      skillId: {
+        type: "string",
+        description: "The `id` from osmcp_list_skills.",
+      },
+      path: {
+        type: "string",
+        description:
+          "A path from the `files` list on osmcp_get_skill, e.g. `references/intake.md`.",
+      },
+    },
+    required: ["skillId", "path"],
+    additionalProperties: false,
+  },
+  annotations: { title: "Read a skill reference file", ...READ_ONLY },
+  execute: async (args, principal) => {
+    const skillId = readString(args, "skillId");
+    const path = normalizeSkillFilePath(readString(args, "path"));
+    if (!skillId) {
+      return toolError("Pass the `skillId` of a skill from osmcp_list_skills.");
+    }
+    if (!path) {
+      return toolError(
+        "Pass a `path` from the `files` list on osmcp_get_skill, relative to the skill folder.",
+      );
+    }
+
+    const settings = await getUserSettings({ userId: principal.userId });
+    // Reading a file is reading the skill: the same visibility rules apply, so
+    // a skill switched off has no readable references either.
+    const found = await readUserSkillContent({
+      userId: principal.userId,
+      orgId: principal.orgId,
+      settings: settings ?? {},
+      skillId,
+      disabledOrgConnectedSkillSourceIds:
+        settings?.disabledOrgConnectedSkillSourceIds,
+    });
+    if (!found) {
+      return toolError(
+        `No skill \`${skillId}\` is available to this user. Call osmcp_list_skills for the ids that are.`,
+      );
+    }
+
+    const content = await readUserSkillFile({
+      userId: principal.userId,
+      orgId: principal.orgId,
+      settings: settings ?? {},
+      skill: found.skill,
+      path,
+    });
+    if (content === null) {
+      return toolError(
+        `Skill ${found.skill.name} has no file \`${path}\`. Call osmcp_get_skill for the paths it does have.`,
+      );
+    }
+
+    return toolResult({ skillId, path, content }, content);
+  },
+};
+
 export const skillWriteTools: McpToolDefinition[] = [
   createSkill,
   cloneSkill,
   updateSkill,
   deleteSkill,
   pairSkills,
+  readSkillFileTool,
 ];

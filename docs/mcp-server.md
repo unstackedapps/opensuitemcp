@@ -203,8 +203,9 @@ user's own library and appear in their Personas and Skills panels.
 | `osmcp_update_skill` | Revise a skill this app wrote |
 | `osmcp_delete_skill` | Remove a skill this app wrote, releasing it from every persona carrying it |
 | `osmcp_pair_skills` | Set the skills any persona carries |
+| `osmcp_read_skill_file` | Read one reference file beside a skill's SKILL.md |
 
-Four rules govern these:
+Five rules govern these:
 
 | Rule | Detail |
 | --- | --- |
@@ -212,6 +213,11 @@ Four rules govern these:
 | **Clone is how to build on someone else's** | `osmcp_clone_skill` and `osmcp_clone_persona` copy anything this user can read. The copy is agent-authored, so the agent may revise it |
 | **A new skill starts at `slash`** | It applies when its owner types `/skill-name`, or when a persona carrying it is working. Pass `mode: "auto"` to apply it to every chat turn |
 | **A persona carries its skills** | `osmcp_pair_skills` takes any persona, built-in or custom, and any skill from any source. In the OpenSuiteMCP app those skills are injected for every turn that persona works. Over this connection they are a reading list: `osmcp_get_persona` names them, and you read each with `osmcp_get_skill` |
+| **A skill is a folder** | `SKILL.md` is the entry point. `osmcp_get_skill` returns it plus `files`, the reference material beside it; read one with `osmcp_read_skill_file` when SKILL.md points at it, rather than pulling them all in advance |
+
+`description` is what an agent reads when choosing between skills, so write one
+on every skill you create. `writtenBy` on `osmcp_list_skills` names the agent
+that wrote it and the product it connected from.
 
 A persona this user has made their default cannot be deleted by an agent.
 
@@ -227,6 +233,28 @@ skills without removing them.
 | Input schema | NetSuite's, forwarded verbatim — enums, formats and nested shapes intact |
 | `readOnlyHint` / `destructiveHint` | Derived from the tool name, because NetSuite does not declare whether a tool mutates. Conservative: an unrecognised name is announced as a write |
 | Effect of the hints | Advisory. A client uses them to decide whether to confirm. Nothing is hidden on that basis — enabling a tool happens in the app |
+
+### Skill bundles
+
+A skill can be one document or a folder:
+
+```
+ic-je-review/
+  SKILL.md              ← the entry point, always present
+  references/
+    intake.md
+    troubleshooting.md
+```
+
+| Limit | Value |
+| --- | --- |
+| Reference files per skill | 32 |
+| Characters per reference file | 64,000 |
+| Characters per skill, SKILL.md included | 256,000 |
+
+A person imports a folder as a `.zip` in **Skills**, and downloads one the same
+way — a skill with no references downloads as a single `SKILL.md`. Oracle,
+Community and Connected packs keep the folder the repo laid out.
 
 ### Result shape
 

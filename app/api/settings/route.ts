@@ -36,6 +36,7 @@ import { isOrgManagedCustomSkillId } from "@/lib/ai/skills/ids";
 import { normalizeSkillModes } from "@/lib/ai/skills/modes";
 import { resolveUserSkillSurface } from "@/lib/ai/skills/user-surface";
 import { getUserSettings, upsertUserSettings } from "@/lib/db/queries";
+import { deleteSkillFiles } from "@/lib/db/skill-files";
 import { decrypt, encrypt } from "@/lib/encryption";
 import {
   type NetSuiteAccountEntry,
@@ -124,6 +125,17 @@ const customSkillSchema = z.object({
    * guardrail as person-written.
    */
   authoredBy: z.literal("agent").optional(),
+  description: z.string().max(280).optional(),
+  agentAuthor: z
+    .object({
+      keyId: z.string().max(128),
+      keyName: z.string().max(128),
+      connectsFrom: z.string().max(64).nullable().optional(),
+      netsuiteAccountId: z.string().max(64).nullable().optional(),
+      at: z.string(),
+    })
+    .optional(),
+  files: z.array(z.string().max(256)).max(32).optional(),
 });
 
 const customPersonaSchema = z.object({
@@ -141,6 +153,15 @@ const customPersonaSchema = z.object({
    * revise it.
    */
   authoredBy: z.literal("agent").optional(),
+  agentAuthor: z
+    .object({
+      keyId: z.string().max(128),
+      keyName: z.string().max(128),
+      connectsFrom: z.string().max(64).nullable().optional(),
+      netsuiteAccountId: z.string().max(64).nullable().optional(),
+      at: z.string(),
+    })
+    .optional(),
 });
 
 const settingsSchema = z.object({
@@ -966,6 +987,10 @@ export async function POST(request: Request) {
         const after = new Set(nextCustomSkills.map((skill) => skill.id));
         const removed = new Set(before.filter((id) => !after.has(id)));
         if (removed.size > 0) {
+          await deleteSkillFiles({
+            userId: session.user.id,
+            skillIds: [...removed],
+          });
           map = Object.fromEntries(
             Object.entries(map)
               .map(([personaId, skillIds]) => [
