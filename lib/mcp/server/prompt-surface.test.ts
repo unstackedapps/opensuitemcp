@@ -5,9 +5,11 @@ import {
   BUILTIN_MCP_PROMPTS,
   builtinPromptMessages,
   NETSUITE_PROMPT_PREFIX,
+  netsuitePromptArguments,
   netsuitePromptName,
   netsuitePromptNames,
   netsuitePromptToMcp,
+  netsuitePromptValues,
 } from "./prompt-surface";
 
 describe("the prompts this server publishes", () => {
@@ -69,7 +71,7 @@ describe("a NetSuite Companion prompt becomes an MCP prompt", () => {
     prompt: "Reconcile [vendor] for [period] and list variances.",
   };
 
-  it("slugs the id into a stable, prefixed name", () => {
+  it("produces a stable, prefixed, client-safe name", () => {
     const name = netsuitePromptName(prompt);
     assert.ok(name.startsWith(NETSUITE_PROMPT_PREFIX));
     assert.match(name, /^[a-z0-9_]+$/);
@@ -95,6 +97,36 @@ describe("a NetSuite Companion prompt becomes an MCP prompt", () => {
     assert.ok(mapped.arguments.every((entry) => entry.name.length > 0));
   });
 
+  it("names arguments readably, not by placeholder id", () => {
+    // Found live: arguments went out as "[current period]#0", which is the
+    // internal id and is what a client would render as a field label.
+    const mapped = netsuitePromptToMcp(prompt);
+    assert.deepEqual(
+      mapped.arguments.map((entry) => entry.name),
+      ["vendor", "period"],
+    );
+    assert.ok(
+      mapped.arguments.every((entry) => !/[[\]#]/.test(entry.name)),
+      "no brackets or hashes in an argument name",
+    );
+  });
+
+  it("numbers a blank the prompt asks for twice", () => {
+    const twice: NetSuitePrompt = {
+      ...prompt,
+      prompt: "Compare [period] against [period] for [subsidiary].",
+    };
+    assert.deepEqual(
+      netsuitePromptArguments(twice).map((entry) => entry.name),
+      ["period", "period_2", "subsidiary"],
+    );
+  });
+
+  it("keeps the label as the argument description", () => {
+    const mapped = netsuitePromptToMcp(prompt);
+    assert.equal(mapped.arguments[0].description, "Vendor");
+  });
+
   it("names from the title, not the id", () => {
     // Found live: the Companion library numbers its entries 1..100, so slugging
     // the id produced a menu of netsuite_1 through netsuite_100.
@@ -109,6 +141,55 @@ describe("a NetSuite Companion prompt becomes an MCP prompt", () => {
       netsuitePromptName({ ...prompt, name: "///", id: "///" }),
       `${NETSUITE_PROMPT_PREFIX}prompt`,
     );
+  });
+});
+
+describe("filling a prompt from named arguments", () => {
+  const prompt: NetSuitePrompt = {
+    id: "10",
+    name: "Board Report Synthesis",
+    category: "Financial",
+    roles: [],
+    industries: [],
+    prompt: "Compare [period] against [period] for [subsidiary].",
+  };
+
+  it("routes each named argument to its own blank", () => {
+    assert.deepEqual(
+      netsuitePromptValues(prompt, {
+        period: "Q3 2026",
+        period_2: "Q2 2026",
+        subsidiary: "Parent",
+      }),
+      {
+        "[period]#0": "Q3 2026",
+        "[period]#1": "Q2 2026",
+        "[subsidiary]#0": "Parent",
+      },
+    );
+  });
+
+  it("still accepts a raw placeholder id", () => {
+    assert.deepEqual(netsuitePromptValues(prompt, { "[period]#1": "Q2" }), {
+      "[period]#1": "Q2",
+    });
+  });
+
+  it("stringifies a number or boolean rather than dropping it", () => {
+    assert.deepEqual(netsuitePromptValues(prompt, { period: 2026 }), {
+      "[period]#0": "2026",
+    });
+  });
+
+  it("drops null and undefined", () => {
+    assert.deepEqual(
+      netsuitePromptValues(prompt, { period: null, subsidiary: undefined }),
+      {},
+    );
+  });
+
+  it("returns nothing when no arguments were passed", () => {
+    assert.deepEqual(netsuitePromptValues(prompt, undefined), {});
   });
 });
 

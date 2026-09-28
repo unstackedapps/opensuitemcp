@@ -9,6 +9,7 @@ import {
   NETSUITE_PROMPT_PREFIX,
   netsuitePromptNames,
   netsuitePromptToMcp,
+  netsuitePromptValues,
 } from "./prompt-surface";
 import {
   isHandshakeEraVersion,
@@ -315,15 +316,12 @@ async function getPrompt(
     );
     const match = prompts.find((prompt) => names.get(prompt.id) === name);
     if (match) {
-      // A client may send a number or a boolean for an argument; the filler
-      // substitutes text, so anything else is stringified rather than dropped.
-      const values: Record<string, string> = {};
-      for (const [key, value] of Object.entries(args ?? {})) {
-        if (value !== null && value !== undefined) {
-          values[key] = String(value);
-        }
-      }
-      const filled = fillPrompt(match.prompt, values);
+      // Arguments arrive under their readable names; the filler keys on the
+      // placeholder ids behind them.
+      const filled = fillPrompt(
+        match.prompt,
+        netsuitePromptValues(match, args),
+      );
       return ok(id, {
         description: netsuitePromptToMcp(match, name).description,
         messages: [
