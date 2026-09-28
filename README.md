@@ -27,6 +27,7 @@ _Main chat UI._
 - **A skill can be a folder** — `SKILL.md` plus the reference files it points at. Import and download one as a `.zip`; an agent reads a reference only when the instructions call for it
 - **Skills carry a description** — shown in the Skills panel, and what an agent reads when choosing between them
 - **Skills say which agent wrote them** — the app name and the product it connected from, not just “an agent”
+- **Prompts in your AI client's own menu** — four OpenSuiteMCP workflows, plus every prompt your NetSuite Companion library publishes, pickable from `/` in Claude or Cursor
 
 ## What’s in 5.5
 
