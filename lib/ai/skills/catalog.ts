@@ -790,6 +790,29 @@ export function listEnabledSkillNames(
  * Always includes an ENABLED SKILLS inventory so the model can answer
  * “what skills do you have?” even when optional bodies are empty/truncated.
  */
+/**
+ * Name the files a skill carries, at the end of its own text.
+ *
+ * SKILL.md is injected; the material it points at is not. Without this the
+ * model reads "run references/intake.md" and has no way to know that file is
+ * reachable, so a skill pack's own instructions become unfollowable.
+ */
+function withReferenceNote(
+  content: string,
+  name: string | undefined,
+  files: string[] | undefined,
+): string {
+  if (!files?.length) {
+    return content;
+  }
+  const label = name?.trim() || "this skill";
+  return [
+    content.trimEnd(),
+    "",
+    `Files in ${label}: ${files.join(", ")}. Read one with the readSkillFile tool — pass skill "${label}" and the path — when these instructions point at it.`,
+  ].join("\n");
+}
+
 export function buildSkillsPromptSection(
   userSettings: UserSkillSettings,
   options?: {
@@ -878,7 +901,11 @@ export function buildSkillsPromptSection(
     if (!shouldInjectSkillForTurn(mode, skill.id, invokedIds)) {
       continue;
     }
-    push(skill.name || "Custom skill", skill.content, MAX_OPTIONAL_SKILL_CHARS);
+    push(
+      skill.name || "Custom skill",
+      withReferenceNote(skill.content, skill.name, skill.files),
+      MAX_OPTIONAL_SKILL_CHARS,
+    );
   }
 
   if (options?.userId) {

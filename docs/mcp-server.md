@@ -281,6 +281,10 @@ A person imports a folder as a `.zip` in **Skills**, and downloads one the same
 way — a skill with no references downloads as a single `SKILL.md`. Oracle,
 Community and Connected packs keep the folder the repo laid out.
 
+Inside the OpenSuiteMCP app the same rule holds: `SKILL.md` is injected for the
+turn and names the files beside it, which the model reads with its
+`readSkillFile` tool.
+
 ### Result shape
 
 Every result carries both halves:

@@ -69,6 +69,7 @@ import {
   createProposeCustomPersonaTool,
   createUpdatePersonaInterviewTool,
 } from "@/lib/ai/tools/persona-interview";
+import { createReadSkillFileTool } from "@/lib/ai/tools/read-skill-file";
 import { createReadWebpageTool } from "@/lib/ai/tools/read-webpage";
 import { createSearchResourceTool } from "@/lib/ai/tools/search-web-resource";
 import { fallbackChatTitle } from "@/lib/chat/chat-title";
@@ -848,6 +849,12 @@ export async function POST(request: Request) {
           // Add getCurrentConfig tool with resolved model information
           const allToolsWithConfig = {
             ...allTools,
+            // A skill injected for this turn may name files beside it; without
+            // this the model reads an instruction it cannot follow.
+            readSkillFile: createReadSkillFileTool({
+              userId: session.user.id,
+              orgId: session.user.orgId ?? null,
+            }),
             getCurrentConfig: createGetCurrentConfigTool({
               selectedModelId: selectedChatModel,
               resolvedModelId: modelId,

@@ -233,6 +233,8 @@ type SkillRowProps = {
   carriedBy?: PairedPersona[];
   /** Reference file paths beside SKILL.md. */
   files?: string[];
+  /** Needed to fetch a reference file's body. */
+  skillId?: string;
   variant?: "list" | "card";
 };
 
@@ -250,6 +252,7 @@ function SkillRow({
   preview,
   carriedBy,
   files,
+  skillId,
   variant = "list",
 }: SkillRowProps) {
   const [expanded, setExpanded] = useState(false);
@@ -332,7 +335,8 @@ function SkillRow({
             {files && files.length > 0 ? (
               <>
                 <span className="mx-1.5 text-border">·</span>
-                {files.length} file{files.length === 1 ? "" : "s"}
+                SKILL.md + {files.length} reference
+                {files.length === 1 ? "" : "s"}
               </>
             ) : null}
             {carriedBy && carriedBy.length > 0 ? (
@@ -373,23 +377,96 @@ function SkillRow({
               {content}
             </pre>
           ) : null}
-          {files && files.length > 0 ? (
-            <div className="border-border/60 border-t px-3 py-2">
-              <p className="mb-1 text-[11px] text-muted-foreground/80">
-                SKILL.md · {files.length} reference file
-                {files.length === 1 ? "" : "s"}
-              </p>
-              <ul className="flex flex-col gap-0.5">
-                {files.map((path) => (
-                  <li
-                    className="truncate font-mono text-[11px] text-muted-foreground"
-                    key={path}
-                  >
-                    {path}
-                  </li>
-                ))}
-              </ul>
+          {files && files.length > 0 && skillId ? (
+            <div className="border-border/60 border-t">
+              {files.map((path) => (
+                <SkillReferenceFile key={path} path={path} skillId={skillId} />
+              ))}
             </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * One reference file, fetched when it is opened.
+ *
+ * Bodies are not carried by the skills payload — a bundle's references are
+ * large and read rarely, which is the reason they live in their own table.
+ */
+function SkillReferenceFile({
+  skillId,
+  path,
+}: {
+  skillId: string;
+  path: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [content, setContent] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const toggle = async () => {
+    const next = !open;
+    setOpen(next);
+    if (!next || content !== null) {
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(
+        `/api/skills/${encodeURIComponent(skillId)}/files`,
+      );
+      if (!response.ok) {
+        throw new Error("Failed to load");
+      }
+      const payload = (await response.json()) as {
+        files?: Array<{ path: string; content: string }>;
+      };
+      const match = payload.files?.find((file) => file.path === path);
+      setContent(match?.content ?? "");
+    } catch {
+      setError("Failed to load this file.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="border-border/60 border-b last:border-b-0">
+      <button
+        className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-muted/40"
+        onClick={() => void toggle()}
+        type="button"
+      >
+        <ChevronDown
+          className={cn(
+            "size-3 shrink-0 text-muted-foreground transition-transform",
+            open && "rotate-180",
+          )}
+        />
+        <span className="truncate font-mono text-[11px] text-muted-foreground">
+          {path}
+        </span>
+      </button>
+      {open ? (
+        <div className="px-3 pb-2">
+          {loading ? (
+            <div className="flex items-center gap-2 py-2 text-muted-foreground text-xs">
+              <Loader2 className="size-3.5 animate-spin" />
+              Loading {path}…
+            </div>
+          ) : null}
+          {error ? (
+            <p className="py-2 text-destructive text-xs">{error}</p>
+          ) : null}
+          {content !== null && !loading ? (
+            <pre className="max-h-64 overflow-auto whitespace-pre-wrap wrap-break-word rounded-md bg-muted/30 px-3 py-2 font-mono text-[11px] text-muted-foreground leading-relaxed">
+              {content}
+            </pre>
           ) : null}
         </div>
       ) : null}
@@ -1638,6 +1715,7 @@ export function SkillsPanel({
                   }
                   author={customSkillAuthor(skill)}
                   files={skill.files}
+                  skillId={skill.id}
                   carriedBy={personasCarrying(
                     skill.id,
                     personaSkillIds,
