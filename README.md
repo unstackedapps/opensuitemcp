@@ -19,8 +19,11 @@ _Main chat UI._
 ## What’s in 5.6
 
 - **An agent writes skills** — a connected AI researches in your NetSuite account, then saves what it established with `osmcp_create_skill`, revises it with `osmcp_update_skill`, and removes it with `osmcp_delete_skill`
-- **A persona carries its skills** — pair custom skills to a persona in the persona editor, and they apply whenever that persona is the one working
+- **A persona carries its skills** — pair any skill to any persona, built-in ones included, on the **Skills** tab of the persona editor. They apply whenever that persona is the one working
+- **Clone anything you can read** — a built-in persona, someone else's skill, an organization's skill. The copy is yours to change, and the original is untouched
 - **Skills say who wrote them** — the Skills panel credits an agent-written skill, and an agent may revise only its own
+- **Deleting tells you what it releases** — removing a skill names the personas that carried it; removing a persona leaves its skills in place
+- **Markdown renders** — the eye toggle previews a persona or skill as it reads
 
 ## What’s in 5.5
 
@@ -64,7 +67,9 @@ Open **Personas** from the App Portal or the header badge on a new chat. Pick a 
 
 Built-in personas ship in `.personas/*.md` in this repo. Custom personas are stored per user in Postgres.
 
-Pair custom skills to a persona in its editor. A paired skill applies whenever that persona is the one working, even when its mode is **Slash**.
+Pair skills to a persona on the **Skills** tab of its editor — built-in personas included, where the tab is the only part you can change. A paired skill applies whenever that persona is the one working, even when its mode is **Slash**.
+
+**Clone** copies a persona, including the skills it carries.
 
 ## Skills
 
@@ -79,7 +84,9 @@ Open **Skills** from the App Portal (or the sidebar). Four sources, three invoca
 
 **Auto** is injected for new messages. **Slash** only when you type `/skill-name`. **Off** is never injected. Composer `/` lists Auto and Slash skills. Modes apply to **new** messages, not as a per-thread override.
 
-A skill written by a connected agent is credited to the agent and starts as **Slash**, so it applies when you invoke it or when a persona carrying it is working.
+A skill written by a connected agent is credited to the agent and starts as **Slash**, so it applies when you invoke it or when a persona carrying it is working. A skill you add yourself starts as **Auto**.
+
+**Clone** copies any skill — including one your organization published — into one you own.
 
 Shared packs are **not** vendored in git. Sync them with:
 

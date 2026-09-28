@@ -1,10 +1,13 @@
 "use client";
 
 import {
-  ChevronDown,
+  Copy,
+  Eye,
+  EyeOff,
   Loader2,
   Pencil,
   Plus,
+  Search,
   Trash2,
   UserRound,
 } from "lucide-react";
@@ -19,10 +22,12 @@ import {
 } from "react";
 import useSWR from "swr";
 import { ConfirmDestructiveDialog } from "@/components/confirm-destructive-dialog";
+import { Response } from "@/components/message-elements/response";
 import { OnboardingPanelSkeleton } from "@/components/onboarding/onboarding-panel-skeleton";
 import { PersonaDetailsLink } from "@/components/persona-details-dialog";
 import { useOptionalAppPortal } from "@/components/portal/context";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -31,18 +36,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { AVA_PERSONA_ID } from "@/lib/ai/personas/ids";
+import { MAX_PAIRED_SKILL_IDS as MAX_PAIRED_SKILLS } from "@/lib/ai/personas/pairing";
 import { guestRegex } from "@/lib/constants";
 import { cn, generateUUID } from "@/lib/utils";
 import { toast } from "./toast";
@@ -69,7 +69,16 @@ type CustomPersona = {
   skillIds?: string[];
 };
 
-type PairableSkill = { id: string; name: string };
+type PairableSkill = {
+  id: string;
+  name: string;
+  source?: string;
+  slug?: string | null;
+  managedByOrg?: boolean;
+  authoredBy?: "agent";
+};
+
+type PersonaSkillIds = Record<string, string[]>;
 
 type SettingsPersonasPayload = {
   defaultPersonaId: string | null;
@@ -77,6 +86,16 @@ type SettingsPersonasPayload = {
   customPersonas: CustomPersona[];
   personas: PersonaListItem[];
   customSkills: PairableSkill[];
+  personaSkillIds: PersonaSkillIds;
+};
+
+/** A builtin opens the same editor with its own fields read-only. */
+type PersonaDraft = {
+  id: string;
+  name: string;
+  shortName: string;
+  content: string;
+  readOnly: boolean;
 };
 
 type PersonasPanelProps = {
@@ -98,12 +117,20 @@ async function fetchSettingsPersonas(): Promise<SettingsPersonasPayload> {
       ? data.customPersonas
       : [],
     personas: Array.isArray(data.personas) ? data.personas : [],
-    customSkills: Array.isArray(data.customSkills)
-      ? data.customSkills.map((skill: { id: string; name: string }) => ({
+    customSkills: Array.isArray(data.pairableSkills)
+      ? data.pairableSkills.map((skill: PairableSkill) => ({
           id: skill.id,
           name: skill.name,
+          source: skill.source,
+          slug: skill.slug,
+          managedByOrg: skill.managedByOrg,
+          authoredBy: skill.authoredBy,
         }))
       : [],
+    personaSkillIds:
+      data.personaSkillIds && typeof data.personaSkillIds === "object"
+        ? (data.personaSkillIds as PersonaSkillIds)
+        : {},
   };
 }
 
@@ -112,6 +139,7 @@ async function persistPersonaSettings(
     defaultPersonaId: string | null;
     hidePersonaPicker: boolean;
     customPersonas: CustomPersona[];
+    personaSkillIds: PersonaSkillIds;
   }>,
 ) {
   const response = await fetch("/api/settings", {
@@ -205,7 +233,8 @@ export function PersonasPanel({
   const [hidePicker, setHidePicker] = useState(false);
   const [defaultId, setDefaultId] = useState(AVA_PERSONA_ID);
   const [customPersonas, setCustomPersonas] = useState<CustomPersona[]>([]);
-  const [editing, setEditing] = useState<CustomPersona | null>(null);
+  const [editing, setEditing] = useState<PersonaDraft | null>(null);
+  const [personaSkillIds, setPersonaSkillIds] = useState<PersonaSkillIds>({});
   const [editName, setEditName] = useState("");
   const [editShortName, setEditShortName] = useState("");
   const [editContent, setEditContent] = useState("");
@@ -222,7 +251,19 @@ export function PersonasPanel({
     setHidePicker(data.hidePersonaPicker);
     setDefaultId(data.defaultPersonaId ?? AVA_PERSONA_ID);
     setCustomPersonas(data.customPersonas);
+    setPersonaSkillIds(data.personaSkillIds);
   }, [data]);
+
+  const openPersonaEditor = useCallback(
+    (draft: PersonaDraft) => {
+      setEditing(draft);
+      setEditName(draft.name);
+      setEditShortName(draft.shortName);
+      setEditContent(draft.content);
+      setEditSkillIds(personaSkillIds[draft.id] ?? []);
+    },
+    [personaSkillIds],
+  );
 
   const runPersist = useCallback(
     async (
@@ -230,6 +271,7 @@ export function PersonasPanel({
         defaultPersonaId: string | null;
         hidePersonaPicker: boolean;
         customPersonas: CustomPersona[];
+        personaSkillIds: PersonaSkillIds;
       }>,
       rollback: () => void,
     ) => {
@@ -267,6 +309,103 @@ export function PersonasPanel({
       );
     },
     [defaultId, runPersist],
+  );
+
+  /** A builtin is read-only text on disk; only the skills it carries are ours. */
+  const openBuiltinEditor = useCallback(
+    async (persona: PersonaListItem) => {
+      openPersonaEditor({
+        id: persona.id,
+        name: persona.name,
+        shortName: persona.shortName,
+        content: "",
+        readOnly: true,
+      });
+      try {
+        const response = await fetch(
+          `/api/personas/${encodeURIComponent(persona.id)}`,
+        );
+        if (!response.ok) {
+          return;
+        }
+        const payload = (await response.json()) as { content?: string };
+        setEditContent(payload.content ?? "");
+      } catch {
+        // The Skills tab is the point here; instructions stay blank.
+      }
+    },
+    [openPersonaEditor],
+  );
+
+  const clonePersona = useCallback(
+    async (personaId: string, personaName: string) => {
+      if (customPersonas.length >= 32) {
+        toast({
+          type: "error",
+          description:
+            "Limit reached — delete a custom persona before cloning another.",
+        });
+        return;
+      }
+
+      let content =
+        customPersonas.find((persona) => persona.id === personaId)?.content ??
+        null;
+      if (content === null) {
+        try {
+          const response = await fetch(
+            `/api/personas/${encodeURIComponent(personaId)}`,
+          );
+          if (!response.ok) {
+            throw new Error("Failed to read persona");
+          }
+          const payload = (await response.json()) as { content?: string };
+          content = payload.content ?? "";
+        } catch {
+          toast({ type: "error", description: "Failed to read that persona" });
+          return;
+        }
+      }
+
+      const source = customPersonas.find((persona) => persona.id === personaId);
+      const listed = data?.personas.find((persona) => persona.id === personaId);
+      const clone: CustomPersona = {
+        id: generateUUID(),
+        name: `${personaName} copy`,
+        shortName:
+          source?.shortName ??
+          listed?.shortName ??
+          personaName.split(/\s+/)[0] ??
+          personaName,
+        ...(source?.primaryRole ? { primaryRole: source.primaryRole } : {}),
+        content: content ?? "",
+        updatedAt: new Date().toISOString(),
+      };
+
+      const previousPersonas = customPersonas;
+      const previousPairings = personaSkillIds;
+      const nextPersonas = [...customPersonas, clone];
+      const carried = personaSkillIds[personaId] ?? [];
+      const nextPairings =
+        carried.length > 0
+          ? { ...personaSkillIds, [clone.id]: carried }
+          : personaSkillIds;
+
+      setCustomPersonas(nextPersonas);
+      setPersonaSkillIds(nextPairings);
+      setTab("custom");
+      await runPersist(
+        {
+          customPersonas: nextPersonas,
+          ...(carried.length > 0 ? { personaSkillIds: nextPairings } : {}),
+        },
+        () => {
+          setCustomPersonas(previousPersonas);
+          setPersonaSkillIds(previousPairings);
+        },
+      );
+    },
+    [customPersonas, data?.personas, personaSkillIds, runPersist],
   );
 
   const startInterview = useCallback(async (refiningPersonaId?: string) => {
@@ -439,6 +578,40 @@ export function PersonasPanel({
               >
                 {builtinPersonas.map((persona) => (
                   <PersonaCard
+                    actions={
+                      isGuest ? null : (
+                        <>
+                          <Button
+                            aria-label={`Skills for ${persona.name}`}
+                            className="hover:bg-foreground/10 dark:hover:bg-foreground/15"
+                            onClick={() => {
+                              void openBuiltinEditor(persona);
+                            }}
+                            size="sm"
+                            type="button"
+                            variant="ghost"
+                          >
+                            Skills
+                            {(personaSkillIds[persona.id]?.length ?? 0) > 0
+                              ? ` · ${personaSkillIds[persona.id].length}`
+                              : ""}
+                          </Button>
+                          <Button
+                            aria-label={`Clone ${persona.name}`}
+                            className="hover:bg-foreground/10 dark:hover:bg-foreground/15"
+                            disabled={saving || customPersonas.length >= 32}
+                            onClick={() => {
+                              void clonePersona(persona.id, persona.name);
+                            }}
+                            size="icon"
+                            type="button"
+                            variant="ghost"
+                          >
+                            <Copy className="size-4" />
+                          </Button>
+                        </>
+                      )
+                    }
                     disabled={saving}
                     key={persona.id}
                     onSelect={() => {
@@ -498,17 +671,32 @@ export function PersonasPanel({
                                 aria-label={`Edit ${persona.name}`}
                                 className="hover:bg-foreground/10 dark:hover:bg-foreground/15"
                                 onClick={() => {
-                                  setEditing(custom);
-                                  setEditName(custom.name);
-                                  setEditShortName(custom.shortName ?? "");
-                                  setEditContent(custom.content);
-                                  setEditSkillIds(custom.skillIds ?? []);
+                                  openPersonaEditor({
+                                    id: custom.id,
+                                    name: custom.name,
+                                    shortName: custom.shortName ?? "",
+                                    content: custom.content,
+                                    readOnly: false,
+                                  });
                                 }}
                                 size="icon"
                                 type="button"
                                 variant="ghost"
                               >
                                 <Pencil className="size-4" />
+                              </Button>
+                              <Button
+                                aria-label={`Clone ${persona.name}`}
+                                className="hover:bg-foreground/10 dark:hover:bg-foreground/15"
+                                disabled={saving || customPersonas.length >= 32}
+                                onClick={() => {
+                                  void clonePersona(persona.id, persona.name);
+                                }}
+                                size="icon"
+                                type="button"
+                                variant="ghost"
+                              >
+                                <Copy className="size-4" />
                               </Button>
                               <Button
                                 aria-label={`Delete ${persona.name}`}
@@ -553,12 +741,33 @@ export function PersonasPanel({
           if (!editing) {
             return;
           }
-          const previous = customPersonas;
+          const previousPersonas = customPersonas;
+          const previousPairings = personaSkillIds;
+          const nextPairings = { ...personaSkillIds };
+          if (editSkillIds.length > 0) {
+            nextPairings[editing.id] = editSkillIds;
+          } else {
+            delete nextPairings[editing.id];
+          }
+          setPersonaSkillIds(nextPairings);
+          setEditing(null);
+
+          // A builtin is a prompt file on disk; only its pairings are ours.
+          if (editing.readOnly) {
+            void runPersist({ personaSkillIds: nextPairings }, () => {
+              setPersonaSkillIds(previousPairings);
+            });
+            return;
+          }
+
+          const source = customPersonas.find(
+            (entry) => entry.id === editing.id,
+          );
           const nextEntry: CustomPersona = {
             // Spread first so fields the editor does not expose survive a save:
             // primaryRole, and the authoredBy stamp that marks agent-written
             // personas in the picker.
-            ...editing,
+            ...source,
             id: editing.id,
             name: editName.trim(),
             shortName:
@@ -566,7 +775,6 @@ export function PersonasPanel({
               editName.trim().split(/\s+/).at(0) ||
               editName.trim(),
             content: editContent.trim(),
-            skillIds: editSkillIds,
             updatedAt: new Date().toISOString(),
           };
           const exists = customPersonas.some((p) => p.id === editing.id);
@@ -574,10 +782,13 @@ export function PersonasPanel({
             ? customPersonas.map((p) => (p.id === editing.id ? nextEntry : p))
             : [...customPersonas, nextEntry];
           setCustomPersonas(next);
-          setEditing(null);
-          void runPersist({ customPersonas: next }, () => {
-            setCustomPersonas(previous);
-          });
+          void runPersist(
+            { customPersonas: next, personaSkillIds: nextPairings },
+            () => {
+              setCustomPersonas(previousPersonas);
+              setPersonaSkillIds(previousPairings);
+            },
+          );
         }}
         onShortNameChange={setEditShortName}
         saving={saving}
@@ -647,17 +858,13 @@ export function PersonasPanel({
                 className="min-w-0"
                 disabled={saving || customPersonas.length >= 32}
                 onClick={() => {
-                  setEditing({
+                  openPersonaEditor({
                     id: generateUUID(),
                     name: "",
                     shortName: "",
                     content: "",
-                    updatedAt: new Date().toISOString(),
+                    readOnly: false,
                   });
-                  setEditName("");
-                  setEditShortName("");
-                  setEditContent("");
-                  setEditSkillIds([]);
                 }}
                 size="sm"
                 type="button"
@@ -684,7 +891,7 @@ export function PersonasPanel({
 }
 
 type PersonaEditorDialogProps = {
-  editing: CustomPersona | null;
+  editing: PersonaDraft | null;
   isNew: boolean;
   name: string;
   shortName: string;
@@ -719,17 +926,47 @@ function PersonaEditorDialog({
   const nameId = useId();
   const shortNameId = useId();
   const contentId = useId();
-  const skillsId = useId();
+  const searchId = useId();
+  const [tab, setTab] = useState("details");
+  const [query, setQuery] = useState("");
+  const [showPreview, setShowPreview] = useState(false);
+
+  const readOnly = editing?.readOnly === true;
+
+  // Reopening lands on Details for an editable persona, and on Skills for a
+  // builtin, which has nothing else to change.
+  useEffect(() => {
+    if (editing) {
+      setTab(editing.readOnly ? "skills" : "details");
+      setQuery("");
+      setShowPreview(editing.readOnly);
+    }
+  }, [editing]);
+
   const paired = skillIds.filter((skillId) =>
     availableSkills.some((skill) => skill.id === skillId),
   );
-  const pairedLabel =
-    paired.length === 0
-      ? "None"
-      : paired.length === 1
-        ? (availableSkills.find((skill) => skill.id === paired[0])?.name ??
-          "1 skill")
-        : `${paired.length} skills`;
+
+  const matches = query.trim()
+    ? availableSkills.filter((skill) => {
+        const needle = query.trim().toLowerCase();
+        return (
+          skill.name.toLowerCase().includes(needle) ||
+          (skill.slug ?? "").toLowerCase().includes(needle)
+        );
+      })
+    : availableSkills;
+
+  const toggleSkill = (skillId: string, checked: boolean) => {
+    if (checked) {
+      if (paired.length >= MAX_PAIRED_SKILLS) {
+        return;
+      }
+      onSkillIdsChange([...paired, skillId]);
+      return;
+    }
+    onSkillIdsChange(paired.filter((id) => id !== skillId));
+  };
 
   return (
     <Dialog
@@ -743,105 +980,190 @@ function PersonaEditorDialog({
       <DialogContent className="flex max-h-[calc(100dvh-5.5rem)] flex-col gap-0 overflow-hidden p-0 sm:max-h-[min(90vh,800px)] sm:max-w-2xl">
         <DialogHeader className="shrink-0 space-y-1 border-border/60 border-b px-4 py-3 text-left sm:px-5">
           <DialogTitle className="text-base">
-            {isNew ? "New persona" : "Edit persona"}
+            {readOnly ? name : isNew ? "New persona" : "Edit persona"}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            Name and instructions are required. Short name is shown in the
-            sidebar and chat badge.
+            {readOnly
+              ? "Built-in persona. The skills it carries are yours to set."
+              : "Name and instructions are required. Short name is shown in the sidebar and chat badge."}
           </DialogDescription>
         </DialogHeader>
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-4 sm:px-5">
-          <div className="space-y-1.5">
-            <Label htmlFor={nameId}>Name</Label>
-            <Input
-              id={nameId}
-              maxLength={200}
-              onChange={(event) => {
-                onNameChange(event.target.value);
-              }}
-              value={name}
-            />
+
+        <Tabs
+          className="flex min-h-0 flex-1 flex-col"
+          onValueChange={setTab}
+          value={tab}
+        >
+          <div className="shrink-0 border-border/60 border-b px-4 py-3 sm:px-5">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="details">Details</TabsTrigger>
+              <TabsTrigger value="skills">
+                Skills{paired.length > 0 ? ` · ${paired.length}` : ""}
+              </TabsTrigger>
+            </TabsList>
           </div>
-          <div
-            className={cn(
-              "grid gap-4",
-              availableSkills.length > 0 ? "sm:grid-cols-2" : null,
-            )}
-          >
-            <div className="space-y-1.5">
-              <Label htmlFor={shortNameId}>Short name</Label>
-              <Input
-                id={shortNameId}
-                maxLength={40}
-                onChange={(event) => {
-                  onShortNameChange(event.target.value);
-                }}
-                placeholder="Shown in sidebar / badge"
-                value={shortName}
-              />
-            </div>
-            {availableSkills.length > 0 ? (
-              <div className="space-y-1.5">
-                <Label htmlFor={skillsId}>Skills</Label>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      className="w-full justify-between font-normal"
-                      id={skillsId}
-                      type="button"
-                      variant="outline"
-                    >
-                      <span className="truncate">{pairedLabel}</span>
-                      <ChevronDown className="size-4 shrink-0 opacity-50" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="start"
-                    className="max-h-64 w-(--radix-dropdown-menu-trigger-width) overflow-y-auto"
-                  >
-                    {availableSkills.map((skill) => (
-                      <DropdownMenuCheckboxItem
-                        checked={paired.includes(skill.id)}
-                        key={skill.id}
-                        onCheckedChange={(checked) => {
-                          onSkillIdsChange(
-                            checked
-                              ? [...paired, skill.id].slice(0, 16)
-                              : paired.filter((id) => id !== skill.id),
-                          );
-                        }}
-                        onSelect={(event) => {
-                          event.preventDefault();
-                        }}
-                      >
-                        <span className="truncate">{skill.name}</span>
-                      </DropdownMenuCheckboxItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+            <TabsContent
+              className="mt-0 flex min-h-0 flex-col gap-4"
+              value="details"
+            >
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor={nameId}>Name</Label>
+                  <Input
+                    disabled={readOnly}
+                    id={nameId}
+                    maxLength={200}
+                    onChange={(event) => {
+                      onNameChange(event.target.value);
+                    }}
+                    value={name}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor={shortNameId}>Short name</Label>
+                  <Input
+                    disabled={readOnly}
+                    id={shortNameId}
+                    maxLength={40}
+                    onChange={(event) => {
+                      onShortNameChange(event.target.value);
+                    }}
+                    placeholder="Shown in sidebar / badge"
+                    value={shortName}
+                  />
+                </div>
               </div>
-            ) : null}
+
+              <div className="flex min-h-0 flex-1 flex-col space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor={contentId}>Instructions</Label>
+                  <Button
+                    aria-label={
+                      showPreview ? "Edit instructions" : "Preview instructions"
+                    }
+                    className="size-7"
+                    disabled={readOnly}
+                    onClick={() => {
+                      setShowPreview((current) => !current);
+                    }}
+                    size="icon"
+                    type="button"
+                    variant="ghost"
+                  >
+                    {showPreview ? (
+                      <EyeOff className="size-4" />
+                    ) : (
+                      <Eye className="size-4" />
+                    )}
+                  </Button>
+                </div>
+                {showPreview ? (
+                  <div className="min-h-64 flex-1 overflow-y-auto rounded-md border border-border/60 bg-muted/30 p-3 md:min-h-80">
+                    <Response>{content}</Response>
+                  </div>
+                ) : (
+                  <Textarea
+                    className="min-h-64 flex-1 resize-y font-mono text-xs md:min-h-80"
+                    id={contentId}
+                    maxLength={32_000}
+                    onChange={(event) => {
+                      onContentChange(event.target.value);
+                    }}
+                    rows={14}
+                    value={content}
+                  />
+                )}
+              </div>
+            </TabsContent>
+
+            <TabsContent className="mt-0 space-y-3" value="skills">
+              {availableSkills.length === 0 ? (
+                <p className="text-muted-foreground text-sm">
+                  No skills yet. Add one in Skills to pair it here.
+                </p>
+              ) : (
+                <>
+                  <div className="relative">
+                    <Search className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-3 size-4 text-muted-foreground" />
+                    <Input
+                      className="h-9 pl-10"
+                      id={searchId}
+                      onChange={(event) => {
+                        setQuery(event.target.value);
+                      }}
+                      placeholder="Search skills"
+                      value={query}
+                    />
+                  </div>
+
+                  <p className="text-muted-foreground text-xs">
+                    {paired.length} of {MAX_PAIRED_SKILLS} paired
+                  </p>
+
+                  <div className="flex flex-col gap-1">
+                    {matches.map((skill) => {
+                      const checked = paired.includes(skill.id);
+                      const atCap =
+                        !checked && paired.length >= MAX_PAIRED_SKILLS;
+                      return (
+                        <label
+                          className={cn(
+                            "flex items-center gap-3 rounded-md border border-border/60 px-3 py-2 text-sm",
+                            atCap
+                              ? "opacity-50"
+                              : "cursor-pointer hover:bg-muted/50",
+                          )}
+                          htmlFor={`${searchId}-${skill.id}`}
+                          key={skill.id}
+                        >
+                          <Checkbox
+                            checked={checked}
+                            disabled={atCap}
+                            id={`${searchId}-${skill.id}`}
+                            onCheckedChange={(value) => {
+                              toggleSkill(skill.id, value === true);
+                            }}
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate">{skill.name}</span>
+                            {skill.slug ? (
+                              <span className="block truncate text-muted-foreground text-xs">
+                                /{skill.slug}
+                              </span>
+                            ) : null}
+                          </span>
+                          <span className="shrink-0 text-muted-foreground text-xs capitalize">
+                            {skill.managedByOrg
+                              ? "Organization"
+                              : skill.authoredBy === "agent"
+                                ? "An agent"
+                                : (skill.source ?? "")}
+                          </span>
+                        </label>
+                      );
+                    })}
+                    {matches.length === 0 ? (
+                      <p className="py-6 text-center text-muted-foreground text-sm">
+                        No skill matches “{query}”.
+                      </p>
+                    ) : null}
+                  </div>
+                </>
+              )}
+            </TabsContent>
           </div>
-          <div className="flex min-h-0 flex-1 flex-col space-y-1.5">
-            <Label htmlFor={contentId}>Instructions</Label>
-            <Textarea
-              className="min-h-64 flex-1 resize-y font-mono text-xs md:min-h-80"
-              id={contentId}
-              maxLength={32_000}
-              onChange={(event) => {
-                onContentChange(event.target.value);
-              }}
-              rows={14}
-              value={content}
-            />
-          </div>
-        </div>
+        </Tabs>
+
         <DialogFooter className="shrink-0 gap-2 border-border/60 border-t px-4 py-3 sm:justify-end sm:px-5">
           <Button onClick={onCancel} type="button" variant="outline">
             Cancel
           </Button>
           <Button
-            disabled={saving || !name.trim() || !content.trim()}
+            disabled={
+              saving || (!readOnly && (!name.trim() || !content.trim()))
+            }
             onClick={onSave}
             type="button"
           >

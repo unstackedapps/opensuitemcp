@@ -41,6 +41,10 @@ import {
   normalizePersonaInterviewState,
   type PersonaInterviewState,
 } from "@/lib/ai/personas/interview";
+import {
+  normalizePersonaSkillIds,
+  pairedSkillIdsFor,
+} from "@/lib/ai/personas/pairing";
 import { buildSystemPromptParts, type RequestHints } from "@/lib/ai/prompts";
 import type { AiProviderType } from "@/lib/ai/provider-entries";
 import { getUserProvider } from "@/lib/ai/providers";
@@ -577,11 +581,10 @@ export async function POST(request: Request) {
                 // what makes `slash` the right mode for a skill written for
                 // one specialist: it stays off every unrelated prompt and
                 // arrives whenever that specialist is the one working.
-                const personaSkillIds = stampedPersonaId
-                  ? (customPersonasForPrompt.find(
-                      (persona) => persona.id === stampedPersonaId,
-                    )?.skillIds ?? [])
-                  : [];
+                const personaSkillIds = pairedSkillIdsFor(
+                  normalizePersonaSkillIds(settings.personaSkillIds),
+                  stampedPersonaId,
+                );
                 const turnSkillIds = [
                   ...new Set([...invokedConnectedSkillIds, ...personaSkillIds]),
                 ];

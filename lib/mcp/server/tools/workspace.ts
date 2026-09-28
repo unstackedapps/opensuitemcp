@@ -6,6 +6,11 @@ import {
   normalizeCustomPersonas,
 } from "@/lib/ai/personas/catalog";
 import {
+  normalizePersonaSkillIds,
+  pairedSkillIdsFor,
+  personasCarryingSkill,
+} from "@/lib/ai/personas/pairing";
+import {
   readUserSkillContent,
   resolveUserSkillSurface,
 } from "@/lib/ai/skills/user-surface";
@@ -312,11 +317,12 @@ const listSkills: McpToolDefinition = {
   name: "osmcp_list_skills",
   title: "List skills",
   description:
-    "List the skill packs this user has available — Oracle, Community, Connected, and Custom. Skills are instruction documents describing NetSuite practice; a skill the user has switched off is not listed. `mode` is `auto` when the skill always applies, or `slash` when it is invoked by name. `authoredBy` says whether a person or an agent wrote it, and an agent may revise only its own with osmcp_update_skill.",
+    "List the skill packs this user has available — Oracle, Community, Connected, and Custom. Skills are instruction documents describing NetSuite practice; a skill the user has switched off is not listed. `mode` is `auto` when the skill always applies, or `slash` when it is invoked by name. `authoredBy` says whether a person or an agent wrote it, and an agent may revise only its own with osmcp_update_skill; anything else it builds on with osmcp_clone_skill. `managedByOrg` marks a skill an organization administrator published. `carriedBy` lists the personas that bring this skill into a turn.",
   inputSchema: EMPTY_INPUT_SCHEMA,
   annotations: { title: "List skills", ...READ_ONLY },
   execute: async (_args, principal) => {
     const settings = await getUserSettings({ userId: principal.userId });
+    const personaSkillIds = normalizePersonaSkillIds(settings?.personaSkillIds);
     const skills = await resolveUserSkillSurface({
       userId: principal.userId,
       orgId: principal.orgId,
@@ -336,6 +342,8 @@ const listSkills: McpToolDefinition = {
         mode: skill.mode,
         slug: skill.slug,
         authoredBy: skill.authoredBy ?? "user",
+        managedByOrg: skill.managedByOrg === true,
+        carriedBy: personasCarryingSkill(personaSkillIds, skill.id),
       }));
 
     return toolResult({
@@ -347,6 +355,8 @@ const listSkills: McpToolDefinition = {
         "mode",
         "slug",
         "authoredBy",
+        "managedByOrg",
+        "carriedBy",
       ],
       rows,
     });
@@ -363,6 +373,7 @@ const listPersonas: McpToolDefinition = {
   execute: async (_args, principal) => {
     const settings = await getUserSettings({ userId: principal.userId });
     const customPersonas = settings?.customPersonas ?? [];
+    const personaSkillIds = normalizePersonaSkillIds(settings?.personaSkillIds);
     // An org that narrows which builtin personas its members may use narrows
     // them here too: an agent acts as the member, so it sees the member's list.
     const available =
@@ -380,7 +391,7 @@ const listPersonas: McpToolDefinition = {
       primaryRole: persona.primaryRole,
       source: persona.source,
       authoredBy: persona.authoredBy ?? "user",
-      skillIds: persona.skillIds ?? [],
+      skillIds: pairedSkillIdsFor(personaSkillIds, persona.id),
     }));
 
     return toolResult({
@@ -509,10 +520,29 @@ const getPersona: McpToolDefinition = {
       );
     }
 
-    const carried =
-      normalizeCustomPersonas(settings?.customPersonas).find(
-        (entry) => entry.id === persona.id,
-      )?.skillIds ?? [];
+    const carried = pairedSkillIdsFor(
+      normalizePersonaSkillIds(settings?.personaSkillIds),
+      persona.id,
+    );
+
+    const surface =
+      carried.length > 0
+        ? await resolveUserSkillSurface({
+            userId: principal.userId,
+            orgId: principal.orgId,
+            settings: settings ?? {},
+            disabledOrgConnectedSkillSourceIds:
+              settings?.disabledOrgConnectedSkillSourceIds,
+          })
+        : [];
+    const skills = carried.map((skillId) => {
+      const match = surface.find((entry) => entry.id === skillId);
+      return {
+        id: skillId,
+        name: match?.name ?? skillId,
+        mode: match?.mode ?? "off",
+      };
+    });
 
     return toolResult(
       {
@@ -520,9 +550,10 @@ const getPersona: McpToolDefinition = {
         name: persona.name,
         content: persona.content,
         skillIds: carried,
+        skills,
       },
-      carried.length > 0
-        ? `${persona.content}\n\nThis persona carries the custom skills ${carried.join(", ")}. Read each with osmcp_get_skill.`
+      skills.length > 0
+        ? `${persona.content}\n\nThis persona carries ${skills.map((skill) => `${skill.name} (${skill.id})`).join(", ")}. Read each with osmcp_get_skill.`
         : persona.content,
     );
   },

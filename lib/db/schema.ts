@@ -226,6 +226,18 @@ export const userSettings = pgTable("UserSettings", {
     .$type<CustomPersona[]>()
     .notNull()
     .default(sql`'[]'::jsonb`),
+  /**
+   * Skills each persona carries into a turn, keyed by persona id.
+   *
+   * Kept beside the personas rather than on them: a builtin persona is a
+   * prompt file on disk with nowhere to store a field, and this user's
+   * pairings are theirs alone. One map means one lookup for every persona,
+   * builtin or custom.
+   */
+  personaSkillIds: jsonb("personaSkillIds")
+    .$type<Record<string, string[]>>()
+    .notNull()
+    .default(sql`'{}'::jsonb`),
   createdAt: timestamp("createdAt").notNull(),
   updatedAt: timestamp("updatedAt").notNull(),
 });

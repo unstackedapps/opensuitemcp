@@ -10,14 +10,18 @@ import {
 import {
   MAX_PAIRED_SKILL_IDS,
   normalizePairedSkillIds,
-  prunePairedSkillIds,
+  normalizePersonaSkillIds,
+  type PersonaSkillIds,
+  pairedSkillIdsFor,
+  removePersonaPairings,
+  setPairedSkillIds,
 } from "@/lib/ai/personas/pairing";
 import { personaPlaybookOutlineInline } from "@/lib/ai/personas/playbook-shape";
 import type { CustomPersona } from "@/lib/ai/personas/types";
-import { normalizeUserSkillSettings } from "@/lib/ai/skills/catalog";
+import { resolveUserSkillSurface } from "@/lib/ai/skills/user-surface";
 import { getUserSettings, upsertUserSettings } from "@/lib/db/queries";
 import { generateUUID } from "@/lib/utils";
-import { setMcpPrincipalPersona } from "../authenticate";
+import { type McpPrincipal, setMcpPrincipalPersona } from "../authenticate";
 import { resolveAssignedPersona } from "../persona-assignment";
 import { type McpToolDefinition, toolError, toolResult } from "./types";
 
@@ -48,11 +52,13 @@ function shortNameFallback(name: string): string {
 async function loadCustomPersonas(userId: string): Promise<{
   settings: Awaited<ReturnType<typeof getUserSettings>>;
   customs: CustomPersona[];
+  personaSkillIds: PersonaSkillIds;
 }> {
   const settings = await getUserSettings({ userId });
   return {
     settings,
     customs: normalizeCustomPersonas(settings?.customPersonas),
+    personaSkillIds: normalizePersonaSkillIds(settings?.personaSkillIds),
   };
 }
 
@@ -71,9 +77,12 @@ function agentMayModify(persona: CustomPersona): boolean {
 /**
  * Skills a persona may carry, checked against the library rather than taken on
  * trust: a pairing to an id nothing resolves would silently inject nothing.
+ * Any source qualifies — the turn injects Oracle, Community, Connected and
+ * Custom skills alike.
  */
 async function resolvePairedSkillIds(
-  userId: string,
+  principal: McpPrincipal,
+  settings: Awaited<ReturnType<typeof getUserSettings>>,
   value: unknown,
 ): Promise<{ ids: string[] } | { error: string }> {
   const requested = normalizePairedSkillIds(value);
@@ -86,19 +95,23 @@ async function resolvePairedSkillIds(
     };
   }
 
-  const settings = await getUserSettings({ userId });
-  const available = normalizeUserSkillSettings(settings ?? {}).customSkills;
-  const ids = prunePairedSkillIds(
-    requested,
-    available.map((skill) => skill.id),
+  const surface = await resolveUserSkillSurface({
+    userId: principal.userId,
+    orgId: principal.orgId,
+    settings: settings ?? {},
+    disabledOrgConnectedSkillSourceIds:
+      settings?.disabledOrgConnectedSkillSourceIds,
+  });
+  const available = new Set(
+    surface.filter((entry) => entry.mode !== "off").map((entry) => entry.id),
   );
-  const missing = requested.filter((id) => !ids.includes(id));
+  const missing = requested.filter((id) => !available.has(id));
   if (missing.length > 0) {
     return {
-      error: `No custom skill \`${missing[0]}\` belongs to this user. Call osmcp_list_skills for the ids that do, or write one with osmcp_create_skill.`,
+      error: `Skill \`${missing[0]}\` is not available to this user, or is switched off. Call osmcp_list_skills for the ids that are, or write one with osmcp_create_skill.`,
     };
   }
-  return { ids };
+  return { ids: requested };
 }
 
 const createPersona: McpToolDefinition = {
@@ -165,7 +178,9 @@ const createPersona: McpToolDefinition = {
       );
     }
 
-    const { customs } = await loadCustomPersonas(principal.userId);
+    const { settings, customs, personaSkillIds } = await loadCustomPersonas(
+      principal.userId,
+    );
     if (customs.length >= MAX_CUSTOM_PERSONAS) {
       return toolError(
         `This user already has the maximum of ${MAX_CUSTOM_PERSONAS} custom personas. Delete one with osmcp_delete_persona before creating another.`,
@@ -181,7 +196,8 @@ const createPersona: McpToolDefinition = {
     );
 
     const skillIds = await resolvePairedSkillIds(
-      principal.userId,
+      principal,
+      settings,
       args.skillIds,
     );
     if ("error" in skillIds) {
@@ -196,12 +212,20 @@ const createPersona: McpToolDefinition = {
       content,
       updatedAt: new Date().toISOString(),
       authoredBy: "agent",
-      ...(skillIds.ids.length > 0 ? { skillIds: skillIds.ids } : {}),
     };
 
     await upsertUserSettings({
       userId: principal.userId,
       customPersonas: [...customs, persona],
+      ...(skillIds.ids.length > 0
+        ? {
+            personaSkillIds: setPairedSkillIds(
+              personaSkillIds,
+              persona.id,
+              skillIds.ids,
+            ),
+          }
+        : {}),
     });
 
     const adopt = args.adopt === true;
@@ -216,7 +240,7 @@ const createPersona: McpToolDefinition = {
         shortName: persona.shortName,
         ...(persona.primaryRole ? { primaryRole: persona.primaryRole } : {}),
         authoredBy: "agent",
-        skillIds: persona.skillIds ?? [],
+        skillIds: skillIds.ids,
         adopted: adopt,
       },
       adopt
@@ -230,7 +254,7 @@ const updatePersona: McpToolDefinition = {
   name: "osmcp_update_persona",
   title: "Update persona",
   description:
-    "Revise a persona this agent wrote. Only agent-authored personas can be changed — a persona a person wrote is theirs, so refine it by creating a new one instead. Pass only the fields to change.",
+    "Revise a persona this agent wrote. Only agent-authored personas can be changed — a persona a person wrote is theirs, so build on it with osmcp_clone_persona instead. Pass only the fields to change. The skills a persona carries are set with osmcp_pair_skills.",
   inputSchema: {
     type: "object",
     properties: {
@@ -246,12 +270,6 @@ const updatePersona: McpToolDefinition = {
       },
       shortName: { type: "string", description: "New short label." },
       primaryRole: { type: "string", description: "New one-line summary." },
-      skillIds: {
-        type: "array",
-        items: { type: "string" },
-        description:
-          "Replacement list of custom skill `id`s this persona carries. Pass an empty array to carry none.",
-      },
     },
     required: ["personaId"],
     additionalProperties: false,
@@ -263,7 +281,9 @@ const updatePersona: McpToolDefinition = {
       return toolError("Pass the `personaId` of a persona this agent wrote.");
     }
 
-    const { customs } = await loadCustomPersonas(principal.userId);
+    const { customs, personaSkillIds } = await loadCustomPersonas(
+      principal.userId,
+    );
     const existing = customs.find((entry) => entry.id === personaId);
     if (!existing) {
       return toolError(
@@ -272,7 +292,7 @@ const updatePersona: McpToolDefinition = {
     }
     if (!agentMayModify(existing)) {
       return toolError(
-        `Persona ${existing.name} was written by a person and cannot be changed by an agent. Create a new persona with osmcp_create_persona instead.`,
+        `Persona ${existing.name} was written by a person and cannot be changed by an agent. Copy it with osmcp_clone_persona and revise the copy.`,
       );
     }
 
@@ -280,10 +300,9 @@ const updatePersona: McpToolDefinition = {
     const content = readString(args, "content");
     const shortName = readString(args, "shortName");
     const primaryRole = readString(args, "primaryRole");
-    const nextSkillIds = Array.isArray(args.skillIds) ? args.skillIds : null;
-    if (!(name || content || shortName || primaryRole || nextSkillIds)) {
+    if (!(name || content || shortName || primaryRole)) {
       return toolError(
-        "Pass at least one of `name`, `content`, `shortName`, `primaryRole`, or `skillIds`.",
+        "Pass at least one of `name`, `content`, `shortName`, or `primaryRole`.",
       );
     }
     if (name && name.length > MAX_PERSONA_NAME) {
@@ -295,18 +314,6 @@ const updatePersona: McpToolDefinition = {
       return toolError(
         `Persona \`content\` is limited to ${MAX_PERSONA_CONTENT} characters; this one is ${content.length}.`,
       );
-    }
-
-    let skillIds = existing.skillIds ?? [];
-    if (nextSkillIds) {
-      const resolved = await resolvePairedSkillIds(
-        principal.userId,
-        nextSkillIds,
-      );
-      if ("error" in resolved) {
-        return toolError(resolved.error);
-      }
-      skillIds = resolved.ids;
     }
 
     const updated: CustomPersona = {
@@ -321,7 +328,6 @@ const updatePersona: McpToolDefinition = {
         : {}),
       updatedAt: new Date().toISOString(),
       authoredBy: "agent",
-      ...(skillIds.length > 0 ? { skillIds } : { skillIds: undefined }),
     };
 
     await upsertUserSettings({
@@ -338,9 +344,121 @@ const updatePersona: McpToolDefinition = {
         shortName: updated.shortName,
         ...(updated.primaryRole ? { primaryRole: updated.primaryRole } : {}),
         authoredBy: "agent",
-        skillIds: updated.skillIds ?? [],
+        skillIds: pairedSkillIdsFor(personaSkillIds, personaId),
       },
       `Updated persona ${updated.name}.`,
+    );
+  },
+};
+
+const clonePersona: McpToolDefinition = {
+  name: "osmcp_clone_persona",
+  title: "Clone persona",
+  description:
+    "Copy any persona this user can read into a new agent-authored persona, which this agent may then revise. This is how to build on a builtin specialist or one a person wrote: the original is left alone, the copy is yours. The copy carries the same skills as the original. Pass `adopt: true` to act as the copy in the same call.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      personaId: {
+        type: "string",
+        description: "A persona `id` from osmcp_list_personas.",
+      },
+      name: {
+        type: "string",
+        description: "Name for the copy. Defaults to the original's name.",
+      },
+      adopt: {
+        type: "boolean",
+        description: "Assign the copy to this API key immediately.",
+      },
+    },
+    required: ["personaId"],
+    additionalProperties: false,
+  },
+  annotations: { title: "Clone persona", ...WRITE },
+  execute: async (args, principal) => {
+    const personaId = readString(args, "personaId");
+    if (!personaId) {
+      return toolError(
+        "Pass the `personaId` of a persona from osmcp_list_personas.",
+      );
+    }
+    if (isPersonaBuilderId(personaId)) {
+      return toolError(
+        "The persona builder is an OpenSuiteMCP interview mode, not a specialist that can be copied.",
+      );
+    }
+
+    const { customs, personaSkillIds } = await loadCustomPersonas(
+      principal.userId,
+    );
+    if (customs.length >= MAX_CUSTOM_PERSONAS) {
+      return toolError(
+        `This user already has the maximum of ${MAX_CUSTOM_PERSONAS} custom personas. Delete one with osmcp_delete_persona before cloning another.`,
+      );
+    }
+
+    const source = getPersonaContent(personaId, customs);
+    if (!source) {
+      return toolError(
+        `No persona \`${personaId}\` is available to this user. Call osmcp_list_personas for the ids that are.`,
+      );
+    }
+
+    const sourceCustom = customs.find((entry) => entry.id === personaId);
+    const name = (readString(args, "name") || source.name).slice(
+      0,
+      MAX_PERSONA_NAME,
+    );
+    const carried = pairedSkillIdsFor(personaSkillIds, personaId);
+
+    const persona: CustomPersona = {
+      id: generateUUID(),
+      name,
+      shortName:
+        sourceCustom?.shortName?.slice(0, MAX_PERSONA_SHORT_NAME) ||
+        shortNameFallback(name),
+      ...(sourceCustom?.primaryRole
+        ? { primaryRole: sourceCustom.primaryRole }
+        : {}),
+      content: source.content.slice(0, MAX_PERSONA_CONTENT),
+      updatedAt: new Date().toISOString(),
+      authoredBy: "agent",
+    };
+
+    await upsertUserSettings({
+      userId: principal.userId,
+      customPersonas: [...customs, persona],
+      ...(carried.length > 0
+        ? {
+            personaSkillIds: setPairedSkillIds(
+              personaSkillIds,
+              persona.id,
+              carried,
+            ),
+          }
+        : {}),
+    });
+
+    const adopt = args.adopt === true;
+    if (adopt) {
+      await setMcpPrincipalPersona({ principal, personaId: persona.id });
+    }
+
+    return toolResult(
+      {
+        id: persona.id,
+        name: persona.name,
+        shortName: persona.shortName,
+        ...(persona.primaryRole ? { primaryRole: persona.primaryRole } : {}),
+        authoredBy: "agent",
+        skillIds: carried,
+        clonedFrom: source.id,
+        adopted: adopt,
+      },
+      adopt
+        ? `Cloned ${source.name} as ${persona.name} and adopted it for this connection.`
+        : `Cloned ${source.name} as ${persona.name}.`,
     );
   },
 };
@@ -349,7 +467,7 @@ const deletePersona: McpToolDefinition = {
   name: "osmcp_delete_persona",
   title: "Delete persona",
   description:
-    "Remove a persona this agent wrote. Only agent-authored personas can be deleted, and never one the user has made their default in OpenSuiteMCP. If this key is currently acting as that persona, it falls back to Ava.",
+    "Remove a persona this agent wrote, releasing the skills it carried. Those skills stay in the library. Only agent-authored personas can be deleted, and never one the user has made their default in OpenSuiteMCP. If this key is currently acting as that persona, it falls back to Ava.",
   inputSchema: {
     type: "object",
     properties: {
@@ -373,7 +491,9 @@ const deletePersona: McpToolDefinition = {
       return toolError("Pass the `personaId` of a persona this agent wrote.");
     }
 
-    const { settings, customs } = await loadCustomPersonas(principal.userId);
+    const { settings, customs, personaSkillIds } = await loadCustomPersonas(
+      principal.userId,
+    );
     const existing = customs.find((entry) => entry.id === personaId);
     if (!existing) {
       return toolError(
@@ -391,9 +511,14 @@ const deletePersona: McpToolDefinition = {
       );
     }
 
+    // The pairing goes with the persona; the skills themselves are kept.
+    const released = pairedSkillIdsFor(personaSkillIds, personaId);
     await upsertUserSettings({
       userId: principal.userId,
       customPersonas: customs.filter((entry) => entry.id !== personaId),
+      ...(released.length > 0
+        ? { personaSkillIds: removePersonaPairings(personaSkillIds, personaId) }
+        : {}),
     });
 
     const wasAdopted = principal.personaId === personaId;
@@ -406,6 +531,7 @@ const deletePersona: McpToolDefinition = {
       {
         id: personaId,
         deleted: true,
+        releasedSkillIds: released,
         ...(wasAdopted ? { nowActingAs: ava.id } : {}),
       },
       wasAdopted
@@ -481,6 +607,7 @@ const setAgentPersona: McpToolDefinition = {
 
 export const personaTools: McpToolDefinition[] = [
   createPersona,
+  clonePersona,
   updatePersona,
   deletePersona,
   setAgentPersona,
