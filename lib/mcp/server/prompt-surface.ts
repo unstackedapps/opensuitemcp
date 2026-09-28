@@ -178,24 +178,68 @@ export function builtinPromptMessages(
   }
 }
 
-/** A stable, client-safe name for a prompt the account publishes. */
-export function netsuitePromptName(prompt: NetSuitePrompt): string {
-  const slug = prompt.id
+function slugify(value: string): string {
+  return value
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "")
-    .slice(0, 48);
-  return `${NETSUITE_PROMPT_PREFIX}${slug || "prompt"}`;
+    .slice(0, 56);
+}
+
+/**
+ * A name for a prompt the account publishes.
+ *
+ * Built from the prompt's name rather than its id, because the library
+ * numbers its entries — a menu of `netsuite_1` through `netsuite_100` names
+ * nothing. `suffix` disambiguates the entries that share a name; the library
+ * ships two called "Current Period Financial Overview".
+ */
+export function netsuitePromptName(
+  prompt: NetSuitePrompt,
+  suffix?: string,
+): string {
+  const slug = slugify(prompt.name) || slugify(prompt.id) || "prompt";
+  const tail = suffix ? `_${slugify(suffix)}` : "";
+  return `${NETSUITE_PROMPT_PREFIX}${slug}${tail}`;
+}
+
+/**
+ * Names for a whole library, each resolving back to one prompt.
+ *
+ * Collisions take the prompt's id as a suffix rather than being dropped: a
+ * skipped entry is one a person can see in NetSuite and cannot pick here.
+ */
+export function netsuitePromptNames(
+  prompts: readonly NetSuitePrompt[],
+  taken: ReadonlySet<string>,
+): Map<string, string> {
+  const used = new Set(taken);
+  const names = new Map<string, string>();
+  for (const prompt of prompts) {
+    let name = netsuitePromptName(prompt);
+    if (used.has(name)) {
+      name = netsuitePromptName(prompt, prompt.id);
+    }
+    // Two entries sharing a name *and* an id cannot both be addressed; the
+    // second is skipped rather than shadowing the first.
+    if (used.has(name)) {
+      continue;
+    }
+    used.add(name);
+    names.set(prompt.id, name);
+  }
+  return names;
 }
 
 export function netsuitePromptToMcp(
   prompt: NetSuitePrompt,
+  name = netsuitePromptName(prompt),
 ): McpPromptDefinition {
   const audience = [...prompt.roles, ...prompt.industries]
     .filter(Boolean)
     .join(", ");
   return {
-    name: netsuitePromptName(prompt),
+    name,
     title: prompt.name,
     description: [
       prompt.category ? `${prompt.category}.` : "",

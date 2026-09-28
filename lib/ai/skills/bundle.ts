@@ -199,11 +199,8 @@ export function parseSkillFrontmatter(raw: string): {
     return {};
   }
   const block = raw.slice(3, end);
-  const nameMatch = block.match(/^name:\s*(.+)$/m);
-  const descMatch = block.match(/^description:\s*(.+)$/m);
-  const name = nameMatch?.[1]?.trim().replace(/^["']|["']$/g, "");
-  let description = descMatch?.[1]?.trim().replace(/^["']|["']$/g, "");
-  // Folded/literal descriptions are rare; keep first line if huge.
+  const name = readFrontmatterField(block, "name");
+  let description = readFrontmatterField(block, "description");
   if (description && description.length > 280) {
     description = `${description.slice(0, 277)}...`;
   }
@@ -211,4 +208,43 @@ export function parseSkillFrontmatter(raw: string): {
     name: name || undefined,
     description: description || undefined,
   };
+}
+
+/**
+ * One frontmatter value, including a folded or literal block.
+ *
+ * `description: >` followed by indented lines is ordinary YAML and is how a
+ * long description is usually written. Reading only the rest of the key's own
+ * line captured the `>` and nothing else, so every skill written that way
+ * described itself to an agent as ">".
+ */
+function readFrontmatterField(block: string, key: string): string | undefined {
+  const lines = block.split(/\r?\n/);
+  const index = lines.findIndex((line) =>
+    new RegExp(`^${key}:(\\s|$)`).test(line),
+  );
+  if (index === -1) {
+    return undefined;
+  }
+
+  const inline = lines[index].slice(key.length + 1).trim();
+  const folded = /^[>|][+-]?$/.test(inline);
+  if (inline && !folded) {
+    return inline.replace(/^["']|["']$/g, "");
+  }
+
+  // A block scalar: every following line indented past column zero belongs to
+  // it, and a folded block joins its lines with spaces.
+  const body: string[] = [];
+  for (const line of lines.slice(index + 1)) {
+    if (line.trim() && !/^\s/.test(line)) {
+      break;
+    }
+    body.push(line.trim());
+  }
+  const literal = inline.startsWith("|");
+  const text = literal
+    ? body.join("\n").trim()
+    : body.filter(Boolean).join(" ").trim();
+  return text || undefined;
 }
