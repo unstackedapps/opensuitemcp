@@ -31,6 +31,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { MAX_CUSTOM_SKILLS } from "@/lib/ai/skills/authoring";
 import { parseSkillFrontmatter, readSkillZip } from "@/lib/ai/skills/bundle";
 import {
   applySkillModeChange,
@@ -1122,10 +1123,10 @@ export function SkillsPanel({
 
   const handleCloneCustomSkill = (skill: CustomSkill) => {
     const personal = customSkills.filter((item) => !item.managedByOrg);
-    if (personal.length >= 32) {
+    if (personal.length >= MAX_CUSTOM_SKILLS) {
       toast({
         type: "error",
-        description: "Limit reached — delete a custom skill before cloning.",
+        description: `You can keep up to ${MAX_CUSTOM_SKILLS} custom skills. Delete one before cloning another.`,
       });
       return;
     }
