@@ -30,6 +30,7 @@ const SERVER_INSTRUCTIONS = [
   "This server exposes one OpenSuiteMCP user's NetSuite workspace. Every call acts as that user, with their permissions and their connected NetSuite account.",
   "Call osmcp_whoami first to confirm the acting identity, the active NetSuite account, and the persona this key is assigned.",
   "If osmcp_whoami reports a persona, read it with osmcp_get_persona and work as that specialist. You can write a new one with osmcp_create_persona and adopt it with osmcp_set_agent_persona, which also sheds the current one when called with no id.",
+  "Skills are the NetSuite practice a specialist works by. Read them with osmcp_list_skills and osmcp_get_skill, and write what you establish back with osmcp_create_skill, so the next session starts where this one ended. A skill you write is invoked by name rather than applied to every chat turn its owner types; pass it as skillIds on a persona and it arrives whenever that persona is adopted. osmcp_update_skill revises your own work, and only your own.",
   "If a NetSuite tool fails, call osmcp_connection_status. A dead authorization needs a person to reconnect the account in the OpenSuiteMCP UI and will not recover on retry.",
   "Tools marked readOnlyHint never change NetSuite data. Tools without it may modify records, so confirm before calling one. The hint is derived from the tool name and is deliberately cautious: an unrecognised name is announced as a write.",
   "Tool results carry both readable text and structuredContent; prefer structuredContent for rows and columns.",

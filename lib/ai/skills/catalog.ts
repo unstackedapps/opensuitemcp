@@ -54,6 +54,12 @@ export type CustomSkill = {
   managedByOrg?: boolean;
   /** Slash token without leading slash */
   slug?: string;
+  /**
+   * Stamped when a connected agent wrote this skill over MCP. Absent means a
+   * person wrote it. One library is shared, so the guardrail that stops an
+   * agent rewriting a person's skill has nothing to read without this.
+   */
+  authoredBy?: "agent";
 };
 
 export type UserSkillSettings = {
@@ -422,6 +428,12 @@ export function normalizeUserSkillSettings(
               typeof skill.slug === "string" && skill.slug.trim().length > 0
                 ? skill.slug.trim()
                 : undefined,
+            // Spread would be simpler, but this mapper is deliberately
+            // explicit: a field it forgets is erased from every skill on the
+            // next save. authoredBy is what the agent write guardrail reads.
+            ...(skill.authoredBy === "agent"
+              ? { authoredBy: "agent" as const }
+              : {}),
           }))
       : [];
     settings = {

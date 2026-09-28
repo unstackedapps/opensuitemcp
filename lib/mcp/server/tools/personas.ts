@@ -7,8 +7,14 @@ import {
   MAX_CUSTOM_PERSONAS,
   normalizeCustomPersonas,
 } from "@/lib/ai/personas/catalog";
+import {
+  MAX_PAIRED_SKILL_IDS,
+  normalizePairedSkillIds,
+  prunePairedSkillIds,
+} from "@/lib/ai/personas/pairing";
 import { personaPlaybookOutlineInline } from "@/lib/ai/personas/playbook-shape";
 import type { CustomPersona } from "@/lib/ai/personas/types";
+import { normalizeUserSkillSettings } from "@/lib/ai/skills/catalog";
 import { getUserSettings, upsertUserSettings } from "@/lib/db/queries";
 import { generateUUID } from "@/lib/utils";
 import { setMcpPrincipalPersona } from "../authenticate";
@@ -62,6 +68,39 @@ function agentMayModify(persona: CustomPersona): boolean {
   return persona.authoredBy === "agent";
 }
 
+/**
+ * Skills a persona may carry, checked against the library rather than taken on
+ * trust: a pairing to an id nothing resolves would silently inject nothing.
+ */
+async function resolvePairedSkillIds(
+  userId: string,
+  value: unknown,
+): Promise<{ ids: string[] } | { error: string }> {
+  const requested = normalizePairedSkillIds(value);
+  if (requested.length === 0) {
+    return { ids: [] };
+  }
+  if (Array.isArray(value) && value.length > MAX_PAIRED_SKILL_IDS) {
+    return {
+      error: `A persona carries at most ${MAX_PAIRED_SKILL_IDS} skills.`,
+    };
+  }
+
+  const settings = await getUserSettings({ userId });
+  const available = normalizeUserSkillSettings(settings ?? {}).customSkills;
+  const ids = prunePairedSkillIds(
+    requested,
+    available.map((skill) => skill.id),
+  );
+  const missing = requested.filter((id) => !ids.includes(id));
+  if (missing.length > 0) {
+    return {
+      error: `No custom skill \`${missing[0]}\` belongs to this user. Call osmcp_list_skills for the ids that do, or write one with osmcp_create_skill.`,
+    };
+  }
+  return { ids };
+}
+
 const createPersona: McpToolDefinition = {
   name: "osmcp_create_persona",
   title: "Create persona",
@@ -87,6 +126,12 @@ const createPersona: McpToolDefinition = {
         type: "string",
         description:
           "Optional one-line summary of what this specialist is for.",
+      },
+      skillIds: {
+        type: "array",
+        items: { type: "string" },
+        description:
+          "Custom skill `id`s from osmcp_list_skills that this specialist works with. Adopting the persona brings them into the turn, so a skill invocable by name arrives with the specialist who needs it instead of sitting on every unrelated prompt.",
       },
       adopt: {
         type: "boolean",
@@ -135,6 +180,14 @@ const createPersona: McpToolDefinition = {
       MAX_PERSONA_PRIMARY_ROLE,
     );
 
+    const skillIds = await resolvePairedSkillIds(
+      principal.userId,
+      args.skillIds,
+    );
+    if ("error" in skillIds) {
+      return toolError(skillIds.error);
+    }
+
     const persona: CustomPersona = {
       id: generateUUID(),
       name,
@@ -143,6 +196,7 @@ const createPersona: McpToolDefinition = {
       content,
       updatedAt: new Date().toISOString(),
       authoredBy: "agent",
+      ...(skillIds.ids.length > 0 ? { skillIds: skillIds.ids } : {}),
     };
 
     await upsertUserSettings({
@@ -162,6 +216,7 @@ const createPersona: McpToolDefinition = {
         shortName: persona.shortName,
         ...(persona.primaryRole ? { primaryRole: persona.primaryRole } : {}),
         authoredBy: "agent",
+        skillIds: persona.skillIds ?? [],
         adopted: adopt,
       },
       adopt
@@ -191,6 +246,12 @@ const updatePersona: McpToolDefinition = {
       },
       shortName: { type: "string", description: "New short label." },
       primaryRole: { type: "string", description: "New one-line summary." },
+      skillIds: {
+        type: "array",
+        items: { type: "string" },
+        description:
+          "Replacement list of custom skill `id`s this persona carries. Pass an empty array to carry none.",
+      },
     },
     required: ["personaId"],
     additionalProperties: false,
@@ -219,9 +280,10 @@ const updatePersona: McpToolDefinition = {
     const content = readString(args, "content");
     const shortName = readString(args, "shortName");
     const primaryRole = readString(args, "primaryRole");
-    if (!(name || content || shortName || primaryRole)) {
+    const nextSkillIds = Array.isArray(args.skillIds) ? args.skillIds : null;
+    if (!(name || content || shortName || primaryRole || nextSkillIds)) {
       return toolError(
-        "Pass at least one of `name`, `content`, `shortName`, or `primaryRole`.",
+        "Pass at least one of `name`, `content`, `shortName`, `primaryRole`, or `skillIds`.",
       );
     }
     if (name && name.length > MAX_PERSONA_NAME) {
@@ -233,6 +295,18 @@ const updatePersona: McpToolDefinition = {
       return toolError(
         `Persona \`content\` is limited to ${MAX_PERSONA_CONTENT} characters; this one is ${content.length}.`,
       );
+    }
+
+    let skillIds = existing.skillIds ?? [];
+    if (nextSkillIds) {
+      const resolved = await resolvePairedSkillIds(
+        principal.userId,
+        nextSkillIds,
+      );
+      if ("error" in resolved) {
+        return toolError(resolved.error);
+      }
+      skillIds = resolved.ids;
     }
 
     const updated: CustomPersona = {
@@ -247,6 +321,7 @@ const updatePersona: McpToolDefinition = {
         : {}),
       updatedAt: new Date().toISOString(),
       authoredBy: "agent",
+      ...(skillIds.length > 0 ? { skillIds } : { skillIds: undefined }),
     };
 
     await upsertUserSettings({
@@ -263,6 +338,7 @@ const updatePersona: McpToolDefinition = {
         shortName: updated.shortName,
         ...(updated.primaryRole ? { primaryRole: updated.primaryRole } : {}),
         authoredBy: "agent",
+        skillIds: updated.skillIds ?? [],
       },
       `Updated persona ${updated.name}.`,
     );

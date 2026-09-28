@@ -31,6 +31,8 @@ export type ResolvedUserSkill = {
   slug: string | null;
   /** Connected only: which connection the skill came from. */
   sourceId: string | null;
+  /** Custom only: stamped when a connected agent wrote it over MCP. */
+  authoredBy?: "agent";
 };
 
 type SettingsRow = Parameters<typeof normalizeUserSkillSettings>[0];
@@ -190,6 +192,7 @@ export async function resolveUserSkillSurface(params: {
       }),
       slug: skill.slug ?? null,
       sourceId: null,
+      ...(skill.authoredBy === "agent" ? { authoredBy: "agent" as const } : {}),
     });
   }
 

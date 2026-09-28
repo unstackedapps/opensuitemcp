@@ -312,7 +312,7 @@ const listSkills: McpToolDefinition = {
   name: "osmcp_list_skills",
   title: "List skills",
   description:
-    "List the skill packs this user has available — Oracle, Community, Connected, and Custom. Skills are instruction documents describing NetSuite practice; a skill the user has switched off is not listed. `mode` is `auto` when the skill always applies, or `slash` when the user invokes it by name.",
+    "List the skill packs this user has available — Oracle, Community, Connected, and Custom. Skills are instruction documents describing NetSuite practice; a skill the user has switched off is not listed. `mode` is `auto` when the skill always applies, or `slash` when it is invoked by name. `authoredBy` says whether a person or an agent wrote it, and an agent may revise only its own with osmcp_update_skill.",
   inputSchema: EMPTY_INPUT_SCHEMA,
   annotations: { title: "List skills", ...READ_ONLY },
   execute: async (_args, principal) => {
@@ -335,10 +335,19 @@ const listSkills: McpToolDefinition = {
         source: skill.source,
         mode: skill.mode,
         slug: skill.slug,
+        authoredBy: skill.authoredBy ?? "user",
       }));
 
     return toolResult({
-      columns: ["id", "name", "description", "source", "mode", "slug"],
+      columns: [
+        "id",
+        "name",
+        "description",
+        "source",
+        "mode",
+        "slug",
+        "authoredBy",
+      ],
       rows,
     });
   },
@@ -348,7 +357,7 @@ const listPersonas: McpToolDefinition = {
   name: "osmcp_list_personas",
   title: "List personas",
   description:
-    "List the OpenSuiteMCP personas available to this user. A persona is a NetSuite specialist playbook; its instructions can inform how you approach a task. `authoredBy` says whether a person or an agent wrote it, and `assignedPersonaId` is the one this API key is assigned.",
+    "List the OpenSuiteMCP personas available to this user. A persona is a NetSuite specialist playbook; its instructions can inform how you approach a task. `authoredBy` says whether a person or an agent wrote it, `skillIds` are the custom skills it carries into a turn, and `assignedPersonaId` is the one this API key is assigned. Read this list before a substantial task and switch with osmcp_set_agent_persona when another specialist fits it better.",
   inputSchema: EMPTY_INPUT_SCHEMA,
   annotations: { title: "List personas", ...READ_ONLY },
   execute: async (_args, principal) => {
@@ -371,10 +380,18 @@ const listPersonas: McpToolDefinition = {
       primaryRole: persona.primaryRole,
       source: persona.source,
       authoredBy: persona.authoredBy ?? "user",
+      skillIds: persona.skillIds ?? [],
     }));
 
     return toolResult({
-      columns: ["id", "name", "primaryRole", "source", "authoredBy"],
+      columns: [
+        "id",
+        "name",
+        "primaryRole",
+        "source",
+        "authoredBy",
+        "skillIds",
+      ],
       rows,
       defaultPersonaId: settings?.defaultPersonaId ?? null,
       assignedPersonaId: resolveAssignedPersona(
@@ -492,9 +509,21 @@ const getPersona: McpToolDefinition = {
       );
     }
 
+    const carried =
+      normalizeCustomPersonas(settings?.customPersonas).find(
+        (entry) => entry.id === persona.id,
+      )?.skillIds ?? [];
+
     return toolResult(
-      { id: persona.id, name: persona.name, content: persona.content },
-      persona.content,
+      {
+        id: persona.id,
+        name: persona.name,
+        content: persona.content,
+        skillIds: carried,
+      },
+      carried.length > 0
+        ? `${persona.content}\n\nThis persona carries the custom skills ${carried.join(", ")}. Read each with osmcp_get_skill.`
+        : persona.content,
     );
   },
 };

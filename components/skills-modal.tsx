@@ -72,6 +72,12 @@ type CustomSkill = {
   enabled?: boolean;
   managedByOrg?: boolean;
   slug?: string;
+  /**
+   * Declared here as well as on the server: this panel PUTs the whole list
+   * back on every save, so a field the client type omits is dropped from
+   * every skill it touches.
+   */
+  authoredBy?: "agent";
 };
 
 type ConnectedSource = {
@@ -330,6 +336,14 @@ function SkillRow({
       ) : null}
     </div>
   );
+}
+
+/** Who to credit, and who to ask before changing it. */
+function customSkillAuthor(skill: CustomSkill): string {
+  if (skill.managedByOrg) {
+    return "Organization";
+  }
+  return skill.authoredBy === "agent" ? "An agent" : "You";
 }
 
 type CustomSkillEditorProps = {
@@ -1212,7 +1226,7 @@ export function SkillsPanel({
                       </>
                     )
                   }
-                  author={skill.managedByOrg ? "Organization" : "You"}
+                  author={customSkillAuthor(skill)}
                   key={skill.id}
                   mode={resolveSkillMode({
                     skillId: skill.id,

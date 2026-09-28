@@ -481,6 +481,7 @@ export async function buildOrgAwarePersonaList(
     primaryRole: string;
     source: PersonaSource;
     authoredBy?: "agent";
+    skillIds?: string[];
   }>
 > {
   const personas = listPersonasForClient(customPersonas);

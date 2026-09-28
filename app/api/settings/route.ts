@@ -109,6 +109,13 @@ const customSkillSchema = z.object({
   updatedAt: z.string().optional(),
   enabled: z.boolean().optional(),
   slug: z.string().max(64).optional(),
+  /**
+   * Who wrote this skill. The modal sends the whole list back on every save,
+   * and a field absent from this schema is dropped from every entry — the same
+   * way it once unstamped agent-written personas and handed them to the
+   * guardrail as person-written.
+   */
+  authoredBy: z.literal("agent").optional(),
 });
 
 const customPersonaSchema = z.object({
@@ -126,6 +133,7 @@ const customPersonaSchema = z.object({
    * revise it.
    */
   authoredBy: z.literal("agent").optional(),
+  skillIds: z.array(z.string().max(128)).max(16).optional(),
 });
 
 const settingsSchema = z.object({

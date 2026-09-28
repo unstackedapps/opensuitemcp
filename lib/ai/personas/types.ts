@@ -16,6 +16,12 @@ export type CustomPersona = {
    * way to say which is which.
    */
   authoredBy?: "agent";
+  /**
+   * Custom skill ids this persona works with. Adopting the persona injects
+   * them for the turn, so a `slash` skill arrives with its specialist instead
+   * of sitting on top of every unrelated prompt.
+   */
+  skillIds?: string[];
 };
 
 /** Dimensions the persona-builder interview must cover before propose. */

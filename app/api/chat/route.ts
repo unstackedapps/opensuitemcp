@@ -573,6 +573,18 @@ export async function POST(request: Request) {
                   (skillId) =>
                     typeof skillId === "string" && slashableIds.has(skillId),
                 );
+                // A persona carries its paired skills into the turn. That is
+                // what makes `slash` the right mode for a skill written for
+                // one specialist: it stays off every unrelated prompt and
+                // arrives whenever that specialist is the one working.
+                const personaSkillIds = stampedPersonaId
+                  ? (customPersonasForPrompt.find(
+                      (persona) => persona.id === stampedPersonaId,
+                    )?.skillIds ?? [])
+                  : [];
+                const turnSkillIds = [
+                  ...new Set([...invokedConnectedSkillIds, ...personaSkillIds]),
+                ];
                 const invokedSkills = slashableSkills.filter((skill) =>
                   invokedConnectedSkillIds.includes(skill.id),
                 );
@@ -588,19 +600,19 @@ export async function POST(request: Request) {
                 skillsPromptSection = buildSkillsPromptSection(
                   skillSettingsForChat,
                   {
-                    invokedConnectedSkillIds,
+                    invokedConnectedSkillIds: turnSkillIds,
                     userId: connectedScopeId,
                   },
                 );
                 enabledSkillNames = listEnabledSkillNames(
                   skillSettingsForChat,
                   {
-                    invokedConnectedSkillIds,
+                    invokedConnectedSkillIds: turnSkillIds,
                     userId: connectedScopeId,
                   },
                 );
                 turnSkillChips = listTurnSkills(skillSettingsForChat, {
-                  invokedConnectedSkillIds,
+                  invokedConnectedSkillIds: turnSkillIds,
                   userId: connectedScopeId,
                 });
                 console.log("[Skills] Session skills:", {
@@ -610,6 +622,7 @@ export async function POST(request: Request) {
                     (skill) => skill.enabled !== false,
                   ).length,
                   invokedConnectedSkillIds,
+                  personaSkillIds,
                   injectedChars: skillsPromptSection.length,
                 });
               } else {
