@@ -5,23 +5,31 @@ All notable changes to OpenSuiteMCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [5.6.0] - 2026-09-27
+## [5.6.0] - 2026-09-28
 
 ### ✨ Added
 
-- **An agent writes skills, not only personas.** A connected AI can already read this workspace's skills; it can now write what its research establishes back into the library. `osmcp_create_skill` saves one, `osmcp_update_skill` revises it across attempts, and `osmcp_delete_skill` withdraws it. An agent set loose to test an approach in a NetSuite account until it holds the recipe now ends that session with the recipe saved, and the next session starts from it
-- **A new skill is invoked by name rather than applied to every turn.** `osmcp_create_skill` writes at **Slash**, so a skill an agent wrote while researching one task does not sit on top of every unrelated prompt its owner types afterwards. It stays listed by `osmcp_list_skills`, so the agent that wrote it can read it back. Pass `mode: "auto"` to apply it always
-- **A persona carries the skills it works by.** Pair custom skills to a persona in the persona editor, or pass `skillIds` to `osmcp_create_persona` and `osmcp_update_persona`; `osmcp_create_skill` takes `pairWith` to write and attach in one call. A paired skill is injected for every turn that persona works, even when its mode is **Slash**, so a specialist and its practice arrive together. `osmcp_list_personas` reports the pairing, which is what lets an agent read the library, judge which specialist fits a request, and switch with `osmcp_set_agent_persona` before starting
-- **Skills carry an `authoredBy` stamp.** The Skills panel credits an agent-written skill to the agent, and `osmcp_list_skills` reports it. An agent may revise or delete what agents wrote — never a skill a person wrote, and never one an organization administrator published
+- **An agent writes skills, not only personas.** A connected AI could already read this workspace's skills and write nothing back, so a research loop that established how a task is done in one NetSuite account ended with that knowledge in a transcript. `osmcp_create_skill` saves it, `osmcp_update_skill` revises it across attempts, and `osmcp_delete_skill` withdraws it. An agent set loose to test an approach until it holds the recipe now ends that session with the recipe saved, and the next session starts from it
+- **A new skill is invoked by name rather than applied to every turn.** `osmcp_create_skill` writes at **Slash**, so a skill an agent wrote while researching one task does not sit on top of every unrelated prompt its owner types afterwards. It stays listed by `osmcp_list_skills`, so the agent that wrote it can read it back. Pass `mode: "auto"` to apply it always. A skill a person adds in the Skills panel still starts at **Auto**
+- **A persona carries the skills it works by.** `osmcp_pair_skills` sets what any persona carries — built-in or custom, and any skill from any of the four sources. Those skills are injected for every turn that persona works, even at **Slash**, so a specialist and its practice arrive together. `osmcp_create_skill` takes `pairWith` to write and attach in one call. In the app, pairing is the **Skills** tab of the persona editor, with a search box rather than a list of everything. Opening a built-in persona there shows its instructions read-only and its skills editable, because the instructions are a file on disk and the pairing is yours
+- **Clone, so a refusal is a fork rather than a dead end.** `osmcp_clone_skill` and `osmcp_clone_persona` copy anything the user can read — a built-in persona, a skill a colleague wrote, a skill an organization published — into something the agent may then revise. The Skills and Personas panels have the same action, including on organization rows, which previously offered nothing at all. A cloned persona carries the same skills as its original
+- **Skills carry an `authoredBy` stamp.** The Skills panel credits an agent-written skill to the agent, and `osmcp_list_skills` reports it alongside `managedByOrg` and `carriedBy`. An agent may revise or delete what agents wrote — never a skill a person wrote, and never one an organization administrator published
+- **Markdown renders where it is read.** An eye toggle in the persona editor, the persona details dialog and the skill editor switches between the source and the rendered document
 
 ### 📝 Changed
 
-- Deleting a skill detaches it from every persona carrying it, so no persona points at an id nothing resolves
+- **Deleting names what it releases.** Removing a skill lists the personas that carried it, in the app and in the tool result, and they keep working without it. Removing a persona releases its pairings and leaves every skill in the library. Switching a paired skill **Off** asks first, because a persona carrying an off skill would inject nothing
+- **Pairings are stored once, keyed by persona.** A built-in persona is a prompt file on disk with nowhere to hold a field, so the map covers built-in and custom alike and every read site does one lookup
 
 ### 🐛 Fixed
 
+- **An organization's published skills no longer eat your own allowance.** The Skills panel sends org-published and personal skills back as one array, and the whole array was capped at 32 — so five published skills silently reduced a member to 27 of their own, and the 28th save returned a bare `400`. The cap counts personal skills, on both the panel and the MCP path, and says so when it bites
 - **`README.md` describes the release it ships with.** `## What’s in 5.3` headed 5.5 content and the file went 5.3 → 5.2 → 5.0, so two releases had no section at all. 5.3, 5.4 and 5.5 are written, and the promotion checklist in `docs/getting-started.md` now requires the section before a release reaches public `main`
-- **Changelog version links resolve.** `[5.3.0]` through `[5.5.0]` had no link reference and rendered as literal brackets
+- **Changelog version links resolve.** Eleven version headings had no link reference and rendered as literal brackets
+
+### 📦 Database
+
+- Migration `0037_persona_skill_pairings` — `UserSettings.personaSkillIds` (`pnpm db:migrate`)
 
 ---
 

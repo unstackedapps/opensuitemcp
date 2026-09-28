@@ -8,6 +8,11 @@ import {
   listPersonasForClient,
   normalizeCustomPersonas,
 } from "@/lib/ai/personas/catalog";
+import { isBuiltinPersonaId } from "@/lib/ai/personas/ids";
+import {
+  normalizePersonaSkillIds,
+  type PersonaSkillIds,
+} from "@/lib/ai/personas/pairing";
 import {
   ensureSeededProviderConfig,
   legacyColumnsFromConfig,
@@ -25,8 +30,11 @@ import {
   overlayUserSearchResourceEnabled,
   type SearchResourceEntry,
 } from "@/lib/ai/search-resources";
+import { MAX_CUSTOM_SKILLS } from "@/lib/ai/skills/authoring";
 import { normalizeUserSkillSettings } from "@/lib/ai/skills/catalog";
+import { isOrgManagedCustomSkillId } from "@/lib/ai/skills/ids";
 import { normalizeSkillModes } from "@/lib/ai/skills/modes";
+import { resolveUserSkillSurface } from "@/lib/ai/skills/user-surface";
 import { getUserSettings, upsertUserSettings } from "@/lib/db/queries";
 import { decrypt, encrypt } from "@/lib/encryption";
 import {
@@ -133,7 +141,6 @@ const customPersonaSchema = z.object({
    * revise it.
    */
   authoredBy: z.literal("agent").optional(),
-  skillIds: z.array(z.string().max(128)).max(16).optional(),
 });
 
 const settingsSchema = z.object({
@@ -179,7 +186,12 @@ const settingsSchema = z.object({
     .record(z.enum(["auto", "slash", "off"]))
     .optional()
     .nullable(),
-  customSkills: z.array(customSkillSchema).max(32).optional().nullable(),
+  /**
+   * Org-published skills are merged into this same list, so the array cap is
+   * not the user's allowance. MAX_CUSTOM_SKILLS is checked against the
+   * personal entries below; this bound only stops an unbounded body.
+   */
+  customSkills: z.array(customSkillSchema).max(128).optional().nullable(),
   disabledOrgConnectedSkillSourceIds: z
     .array(z.string().max(64))
     .max(64)
@@ -190,6 +202,14 @@ const settingsSchema = z.object({
   defaultPersonaId: z.string().max(64).optional().nullable(),
   hidePersonaPicker: z.boolean().optional().nullable(),
   customPersonas: z.array(customPersonaSchema).max(32).optional().nullable(),
+  /**
+   * Skills each persona carries, keyed by persona id — builtin ids included,
+   * which is why it is not a field on customPersonas.
+   */
+  personaSkillIds: z
+    .record(z.array(z.string().max(128)).max(16))
+    .optional()
+    .nullable(),
 });
 
 function normalizeAiProvider(
@@ -393,6 +413,8 @@ export async function GET() {
         defaultPersonaId: null,
         hidePersonaPicker: false,
         customPersonas: [],
+        personaSkillIds: {},
+        pairableSkills: [],
         personas: personasForClient,
         orgMcpPolicy,
         orgLlmPolicy,
@@ -672,6 +694,26 @@ export async function GET() {
       defaultPersonaId: settings.defaultPersonaId ?? null,
       hidePersonaPicker: settings.hidePersonaPicker ?? false,
       customPersonas: normalizeCustomPersonas(settings.customPersonas),
+      personaSkillIds: normalizePersonaSkillIds(settings.personaSkillIds),
+      // Any skill a turn can inject is pairable, not just the custom ones.
+      pairableSkills: (
+        await resolveUserSkillSurface({
+          userId: session.user.id,
+          orgId: session.user.orgId ?? null,
+          settings,
+          disabledOrgConnectedSkillSourceIds:
+            settings.disabledOrgConnectedSkillSourceIds,
+        })
+      )
+        .filter((skill) => skill.mode !== "off")
+        .map((skill) => ({
+          id: skill.id,
+          name: skill.name,
+          source: skill.source,
+          slug: skill.slug,
+          authoredBy: skill.authoredBy,
+          managedByOrg: skill.managedByOrg,
+        })),
       personas: personasForClient,
       orgMcpPolicy,
       orgLlmPolicy,
@@ -876,6 +918,77 @@ export async function POST(request: Request) {
       validated.customPersonas !== undefined
         ? normalizeCustomPersonas(validated.customPersonas)
         : undefined;
+
+    // Org-published skills share this array, so only personal entries count
+    // against the user's allowance.
+    if (nextCustomSkills !== undefined) {
+      const personal = nextCustomSkills.filter(
+        (skill) => !skill.managedByOrg && !isOrgManagedCustomSkillId(skill.id),
+      );
+      if (personal.length > MAX_CUSTOM_SKILLS) {
+        return NextResponse.json(
+          {
+            error: `You can keep up to ${MAX_CUSTOM_SKILLS} custom skills. Delete one before adding another.`,
+          },
+          { status: 400 },
+        );
+      }
+    }
+
+    /**
+     * Pairings follow their two ends.
+     *
+     * A custom skill removed here is released from every persona carrying it,
+     * and a persona removed here takes its own pairings with it. An id is
+     * dropped only when it named a custom skill that has just gone: a pairing
+     * may name an Oracle, Community or Connected skill, and pruning against
+     * the custom list alone would silently wipe those.
+     */
+    let nextPersonaSkillIds: PersonaSkillIds | undefined =
+      validated.personaSkillIds !== undefined
+        ? normalizePersonaSkillIds(validated.personaSkillIds)
+        : undefined;
+
+    const personaPairingsChange =
+      nextPersonaSkillIds !== undefined ||
+      nextCustomSkills !== undefined ||
+      nextCustomPersonas !== undefined;
+
+    if (personaPairingsChange) {
+      let map =
+        nextPersonaSkillIds ??
+        normalizePersonaSkillIds(existing?.personaSkillIds);
+
+      if (nextCustomSkills !== undefined) {
+        const before = normalizeUserSkillSettings({
+          customSkills: existing?.customSkills ?? [],
+        }).customSkills.map((skill) => skill.id);
+        const after = new Set(nextCustomSkills.map((skill) => skill.id));
+        const removed = new Set(before.filter((id) => !after.has(id)));
+        if (removed.size > 0) {
+          map = Object.fromEntries(
+            Object.entries(map)
+              .map(([personaId, skillIds]) => [
+                personaId,
+                skillIds.filter((id) => !removed.has(id)),
+              ])
+              .filter(([, skillIds]) => (skillIds as string[]).length > 0),
+          ) as PersonaSkillIds;
+        }
+      }
+
+      if (nextCustomPersonas !== undefined) {
+        const alive = new Set(nextCustomPersonas.map((persona) => persona.id));
+        map = Object.fromEntries(
+          Object.entries(map).filter(
+            ([personaId]) =>
+              isBuiltinPersonaId(personaId) || alive.has(personaId),
+          ),
+        ) as PersonaSkillIds;
+      }
+
+      nextPersonaSkillIds = map;
+    }
 
     let nextDefaultPersonaId =
       validated.defaultPersonaId !== undefined
@@ -1199,6 +1312,7 @@ export async function POST(request: Request) {
       defaultPersonaId: nextDefaultPersonaId,
       hidePersonaPicker: nextHidePersonaPicker,
       customPersonas: nextCustomPersonas,
+      personaSkillIds: nextPersonaSkillIds,
     });
 
     return NextResponse.json({

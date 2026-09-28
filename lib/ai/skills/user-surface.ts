@@ -33,6 +33,8 @@ export type ResolvedUserSkill = {
   sourceId: string | null;
   /** Custom only: stamped when a connected agent wrote it over MCP. */
   authoredBy?: "agent";
+  /** Custom only: published by an org admin, so read-only to its members. */
+  managedByOrg?: boolean;
 };
 
 type SettingsRow = Parameters<typeof normalizeUserSkillSettings>[0];
@@ -193,6 +195,7 @@ export async function resolveUserSkillSurface(params: {
       slug: skill.slug ?? null,
       sourceId: null,
       ...(skill.authoredBy === "agent" ? { authoredBy: "agent" as const } : {}),
+      ...(skill.managedByOrg ? { managedByOrg: true } : {}),
     });
   }
 

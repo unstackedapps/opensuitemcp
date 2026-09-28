@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/app/(auth)/auth";
 import {
+  listPersonasForClient,
+  normalizeCustomPersonas,
+} from "@/lib/ai/personas/catalog";
+import { normalizePersonaSkillIds } from "@/lib/ai/personas/pairing";
+import {
   type CatalogSkill,
   type ConnectedSkillSource,
   listSlashableComposerSkills,
@@ -73,8 +78,17 @@ export async function GET() {
       },
     );
 
+    // The Skills panel names the personas carrying each skill, and warns
+    // before a delete or a switch-off releases one.
+    const personaSkillIds = normalizePersonaSkillIds(settings?.personaSkillIds);
+    const personas = listPersonasForClient(
+      normalizeCustomPersonas(settings?.customPersonas),
+    ).map((persona) => ({ id: persona.id, name: persona.name }));
+
     return NextResponse.json({
       catalog,
+      personas,
+      personaSkillIds,
       enabledSkillIds,
       skillModes: userSkillSettings.skillModes,
       customSkills,

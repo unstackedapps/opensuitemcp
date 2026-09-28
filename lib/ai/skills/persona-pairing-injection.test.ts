@@ -68,8 +68,12 @@ describe("a persona carries its paired skills into the turn", () => {
       "utf8",
     );
     assert.ok(
-      route.includes("const personaSkillIds = stampedPersonaId"),
-      "chat route resolves the active persona's skills",
+      route.includes("const personaSkillIds = pairedSkillIdsFor("),
+      "chat route resolves the active persona's skills from the map",
+    );
+    assert.ok(
+      route.includes("normalizePersonaSkillIds(settings.personaSkillIds)"),
+      "chat route reads the stored pairing map",
     );
     assert.equal(
       route.match(/invokedConnectedSkillIds: turnSkillIds/g)?.length,

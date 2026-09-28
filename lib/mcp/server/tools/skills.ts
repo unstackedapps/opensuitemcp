@@ -1,9 +1,18 @@
 import "server-only";
 
-import { normalizeCustomPersonas } from "@/lib/ai/personas/catalog";
 import {
+  getPersonaContent,
+  isPersonaBuilderId,
+  normalizeCustomPersonas,
+} from "@/lib/ai/personas/catalog";
+import {
+  detachSkillEverywhere,
   MAX_PAIRED_SKILL_IDS,
-  prunePairedSkillIds,
+  normalizePersonaSkillIds,
+  type PersonaSkillIds,
+  pairedSkillIdsFor,
+  personasCarryingSkill,
+  setPairedSkillIds,
 } from "@/lib/ai/personas/pairing";
 import type { CustomPersona } from "@/lib/ai/personas/types";
 import {
@@ -24,9 +33,15 @@ import {
   isSkillInvocationMode,
   resolveSkillMode,
 } from "@/lib/ai/skills/modes";
+import {
+  type ResolvedUserSkill,
+  readUserSkillContent,
+  resolveUserSkillSurface,
+} from "@/lib/ai/skills/user-surface";
 import { getUserSettings, upsertUserSettings } from "@/lib/db/queries";
 import { validateOrgSkillSettingsPatch } from "@/lib/org/enforcement";
 import { generateUUID } from "@/lib/utils";
+import type { McpPrincipal } from "../authenticate";
 import { type McpToolDefinition, toolError, toolResult } from "./types";
 
 const WRITE = {
@@ -42,21 +57,45 @@ function readString(args: Record<string, unknown>, key: string): string {
 }
 
 type SkillState = {
+  settings: Awaited<ReturnType<typeof getUserSettings>>;
   customSkills: CustomSkill[];
   skillModes: Record<string, "auto" | "slash" | "off">;
   enabledSkillIds: string[];
   customPersonas: CustomPersona[];
+  personaSkillIds: PersonaSkillIds;
 };
 
 async function loadSkillState(userId: string): Promise<SkillState> {
   const settings = await getUserSettings({ userId });
   const skills = normalizeUserSkillSettings(settings ?? {});
   return {
+    settings,
     customSkills: skills.customSkills,
     skillModes: skills.skillModes,
     enabledSkillIds: skills.enabledSkillIds,
     customPersonas: normalizeCustomPersonas(settings?.customPersonas),
+    personaSkillIds: normalizePersonaSkillIds(settings?.personaSkillIds),
   };
+}
+
+/**
+ * Every skill this user can reach, from all four sources.
+ *
+ * A pairing may name an Oracle, Community or Connected skill as readily as a
+ * custom one — the turn injects any of them — so validation runs against the
+ * whole surface rather than the custom list alone.
+ */
+async function loadSkillSurface(
+  principal: McpPrincipal,
+  settings: SkillState["settings"],
+): Promise<ResolvedUserSkill[]> {
+  return await resolveUserSkillSurface({
+    userId: principal.userId,
+    orgId: principal.orgId,
+    settings: settings ?? {},
+    disabledOrgConnectedSkillSourceIds:
+      settings?.disabledOrgConnectedSkillSourceIds,
+  });
 }
 
 /**
@@ -112,11 +151,40 @@ function describeSkill(
   };
 }
 
+/** Personas are named, not listed as ids, wherever a person reads the result. */
+function personaNames(
+  personaIds: readonly string[],
+  customPersonas: CustomPersona[],
+): string[] {
+  return personaIds.map(
+    (id) => getPersonaContent(id, customPersonas)?.name ?? id,
+  );
+}
+
+function resolvePersonaForPairing(
+  personaId: string,
+  customPersonas: CustomPersona[],
+): { persona: { id: string; name: string } } | { error: string } {
+  if (isPersonaBuilderId(personaId)) {
+    return {
+      error:
+        "The persona builder is an OpenSuiteMCP interview mode, not a specialist that carries skills.",
+    };
+  }
+  const persona = getPersonaContent(personaId, customPersonas);
+  if (!persona) {
+    return {
+      error: `No persona \`${personaId}\` is available to this user. Call osmcp_list_personas for the ids that are.`,
+    };
+  }
+  return { persona: { id: persona.id, name: persona.name } };
+}
+
 const createSkill: McpToolDefinition = {
   name: "osmcp_create_skill",
   title: "Create skill",
   description:
-    'Write a new skill into this OpenSuiteMCP user\'s library. A skill is NetSuite practice written for an assistant to follow — how a task is done in this account, what to check, what to avoid. It is saved for the user and listed in their Skills panel marked as agent-authored, so write it to the same standard a person would. Call osmcp_get_skill on an existing skill first to learn the structure and voice expected. A new skill is invocable by name rather than applied to every chat turn: pass `mode: "auto"` to apply it to all of them, or `pairWith` to attach it to a persona, which brings the skill along whenever that persona is adopted.',
+    'Write a new skill into this OpenSuiteMCP user\'s library. A skill is NetSuite practice written for an assistant to follow — how a task is done in this account, what to check, what to avoid. It is saved for the user and listed in their Skills panel marked as agent-authored, so write it to the same standard a person would. Call osmcp_get_skill on an existing skill first to learn the structure and voice expected. A new skill is invoked by name rather than applied to every chat turn: pass `mode: "auto"` to apply it to all of them, or `pairWith` to attach it to a persona, which brings the skill along whenever that persona is adopted.',
   inputSchema: {
     type: "object",
     properties: {
@@ -138,7 +206,7 @@ const createSkill: McpToolDefinition = {
       pairWith: {
         type: "string",
         description:
-          "A persona `id` from osmcp_list_personas. That persona carries this skill into every turn it is adopted for. Only personas this agent wrote can be paired.",
+          "A persona `id` from osmcp_list_personas, builtin or custom. That persona carries this skill into every turn it is adopted for. Use osmcp_pair_skills to change a persona's whole set.",
       },
     },
     required: ["name", "content"],
@@ -165,24 +233,21 @@ const createSkill: McpToolDefinition = {
     }
 
     const pairWith = readString(args, "pairWith");
-    let persona: CustomPersona | undefined;
+    let paired: { id: string; name: string } | null = null;
     if (pairWith) {
-      persona = state.customPersonas.find((entry) => entry.id === pairWith);
-      if (!persona) {
+      const resolved = resolvePersonaForPairing(pairWith, state.customPersonas);
+      if ("error" in resolved) {
+        return toolError(resolved.error);
+      }
+      if (
+        pairedSkillIdsFor(state.personaSkillIds, resolved.persona.id).length >=
+        MAX_PAIRED_SKILL_IDS
+      ) {
         return toolError(
-          `No custom persona \`${pairWith}\` belongs to this user. Call osmcp_list_personas for the ids that do.`,
+          `Persona ${resolved.persona.name} already carries the maximum of ${MAX_PAIRED_SKILL_IDS} skills.`,
         );
       }
-      if (persona.authoredBy !== "agent") {
-        return toolError(
-          `Persona ${persona.name} was written by a person, so an agent cannot change the skills it carries. Pair this skill with a persona written by osmcp_create_persona.`,
-        );
-      }
-      if ((persona.skillIds?.length ?? 0) >= MAX_PAIRED_SKILL_IDS) {
-        return toolError(
-          `Persona ${persona.name} already carries the maximum of ${MAX_PAIRED_SKILL_IDS} skills.`,
-        );
-      }
+      paired = resolved.persona;
     }
 
     const skill: CustomSkill = {
@@ -208,24 +273,18 @@ const createSkill: McpToolDefinition = {
       return toolError(overlaid.error);
     }
 
-    const paired = persona;
-    const customPersonas = paired
-      ? state.customPersonas.map((entry) =>
-          entry.id === paired.id
-            ? {
-                ...entry,
-                skillIds: [...(entry.skillIds ?? []), skill.id],
-                updatedAt: new Date().toISOString(),
-              }
-            : entry,
-        )
+    const personaSkillIds = paired
+      ? setPairedSkillIds(state.personaSkillIds, paired.id, [
+          ...pairedSkillIdsFor(state.personaSkillIds, paired.id),
+          skill.id,
+        ])
       : undefined;
 
     await upsertUserSettings({
       userId: principal.userId,
       customSkills: overlaid.customSkills,
       skillModes: applied.skillModes,
-      ...(customPersonas ? { customPersonas } : {}),
+      ...(personaSkillIds ? { personaSkillIds } : {}),
     });
 
     const saved =
@@ -234,13 +293,142 @@ const createSkill: McpToolDefinition = {
     return toolResult(
       {
         ...describeSkill(saved, applied.skillModes, applied.enabledSkillIds),
-        ...(persona ? { pairedWith: persona.id } : {}),
+        ...(paired ? { pairedWith: paired.id } : {}),
       },
-      persona
-        ? `Created skill ${saved.name} and paired it with persona ${persona.name}.`
+      paired
+        ? `Created skill ${saved.name} and paired it with persona ${paired.name}.`
         : draft.mode === "auto"
           ? `Created skill ${saved.name}, applied to every chat turn.`
           : `Created skill ${saved.name}, invocable as /${saved.slug ?? saved.name}.`,
+    );
+  },
+};
+
+const cloneSkill: McpToolDefinition = {
+  name: "osmcp_clone_skill",
+  title: "Clone skill",
+  description:
+    "Copy any skill this user can read into a new agent-authored skill, which this agent may then revise. This is how to build on a skill a person or an organization wrote: the original is left alone, the copy is yours. Oracle, Community, Connected and Custom skills can all be cloned. Pass `name` to title the copy.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      skillId: {
+        type: "string",
+        description: "The `id` of any skill from osmcp_list_skills.",
+      },
+      name: {
+        type: "string",
+        description: "Name for the copy. Defaults to the original's name.",
+      },
+      mode: {
+        type: "string",
+        enum: ["slash", "auto"],
+        description: "`slash` (default) or `auto`, as for osmcp_create_skill.",
+      },
+      pairWith: {
+        type: "string",
+        description: "A persona `id` to attach the copy to.",
+      },
+    },
+    required: ["skillId"],
+    additionalProperties: false,
+  },
+  annotations: { title: "Clone skill", ...WRITE },
+  execute: async (args, principal) => {
+    const skillId = readString(args, "skillId");
+    if (!skillId) {
+      return toolError("Pass the `skillId` of a skill from osmcp_list_skills.");
+    }
+
+    const state = await loadSkillState(principal.userId);
+    const personal = state.customSkills.filter((entry) => !entry.managedByOrg);
+    if (personal.length >= MAX_CUSTOM_SKILLS) {
+      return toolError(
+        `This user already has the maximum of ${MAX_CUSTOM_SKILLS} custom skills. Delete one with osmcp_delete_skill before cloning another.`,
+      );
+    }
+
+    const found = await readUserSkillContent({
+      userId: principal.userId,
+      orgId: principal.orgId,
+      settings: state.settings ?? {},
+      skillId,
+      disabledOrgConnectedSkillSourceIds:
+        state.settings?.disabledOrgConnectedSkillSourceIds,
+    });
+    if (!found) {
+      return toolError(
+        `No skill \`${skillId}\` is available to this user. Call osmcp_list_skills for the ids that are.`,
+      );
+    }
+
+    const parsed = readSkillDraft({
+      name: readString(args, "name") || found.skill.name,
+      content: found.content,
+      mode: args.mode,
+    });
+    if (!parsed.ok) {
+      return toolError(parsed.error);
+    }
+    const { draft } = parsed;
+
+    const pairWith = readString(args, "pairWith");
+    let paired: { id: string; name: string } | null = null;
+    if (pairWith) {
+      const resolved = resolvePersonaForPairing(pairWith, state.customPersonas);
+      if ("error" in resolved) {
+        return toolError(resolved.error);
+      }
+      paired = resolved.persona;
+    }
+
+    const clone: CustomSkill = {
+      id: generateUUID(),
+      name: draft.name,
+      content: draft.content,
+      updatedAt: new Date().toISOString(),
+      enabled: draft.mode === "auto",
+      authoredBy: "agent",
+    };
+
+    const applied = applySkillModeChange({
+      skillId: clone.id,
+      kind: "custom",
+      mode: draft.mode,
+      skillModes: state.skillModes,
+      enabledSkillIds: state.enabledSkillIds,
+      customSkills: withSlugs([...state.customSkills, clone]),
+    });
+
+    const overlaid = await overlayForOrg(principal.orgId, applied.customSkills);
+    if ("error" in overlaid) {
+      return toolError(overlaid.error);
+    }
+
+    const personaSkillIds = paired
+      ? setPairedSkillIds(state.personaSkillIds, paired.id, [
+          ...pairedSkillIdsFor(state.personaSkillIds, paired.id),
+          clone.id,
+        ])
+      : undefined;
+
+    await upsertUserSettings({
+      userId: principal.userId,
+      customSkills: overlaid.customSkills,
+      skillModes: applied.skillModes,
+      ...(personaSkillIds ? { personaSkillIds } : {}),
+    });
+
+    const saved =
+      overlaid.customSkills.find((entry) => entry.id === clone.id) ?? clone;
+
+    return toolResult(
+      {
+        ...describeSkill(saved, applied.skillModes, applied.enabledSkillIds),
+        clonedFrom: found.skill.id,
+        ...(paired ? { pairedWith: paired.id } : {}),
+      },
+      `Cloned ${found.skill.name} as ${saved.name}.`,
     );
   },
 };
@@ -249,7 +437,7 @@ const updateSkill: McpToolDefinition = {
   name: "osmcp_update_skill",
   title: "Update skill",
   description:
-    "Revise a skill this agent wrote — the way a research loop lands a better version of its own instructions. Only agent-authored skills can be changed: a skill a person or an organization wrote is theirs, so refine it by writing a new one instead. Pass only the fields to change.",
+    "Revise a skill this agent wrote — the way a research loop lands a better version of its own instructions. Only agent-authored skills can be changed: a skill a person or an organization wrote is theirs, so build on it with osmcp_clone_skill instead. Pass only the fields to change.",
   inputSchema: {
     type: "object",
     properties: {
@@ -329,8 +517,7 @@ const updateSkill: McpToolDefinition = {
 
     const updated: CustomSkill = {
       ...existing,
-      // Slug is dropped so the normalizer re-derives it from a changed name.
-      ...(name ? { name, slug: undefined } : {}),
+      ...(name ? { name } : {}),
       ...(content ? { content } : {}),
       updatedAt: new Date().toISOString(),
       authoredBy: "agent",
@@ -364,7 +551,10 @@ const updateSkill: McpToolDefinition = {
       overlaid.customSkills.find((entry) => entry.id === skillId) ?? updated;
 
     return toolResult(
-      describeSkill(saved, applied.skillModes, applied.enabledSkillIds),
+      {
+        ...describeSkill(saved, applied.skillModes, applied.enabledSkillIds),
+        carriedBy: personasCarryingSkill(state.personaSkillIds, skillId),
+      },
       `Updated skill ${saved.name}.`,
     );
   },
@@ -374,7 +564,7 @@ const deleteSkill: McpToolDefinition = {
   name: "osmcp_delete_skill",
   title: "Delete skill",
   description:
-    "Remove a skill this agent wrote, and detach it from every persona carrying it. Only agent-authored skills can be deleted.",
+    "Remove a skill this agent wrote, and release it from every persona carrying it. The personas themselves are kept. Only agent-authored skills can be deleted. Call osmcp_get_skill first if the result matters — the content is not recoverable.",
   inputSchema: {
     type: "object",
     properties: {
@@ -419,42 +609,128 @@ const deleteSkill: McpToolDefinition = {
       Object.entries(state.skillModes).filter(([id]) => id !== skillId),
     );
 
-    // A persona must not keep pointing at a skill nothing resolves.
-    const remainingIds = overlaid.customSkills.map((entry) => entry.id);
-    const detachedFrom: string[] = [];
-    const customPersonas = state.customPersonas.map((persona) => {
-      if (!persona.skillIds?.includes(skillId)) {
-        return persona;
-      }
-      detachedFrom.push(persona.name);
-      return {
-        ...persona,
-        skillIds: prunePairedSkillIds(persona.skillIds, remainingIds),
-      };
-    });
+    const carriedBy = personasCarryingSkill(state.personaSkillIds, skillId);
+    const personaSkillIds = detachSkillEverywhere(
+      state.personaSkillIds,
+      skillId,
+    );
 
     await upsertUserSettings({
       userId: principal.userId,
       customSkills: overlaid.customSkills,
       skillModes,
-      ...(detachedFrom.length > 0 ? { customPersonas } : {}),
+      ...(carriedBy.length > 0 ? { personaSkillIds } : {}),
     });
+
+    const released = personaNames(carriedBy, state.customPersonas);
 
     return toolResult(
       {
         id: skillId,
         deleted: true,
-        ...(detachedFrom.length > 0 ? { detachedFrom } : {}),
+        releasedFrom: carriedBy,
       },
-      detachedFrom.length > 0
-        ? `Deleted skill ${existing.name} and detached it from ${detachedFrom.join(", ")}.`
+      released.length > 0
+        ? `Deleted skill ${existing.name} and released it from ${released.join(", ")}.`
         : `Deleted skill ${existing.name}.`,
+    );
+  },
+};
+
+const pairSkills: McpToolDefinition = {
+  name: "osmcp_pair_skills",
+  title: "Pair skills with a persona",
+  description:
+    "Set which skills a persona carries. Adopting that persona injects them for the turn even when their mode is `slash`, so a specialist arrives with its practice. Works on any persona this user has, builtin or custom, and on any skill from any source — the pairing is this user's own setting rather than a change to what the persona says. Pass the complete list: it replaces what the persona carried. Pass an empty array to carry none.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      personaId: {
+        type: "string",
+        description: "A persona `id` from osmcp_list_personas.",
+      },
+      skillIds: {
+        type: "array",
+        items: { type: "string" },
+        description: `Skill \`id\`s from osmcp_list_skills, at most ${MAX_PAIRED_SKILL_IDS}. Replaces the persona's current set.`,
+      },
+    },
+    required: ["personaId", "skillIds"],
+    additionalProperties: false,
+  },
+  annotations: { title: "Pair skills", ...WRITE, idempotentHint: true },
+  execute: async (args, principal) => {
+    const personaId = readString(args, "personaId");
+    if (!personaId) {
+      return toolError(
+        "Pass the `personaId` of a persona to pair skills with.",
+      );
+    }
+    if (!Array.isArray(args.skillIds)) {
+      return toolError(
+        "Pass `skillIds` as an array of skill ids. An empty array carries none.",
+      );
+    }
+
+    const state = await loadSkillState(principal.userId);
+    const resolved = resolvePersonaForPairing(personaId, state.customPersonas);
+    if ("error" in resolved) {
+      return toolError(resolved.error);
+    }
+
+    const requested = args.skillIds.filter(
+      (id): id is string => typeof id === "string" && id.trim().length > 0,
+    );
+    if (requested.length > MAX_PAIRED_SKILL_IDS) {
+      return toolError(
+        `A persona carries at most ${MAX_PAIRED_SKILL_IDS} skills; this call passed ${requested.length}.`,
+      );
+    }
+
+    const surface = await loadSkillSurface(principal, state.settings);
+    const available = new Set(
+      surface.filter((entry) => entry.mode !== "off").map((entry) => entry.id),
+    );
+    const missing = requested.filter((id) => !available.has(id.trim()));
+    if (missing.length > 0) {
+      return toolError(
+        `Skill \`${missing[0]}\` is not available to this user, or is switched off. Call osmcp_list_skills for the ids that are.`,
+      );
+    }
+
+    const personaSkillIds = setPairedSkillIds(
+      state.personaSkillIds,
+      resolved.persona.id,
+      requested.map((id) => id.trim()),
+    );
+
+    await upsertUserSettings({
+      userId: principal.userId,
+      personaSkillIds,
+    });
+
+    const carried = pairedSkillIdsFor(personaSkillIds, resolved.persona.id);
+    const names = carried.map(
+      (id) => surface.find((entry) => entry.id === id)?.name ?? id,
+    );
+
+    return toolResult(
+      {
+        personaId: resolved.persona.id,
+        name: resolved.persona.name,
+        skillIds: carried,
+      },
+      carried.length > 0
+        ? `${resolved.persona.name} now carries ${names.join(", ")}.`
+        : `${resolved.persona.name} now carries no skills.`,
     );
   },
 };
 
 export const skillWriteTools: McpToolDefinition[] = [
   createSkill,
+  cloneSkill,
   updateSkill,
   deleteSkill,
+  pairSkills,
 ];

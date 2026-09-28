@@ -149,7 +149,7 @@ A single URL taking `POST`. Setup is in
 | `osmcp_list_netsuite_accounts` | Configured accounts and which is active |
 | `osmcp_list_chats` | The user's chat threads |
 | `osmcp_get_chat` | One chat transcript |
-| `osmcp_list_skills` | Skills from all four sources (Oracle, Community, Connected, Custom) the user has switched on, each with `mode` and `authoredBy` |
+| `osmcp_list_skills` | Skills from all four sources (Oracle, Community, Connected, Custom) the user has switched on, each with `mode`, `authoredBy`, `managedByOrg` and the personas `carriedBy` |
 | `osmcp_list_personas` | Available NetSuite specialist personas, each with the `skillIds` it carries |
 | `osmcp_get_skill` | The full instructions of one skill |
 | `osmcp_get_persona` | The full instructions of one persona |
@@ -194,22 +194,30 @@ user's own library and appear in their Personas and Skills panels.
 | Tool | What it does |
 | --- | --- |
 | `osmcp_create_persona` | Write a persona, with `adopt` to become it in the same call |
+| `osmcp_clone_persona` | Copy any readable persona into an agent-authored one |
 | `osmcp_update_persona` | Revise a persona this app wrote |
-| `osmcp_delete_persona` | Remove a persona this app wrote |
+| `osmcp_delete_persona` | Remove a persona this app wrote, releasing the skills it carried |
 | `osmcp_set_agent_persona` | Assign a persona to this connection, or omit `personaId` to return to Ava |
 | `osmcp_create_skill` | Write a skill, with `mode` and `pairWith` |
+| `osmcp_clone_skill` | Copy any readable skill into an agent-authored one |
 | `osmcp_update_skill` | Revise a skill this app wrote |
-| `osmcp_delete_skill` | Remove a skill this app wrote, detaching it from every persona carrying it |
+| `osmcp_delete_skill` | Remove a skill this app wrote, releasing it from every persona carrying it |
+| `osmcp_pair_skills` | Set the skills any persona carries |
 
-Three rules govern these:
+Four rules govern these:
 
 | Rule | Detail |
 | --- | --- |
-| **An agent revises only its own work** | A persona or skill carries `authoredBy`. One a person wrote, or an organization administrator published, is read-only here; write a new one instead |
+| **An agent revises only its own work** | A persona or skill carries `authoredBy`. One a person wrote, or an organization administrator published, is read-only here |
+| **Clone is how to build on someone else's** | `osmcp_clone_skill` and `osmcp_clone_persona` copy anything this user can read. The copy is agent-authored, so the agent may revise it |
 | **A new skill starts at `slash`** | It applies when its owner types `/skill-name`, or when a persona carrying it is working. Pass `mode: "auto"` to apply it to every chat turn |
-| **A persona carries its skills** | Pass `skillIds` on a persona, or `pairWith` on a skill. Those skills are injected for every turn that persona works |
+| **A persona carries its skills** | `osmcp_pair_skills` takes any persona, built-in or custom, and any skill from any source. In the OpenSuiteMCP app those skills are injected for every turn that persona works. Over this connection they are a reading list: `osmcp_get_persona` names them, and you read each with `osmcp_get_skill` |
 
 A persona this user has made their default cannot be deleted by an agent.
+
+Deleting one end of a pairing leaves the other in place: a deleted skill is
+released from every persona that carried it, and a deleted persona releases its
+skills without removing them.
 
 ### NetSuite tools
 

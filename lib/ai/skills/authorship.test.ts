@@ -81,6 +81,9 @@ describe("skill authorship survives a settings save", () => {
     );
     assert.ok(skillSchema.includes("authoredBy"), "customSkillSchema");
     assert.ok(personaSchema.includes("authoredBy"), "customPersonaSchema");
-    assert.ok(personaSchema.includes("skillIds"), "persona pairing");
+    assert.ok(
+      route.includes("personaSkillIds: z"),
+      "settingsSchema names the pairing map",
+    );
   });
 });

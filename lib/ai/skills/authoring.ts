@@ -101,7 +101,7 @@ export function agentMayModifySkill(skill: SkillWriteTarget): boolean {
 
 export function skillWriteRefusal(skill: SkillWriteTarget): string {
   if (skill.managedByOrg || isOrgManagedCustomSkillId(skill.id)) {
-    return `Skill ${skill.name} is published by this organization's administrator and cannot be changed here.`;
+    return `Skill ${skill.name} is published by this organization's administrator and cannot be changed here. Copy it with osmcp_clone_skill and revise the copy.`;
   }
-  return `Skill ${skill.name} was written by a person and cannot be changed by an agent. Write a new skill with osmcp_create_skill instead.`;
+  return `Skill ${skill.name} was written by a person and cannot be changed by an agent. Copy it with osmcp_clone_skill and revise the copy.`;
 }

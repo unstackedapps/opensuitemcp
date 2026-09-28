@@ -3,7 +3,10 @@
 import {
   Blocks,
   ChevronDown,
+  Copy,
   ExternalLink,
+  Eye,
+  EyeOff,
   Loader2,
   Pencil,
   Plus,
@@ -16,6 +19,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import { ConfirmDestructiveDialog } from "@/components/confirm-destructive-dialog";
+import { Response } from "@/components/message-elements/response";
 import { OnboardingPanelSkeleton } from "@/components/onboarding/onboarding-panel-skeleton";
 import { OnboardingStepProse } from "@/components/onboarding/onboarding-step-prose";
 import { useOptionalAppPortal } from "@/components/portal/context";
@@ -95,6 +99,8 @@ type ConnectedSource = {
   userEnabled?: boolean;
 };
 
+type PairedPersona = { id: string; name: string };
+
 type SkillsResponse = {
   catalog: CatalogSkill[];
   enabledSkillIds: string[];
@@ -104,6 +110,9 @@ type SkillsResponse = {
   connectedSkills: CatalogSkill[];
   disabledOrgConnectedSkillSourceIds?: string[];
   orgSkillsPolicy?: { managedByOrg: boolean };
+  /** Personas a skill can be carried by, and which carry which. */
+  personas?: PairedPersona[];
+  personaSkillIds?: Record<string, string[]>;
 };
 
 type SkillSection = "oracle" | "community" | "custom" | "connected";
@@ -151,6 +160,7 @@ async function persistSkillSettings(
       | "customSkills"
       | "skillModes"
       | "disabledOrgConnectedSkillSourceIds"
+      | "personaSkillIds"
     >
   >,
 ) {
@@ -206,6 +216,8 @@ type SkillRowProps = {
   preview?:
     | { kind: "remote"; skillId: string }
     | { kind: "inline"; content: string };
+  /** Personas that bring this skill into a turn. */
+  carriedBy?: PairedPersona[];
   variant?: "list" | "card";
 };
 
@@ -221,6 +233,7 @@ function SkillRow({
   actions,
   hideMode,
   preview,
+  carriedBy,
   variant = "list",
 }: SkillRowProps) {
   const [expanded, setExpanded] = useState(false);
@@ -300,6 +313,12 @@ function SkillRow({
             {author}
             <span className="mx-1.5 text-border">·</span>
             {formatSkillDate(updatedAt)}
+            {carriedBy && carriedBy.length > 0 ? (
+              <>
+                <span className="mx-1.5 text-border">·</span>
+                {carriedBy.map((persona) => persona.name).join(", ")}
+              </>
+            ) : null}
           </p>
         </button>
         <div className="flex shrink-0 items-center justify-end gap-1">
@@ -338,6 +357,35 @@ function SkillRow({
   );
 }
 
+/** Personas that carry this skill, named for the row and the warnings. */
+function personasCarrying(
+  skillId: string,
+  personaSkillIds: Record<string, string[]>,
+  personas: PairedPersona[],
+): PairedPersona[] {
+  return Object.entries(personaSkillIds)
+    .filter(([, skillIds]) => skillIds.includes(skillId))
+    .map(([personaId]) => ({
+      id: personaId,
+      name:
+        personas.find((persona) => persona.id === personaId)?.name ?? personaId,
+    }));
+}
+
+function releaseSkill(
+  skillId: string,
+  personaSkillIds: Record<string, string[]>,
+): Record<string, string[]> {
+  const next: Record<string, string[]> = {};
+  for (const [personaId, skillIds] of Object.entries(personaSkillIds)) {
+    const kept = skillIds.filter((id) => id !== skillId);
+    if (kept.length > 0) {
+      next[personaId] = kept;
+    }
+  }
+  return next;
+}
+
 /** Who to credit, and who to ask before changing it. */
 function customSkillAuthor(skill: CustomSkill): string {
   if (skill.managedByOrg) {
@@ -364,6 +412,7 @@ function CustomSkillEditor({
   const [name, setName] = useState(initialName);
   const [content, setContent] = useState(initialContent);
   const [isSaving, setIsSaving] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
   const fileInputId = useId();
   const nameInputId = useId();
   const contentInputId = useId();
@@ -371,6 +420,7 @@ function CustomSkillEditor({
   useEffect(() => {
     setName(initialName);
     setContent(initialContent);
+    setShowPreview(false);
   }, [initialName, initialContent]);
 
   const handleSave = async () => {
@@ -459,16 +509,38 @@ function CustomSkillEditor({
                 <Upload className="mr-1.5 size-3.5" />
                 Import .md
               </Button>
+              <Button
+                aria-label={showPreview ? "Edit skill" : "Preview skill"}
+                onClick={() => {
+                  setShowPreview((current) => !current);
+                }}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                {showPreview ? (
+                  <EyeOff className="mr-1.5 size-3.5" />
+                ) : (
+                  <Eye className="mr-1.5 size-3.5" />
+                )}
+                Preview
+              </Button>
             </div>
           </div>
-          <Textarea
-            className="min-h-64 flex-1 resize-y text-sm md:min-h-80"
-            id={contentInputId}
-            onChange={(event) => setContent(event.target.value)}
-            placeholder="Write or import your custom skill instructions..."
-            rows={14}
-            value={content}
-          />
+          {showPreview ? (
+            <div className="min-h-64 flex-1 overflow-y-auto rounded-md border border-border/60 bg-muted/30 p-3 md:min-h-80">
+              <Response>{content}</Response>
+            </div>
+          ) : (
+            <Textarea
+              className="min-h-64 flex-1 resize-y text-sm md:min-h-80"
+              id={contentInputId}
+              onChange={(event) => setContent(event.target.value)}
+              placeholder="Write or import your custom skill instructions..."
+              rows={14}
+              value={content}
+            />
+          )}
         </div>
       </div>
       <DialogFooter className="flex-row items-center justify-end gap-2 border-t border-border/60 px-4 py-3 sm:px-5">
@@ -537,6 +609,10 @@ export function SkillsPanel({
   );
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingSkill, setEditingSkill] = useState<CustomSkill | null>(null);
+  const [seedSkill, setSeedSkill] = useState<CustomSkill | null>(null);
+  const [personaSkillIds, setPersonaSkillIds] = useState<
+    Record<string, string[]>
+  >({});
   const [activeSection, setActiveSection] = useState<SkillSection>(
     sections?.[0] ?? "oracle",
   );
@@ -563,6 +639,7 @@ export function SkillsPanel({
       setEnabledSkillIds(data.enabledSkillIds);
       setSkillModes(data.skillModes ?? {});
       setCustomSkills(data.customSkills);
+      setPersonaSkillIds(data.personaSkillIds ?? {});
       setConnectedSources(data.connectedSources ?? []);
       setConnectedSkills(data.connectedSkills ?? []);
       setDisabledOrgConnectedSkillSourceIds(
@@ -607,6 +684,7 @@ export function SkillsPanel({
           | "customSkills"
           | "skillModes"
           | "disabledOrgConnectedSkillSourceIds"
+          | "personaSkillIds"
         >
       >,
       rollback: () => void,
@@ -628,6 +706,8 @@ export function SkillsPanel({
               disabledOrgConnectedSkillSourceIds:
                 payload.disabledOrgConnectedSkillSourceIds ??
                 current.disabledOrgConnectedSkillSourceIds,
+              personaSkillIds:
+                payload.personaSkillIds ?? current.personaSkillIds,
             };
 
             if (payload.disabledOrgConnectedSkillSourceIds !== undefined) {
@@ -694,15 +774,12 @@ export function SkillsPanel({
     });
   };
 
-  const handleSkillModeChange = async (
+  const applySkillMode = async (
     skillId: string,
     kind: SkillKind,
     mode: SkillInvocationMode,
+    releasePairings: boolean,
   ) => {
-    if (pendingToggles.has(skillId)) {
-      return;
-    }
-
     const previousModes = skillModes;
     const previousEnabled = enabledSkillIds;
     const previousCustom = customSkills;
@@ -715,21 +792,31 @@ export function SkillsPanel({
       customSkills,
     });
 
+    const previousPairings = personaSkillIds;
+    const nextPairings = releasePairings
+      ? releaseSkill(skillId, personaSkillIds)
+      : personaSkillIds;
+
     setPendingToggles((current) => new Set(current).add(skillId));
     setSkillModes(next.skillModes);
     setEnabledSkillIds(next.enabledSkillIds);
     setCustomSkills(next.customSkills);
+    if (releasePairings) {
+      setPersonaSkillIds(nextPairings);
+    }
 
     await runPersist(
       {
         skillModes: next.skillModes,
         enabledSkillIds: next.enabledSkillIds,
         ...(kind === "custom" ? { customSkills: next.customSkills } : {}),
+        ...(releasePairings ? { personaSkillIds: nextPairings } : {}),
       },
       () => {
         setSkillModes(previousModes);
         setEnabledSkillIds(previousEnabled);
         setCustomSkills(previousCustom);
+        setPersonaSkillIds(previousPairings);
       },
     );
 
@@ -742,16 +829,81 @@ export function SkillsPanel({
     });
   };
 
+  const handleSkillModeChange = async (
+    skillId: string,
+    kind: SkillKind,
+    mode: SkillInvocationMode,
+  ) => {
+    if (pendingToggles.has(skillId)) {
+      return;
+    }
+
+    // Off is the one mode a paired skill cannot hold: a persona carrying it
+    // would inject nothing. Ask, then release.
+    const carriers =
+      mode === "off"
+        ? personasCarrying(skillId, personaSkillIds, data?.personas ?? [])
+        : [];
+    if (carriers.length > 0) {
+      const skillName =
+        customSkills.find((item) => item.id === skillId)?.name ??
+        data?.catalog.find((item) => item.id === skillId)?.name ??
+        "this skill";
+      setPendingDestructive({
+        confirmLabel: "Switch off",
+        description: `${carriers.map((persona) => persona.name).join(", ")} ${carriers.length === 1 ? "carries" : "carry"} ${skillName}. Switching it off removes ${carriers.length === 1 ? "that pairing" : "those pairings"}.`,
+        onConfirm: () => {
+          void applySkillMode(skillId, kind, mode, true);
+        },
+        title: `Switch off ${skillName}?`,
+      });
+      return;
+    }
+
+    await applySkillMode(skillId, kind, mode, false);
+  };
+
   const handleDeleteCustomSkill = async (skillId: string) => {
     const skill = customSkills.find((item) => item.id === skillId);
     if (skill?.managedByOrg) {
       return;
     }
     const previous = customSkills;
+    const previousPairings = personaSkillIds;
     const next = customSkills.filter((item) => item.id !== skillId);
+    // The personas carrying it stay; they release this skill.
+    const nextPairings = releaseSkill(skillId, personaSkillIds);
     setCustomSkills(next);
-    await runPersist({ customSkills: next }, () => setCustomSkills(previous));
+    setPersonaSkillIds(nextPairings);
+    await runPersist(
+      { customSkills: next, personaSkillIds: nextPairings },
+      () => {
+        setCustomSkills(previous);
+        setPersonaSkillIds(previousPairings);
+      },
+    );
     void globalMutate("slashable-skills");
+  };
+
+  /** Clone lands as a personal skill this user owns, whatever it came from. */
+  const handleCloneCustomSkill = (skill: CustomSkill) => {
+    const personal = customSkills.filter((item) => !item.managedByOrg);
+    if (personal.length >= 32) {
+      toast({
+        type: "error",
+        description: "Limit reached — delete a custom skill before cloning.",
+      });
+      return;
+    }
+    setEditingSkill(null);
+    setSeedSkill({
+      id: crypto.randomUUID(),
+      name: `${skill.name} copy`,
+      content: skill.content,
+      updatedAt: new Date().toISOString(),
+      enabled: true,
+    });
+    setEditorOpen(true);
   };
 
   const handleSaveCustomSkill = async (name: string, content: string) => {
@@ -783,6 +935,7 @@ export function SkillsPanel({
     await runPersist({ customSkills: next }, () => setCustomSkills(previous));
     void globalMutate("slashable-skills");
     setEditingSkill(null);
+    setSeedSkill(null);
     setEditorOpen(false);
   };
 
@@ -978,6 +1131,7 @@ export function SkillsPanel({
 
   const openCustomSkillEditor = () => {
     setEditingSkill(null);
+    setSeedSkill(null);
     setEditorOpen(true);
   };
 
@@ -1001,14 +1155,21 @@ export function SkillsPanel({
   if (editorOpen) {
     return (
       <CustomSkillEditor
-        initialContent={editingSkill?.content ?? ""}
-        initialName={editingSkill?.name ?? ""}
+        initialContent={editingSkill?.content ?? seedSkill?.content ?? ""}
+        initialName={editingSkill?.name ?? seedSkill?.name ?? ""}
         onCancel={() => {
           setEditorOpen(false);
           setEditingSkill(null);
+          setSeedSkill(null);
         }}
         onSave={handleSaveCustomSkill}
-        title={editingSkill ? "Edit custom skill" : "New custom skill"}
+        title={
+          editingSkill
+            ? "Edit custom skill"
+            : seedSkill
+              ? "Clone custom skill"
+              : "New custom skill"
+        }
       />
     );
   }
@@ -1189,44 +1350,71 @@ export function SkillsPanel({
               {customSkills.map((skill) => (
                 <SkillRow
                   actions={
-                    skill.managedByOrg ? undefined : (
-                      <>
-                        <Button
-                          aria-label={`Edit ${skill.name}`}
-                          className="size-7"
-                          onClick={() => {
-                            setEditingSkill(skill);
-                            setEditorOpen(true);
-                          }}
-                          size="icon"
-                          type="button"
-                          variant="ghost"
-                        >
-                          <Pencil className="size-3.5" />
-                        </Button>
-                        <Button
-                          aria-label={`Delete ${skill.name}`}
-                          className="size-7 text-muted-foreground hover:text-red-500 dark:hover:text-red-400"
-                          onClick={() => {
-                            setPendingDestructive({
-                              confirmLabel: "Delete",
-                              description:
-                                "This permanently deletes the custom skill.",
-                              onConfirm: () =>
-                                handleDeleteCustomSkill(skill.id),
-                              title: `Delete ${skill.name}?`,
-                            });
-                          }}
-                          size="icon"
-                          type="button"
-                          variant="ghost"
-                        >
-                          <Trash2 className="size-3.5" />
-                        </Button>
-                      </>
-                    )
+                    <>
+                      <Button
+                        aria-label={`Clone ${skill.name}`}
+                        className="size-7"
+                        onClick={() => {
+                          handleCloneCustomSkill(skill);
+                        }}
+                        size="icon"
+                        type="button"
+                        variant="ghost"
+                      >
+                        <Copy className="size-3.5" />
+                      </Button>
+                      {skill.managedByOrg ? null : (
+                        <>
+                          <Button
+                            aria-label={`Edit ${skill.name}`}
+                            className="size-7"
+                            onClick={() => {
+                              setSeedSkill(null);
+                              setEditingSkill(skill);
+                              setEditorOpen(true);
+                            }}
+                            size="icon"
+                            type="button"
+                            variant="ghost"
+                          >
+                            <Pencil className="size-3.5" />
+                          </Button>
+                          <Button
+                            aria-label={`Delete ${skill.name}`}
+                            className="size-7 text-muted-foreground hover:text-red-500 dark:hover:text-red-400"
+                            onClick={() => {
+                              const carriers = personasCarrying(
+                                skill.id,
+                                personaSkillIds,
+                                data?.personas ?? [],
+                              );
+                              setPendingDestructive({
+                                confirmLabel: "Delete",
+                                description:
+                                  carriers.length > 0
+                                    ? `This permanently deletes the custom skill. ${carriers.map((persona) => persona.name).join(", ")} ${carriers.length === 1 ? "releases" : "release"} it and ${carriers.length === 1 ? "stays" : "stay"}.`
+                                    : "This permanently deletes the custom skill.",
+                                onConfirm: () =>
+                                  handleDeleteCustomSkill(skill.id),
+                                title: `Delete ${skill.name}?`,
+                              });
+                            }}
+                            size="icon"
+                            type="button"
+                            variant="ghost"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        </>
+                      )}
+                    </>
                   }
                   author={customSkillAuthor(skill)}
+                  carriedBy={personasCarrying(
+                    skill.id,
+                    personaSkillIds,
+                    data?.personas ?? [],
+                  )}
                   key={skill.id}
                   mode={resolveSkillMode({
                     skillId: skill.id,

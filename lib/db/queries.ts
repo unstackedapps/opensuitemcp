@@ -797,6 +797,7 @@ export async function upsertUserSettings({
   defaultPersonaId,
   hidePersonaPicker,
   customPersonas,
+  personaSkillIds,
 }: {
   userId: string;
   googleApiKey?: string | null;
@@ -828,6 +829,7 @@ export async function upsertUserSettings({
   defaultPersonaId?: string | null;
   hidePersonaPicker?: boolean | null;
   customPersonas?: CustomPersona[] | null;
+  personaSkillIds?: Record<string, string[]> | null;
 }): Promise<UserSettings> {
   try {
     const now = new Date();
@@ -933,6 +935,10 @@ export async function upsertUserSettings({
             customPersonas !== undefined
               ? (customPersonas ?? [])
               : (existing.customPersonas ?? []),
+          personaSkillIds:
+            personaSkillIds !== undefined
+              ? (personaSkillIds ?? {})
+              : (existing.personaSkillIds ?? {}),
           updatedAt: now,
         })
         .where(eq(userSettings.userId, userId))
@@ -973,6 +979,7 @@ export async function upsertUserSettings({
         defaultPersonaId: defaultPersonaId ?? null,
         hidePersonaPicker: hidePersonaPicker ?? false,
         customPersonas: customPersonas ?? [],
+        personaSkillIds: personaSkillIds ?? {},
         createdAt: now,
         updatedAt: now,
       })
