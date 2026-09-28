@@ -3,7 +3,6 @@
 import {
   Blocks,
   ChevronDown,
-  Copy,
   ExternalLink,
   Eye,
   EyeOff,
@@ -19,6 +18,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import { ConfirmDestructiveDialog } from "@/components/confirm-destructive-dialog";
+import { CloneIcon } from "@/components/icons";
 import { Response } from "@/components/message-elements/response";
 import { OnboardingPanelSkeleton } from "@/components/onboarding/onboarding-panel-skeleton";
 import { OnboardingStepProse } from "@/components/onboarding/onboarding-step-prose";
@@ -528,7 +528,7 @@ function CustomSkillEditor({
             </div>
           </div>
           {showPreview ? (
-            <div className="min-h-64 flex-1 overflow-y-auto rounded-md border border-border/60 bg-muted/30 p-3 md:min-h-80">
+            <div className="h-64 overflow-y-auto rounded-md border border-border/60 bg-muted/30 p-3 text-sm md:h-80">
               <Response>{content}</Response>
             </div>
           ) : (
@@ -563,6 +563,8 @@ type PendingDestructive = {
   title: string;
   description: string;
   confirmLabel: string;
+  /** Red is for what cannot be undone; a confirm that creates uses default. */
+  variant?: "destructive" | "default";
   onConfirm: () => void | Promise<void>;
 };
 
@@ -886,6 +888,20 @@ export function SkillsPanel({
   };
 
   /** Clone lands as a personal skill this user owns, whatever it came from. */
+  const openCloneCustomSkill = (skill: CustomSkill) => {
+    setPendingDestructive({
+      confirmLabel: "Clone",
+      variant: "default",
+      description: skill.managedByOrg
+        ? `${skill.name} is published by your organization. The copy is yours to edit, and stops following the original.`
+        : `Copies ${skill.name} into a skill you own, at Auto.`,
+      onConfirm: () => {
+        handleCloneCustomSkill(skill);
+      },
+      title: `Clone ${skill.name}?`,
+    });
+  };
+
   const handleCloneCustomSkill = (skill: CustomSkill) => {
     const personal = customSkills.filter((item) => !item.managedByOrg);
     if (personal.length >= 32) {
@@ -1273,6 +1289,11 @@ export function SkillsPanel({
             {oracleCatalog.map((skill) => (
               <SkillRow
                 author={skill.author}
+                carriedBy={personasCarrying(
+                  skill.id,
+                  personaSkillIds,
+                  data?.personas ?? [],
+                )}
                 description={skill.description}
                 disabled={skill.alwaysOn}
                 key={skill.id}
@@ -1306,6 +1327,11 @@ export function SkillsPanel({
             {communityCatalog.map((skill) => (
               <SkillRow
                 author={skill.author}
+                carriedBy={personasCarrying(
+                  skill.id,
+                  personaSkillIds,
+                  data?.personas ?? [],
+                )}
                 description={skill.description}
                 key={skill.id}
                 mode={resolveSkillMode({
@@ -1355,13 +1381,13 @@ export function SkillsPanel({
                         aria-label={`Clone ${skill.name}`}
                         className="size-7"
                         onClick={() => {
-                          handleCloneCustomSkill(skill);
+                          openCloneCustomSkill(skill);
                         }}
                         size="icon"
                         type="button"
                         variant="ghost"
                       >
-                        <Copy className="size-3.5" />
+                        <CloneIcon size={14} />
                       </Button>
                       {skill.managedByOrg ? null : (
                         <>
@@ -1613,6 +1639,11 @@ export function SkillsPanel({
                             {skillsForSource.map((skill) => (
                               <SkillRow
                                 author={source.label}
+                                carriedBy={personasCarrying(
+                                  skill.id,
+                                  personaSkillIds,
+                                  data?.personas ?? [],
+                                )}
                                 description={
                                   skill.slug
                                     ? `/${skill.slug} — ${skill.description}`
@@ -1709,6 +1740,7 @@ export function SkillsPanel({
           pendingDestructive?.description ?? "This action cannot be undone."
         }
         onConfirm={() => pendingDestructive?.onConfirm()}
+        variant={pendingDestructive?.variant}
         onOpenChange={(open) => {
           if (!open) {
             setPendingDestructive(null);

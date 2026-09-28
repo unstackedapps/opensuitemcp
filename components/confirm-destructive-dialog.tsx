@@ -22,6 +22,8 @@ type ConfirmDestructiveDialogProps = {
   confirmLabel?: string;
   cancelLabel?: string;
   actionClassName?: string;
+  /** Red is for what cannot be undone; a confirm that creates uses default. */
+  variant?: "destructive" | "default";
   onConfirm: () => void | Promise<void>;
 };
 
@@ -33,6 +35,7 @@ export function ConfirmDestructiveDialog({
   confirmLabel = "Delete",
   cancelLabel = "Cancel",
   actionClassName,
+  variant = "destructive",
   onConfirm,
 }: ConfirmDestructiveDialogProps) {
   const [busy, setBusy] = useState(false);
@@ -71,10 +74,7 @@ export function ConfirmDestructiveDialog({
             {cancelLabel}
           </AlertDialogCancel>
           <AlertDialogAction
-            className={cn(
-              buttonVariants({ variant: "destructive" }),
-              actionClassName,
-            )}
+            className={cn(buttonVariants({ variant }), actionClassName)}
             disabled={busy}
             onClick={(event) => {
               event.preventDefault();

@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  Copy,
   Eye,
   EyeOff,
   Loader2,
@@ -22,6 +21,7 @@ import {
 } from "react";
 import useSWR from "swr";
 import { ConfirmDestructiveDialog } from "@/components/confirm-destructive-dialog";
+import { CloneIcon } from "@/components/icons";
 import { Response } from "@/components/message-elements/response";
 import { OnboardingPanelSkeleton } from "@/components/onboarding/onboarding-panel-skeleton";
 import { PersonaDetailsLink } from "@/components/persona-details-dialog";
@@ -243,6 +243,10 @@ export function PersonasPanel({
   const [startingInterview, setStartingInterview] = useState(false);
   const [pendingDeletePersona, setPendingDeletePersona] =
     useState<CustomPersona | null>(null);
+  const [pendingClonePersona, setPendingClonePersona] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!data) {
@@ -601,13 +605,16 @@ export function PersonasPanel({
                             className="hover:bg-foreground/10 dark:hover:bg-foreground/15"
                             disabled={saving || customPersonas.length >= 32}
                             onClick={() => {
-                              void clonePersona(persona.id, persona.name);
+                              setPendingClonePersona({
+                                id: persona.id,
+                                name: persona.name,
+                              });
                             }}
                             size="icon"
                             type="button"
                             variant="ghost"
                           >
-                            <Copy className="size-4" />
+                            <CloneIcon size={16} />
                           </Button>
                         </>
                       )
@@ -690,13 +697,16 @@ export function PersonasPanel({
                                 className="hover:bg-foreground/10 dark:hover:bg-foreground/15"
                                 disabled={saving || customPersonas.length >= 32}
                                 onClick={() => {
-                                  void clonePersona(persona.id, persona.name);
+                                  setPendingClonePersona({
+                                    id: persona.id,
+                                    name: persona.name,
+                                  });
                                 }}
                                 size="icon"
                                 type="button"
                                 variant="ghost"
                               >
-                                <Copy className="size-4" />
+                                <CloneIcon size={16} />
                               </Button>
                               <Button
                                 aria-label={`Delete ${persona.name}`}
@@ -803,19 +813,35 @@ export function PersonasPanel({
         }
       />
       <ConfirmDestructiveDialog
-        description="This permanently deletes the custom persona."
+        description={(() => {
+          const carried = pendingDeletePersona
+            ? (personaSkillIds[pendingDeletePersona.id]?.length ?? 0)
+            : 0;
+          return carried > 0
+            ? `This permanently deletes the custom persona. The ${carried === 1 ? "skill it carries stays" : `${carried} skills it carries stay`} in your library.`
+            : "This permanently deletes the custom persona.";
+        })()}
         onConfirm={() => {
           if (!pendingDeletePersona) {
             return;
           }
-          const previous = customPersonas;
+          const previousPersonas = customPersonas;
+          const previousPairings = personaSkillIds;
           const next = customPersonas.filter(
             (persona) => persona.id !== pendingDeletePersona.id,
           );
+          // The pairing goes with the persona; the skills themselves stay.
+          const nextPairings = { ...personaSkillIds };
+          delete nextPairings[pendingDeletePersona.id];
           setCustomPersonas(next);
-          void runPersist({ customPersonas: next }, () => {
-            setCustomPersonas(previous);
-          });
+          setPersonaSkillIds(nextPairings);
+          void runPersist(
+            { customPersonas: next, personaSkillIds: nextPairings },
+            () => {
+              setCustomPersonas(previousPersonas);
+              setPersonaSkillIds(previousPairings);
+            },
+          );
         }}
         onOpenChange={(open) => {
           if (!open) {
@@ -828,6 +854,35 @@ export function PersonasPanel({
             ? `Delete ${pendingDeletePersona.name}?`
             : "Delete persona?"
         }
+      />
+      <ConfirmDestructiveDialog
+        confirmLabel="Clone"
+        description={(() => {
+          const carried = pendingClonePersona
+            ? (personaSkillIds[pendingClonePersona.id]?.length ?? 0)
+            : 0;
+          return carried > 0
+            ? `Copies the instructions and the ${carried === 1 ? "skill it carries" : `${carried} skills it carries`} into a persona you own.`
+            : "Copies the instructions into a persona you own.";
+        })()}
+        onConfirm={() => {
+          if (!pendingClonePersona) {
+            return;
+          }
+          void clonePersona(pendingClonePersona.id, pendingClonePersona.name);
+        }}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingClonePersona(null);
+          }
+        }}
+        open={pendingClonePersona !== null}
+        title={
+          pendingClonePersona
+            ? `Clone ${pendingClonePersona.name}?`
+            : "Clone persona?"
+        }
+        variant="default"
       />
       {!embedded && portal ? (
         <DialogFooter className="flex-col gap-2 border-t border-border/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
@@ -1060,7 +1115,7 @@ function PersonaEditorDialog({
                   </Button>
                 </div>
                 {showPreview ? (
-                  <div className="min-h-64 flex-1 overflow-y-auto rounded-md border border-border/60 bg-muted/30 p-3 md:min-h-80">
+                  <div className="h-64 overflow-y-auto rounded-md border border-border/60 bg-muted/30 p-3 text-sm md:h-80">
                     <Response>{content}</Response>
                   </div>
                 ) : (
@@ -1088,7 +1143,7 @@ function PersonaEditorDialog({
                   <div className="relative">
                     <Search className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-3 size-4 text-muted-foreground" />
                     <Input
-                      className="h-9 pl-10"
+                      className="h-9 pl-10 md:pl-10"
                       id={searchId}
                       onChange={(event) => {
                         setQuery(event.target.value);
