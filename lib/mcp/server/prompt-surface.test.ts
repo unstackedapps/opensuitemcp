@@ -6,6 +6,7 @@ import {
   builtinPromptMessages,
   NETSUITE_PROMPT_PREFIX,
   netsuitePromptName,
+  netsuitePromptNames,
   netsuitePromptToMcp,
 } from "./prompt-surface";
 
@@ -94,10 +95,74 @@ describe("a NetSuite Companion prompt becomes an MCP prompt", () => {
     assert.ok(mapped.arguments.every((entry) => entry.name.length > 0));
   });
 
-  it("still names a prompt whose id has nothing sluggable", () => {
+  it("names from the title, not the id", () => {
+    // Found live: the Companion library numbers its entries 1..100, so slugging
+    // the id produced a menu of netsuite_1 through netsuite_100.
     assert.equal(
-      netsuitePromptName({ ...prompt, id: "///" }),
+      netsuitePromptName(prompt),
+      `${NETSUITE_PROMPT_PREFIX}vendor_reconciliation`,
+    );
+  });
+
+  it("still names a prompt whose name and id have nothing sluggable", () => {
+    assert.equal(
+      netsuitePromptName({ ...prompt, name: "///", id: "///" }),
       `${NETSUITE_PROMPT_PREFIX}prompt`,
+    );
+  });
+});
+
+describe("naming a whole library", () => {
+  const entry = (id: string, name: string): NetSuitePrompt => ({
+    id,
+    name,
+    category: "Financial",
+    roles: [],
+    industries: [],
+    prompt: "Do the thing.",
+  });
+
+  it("gives every entry a distinct name", () => {
+    const prompts = [
+      entry("1", "Current Period Financial Overview"),
+      entry("42", "Current Period Financial Overview"),
+      entry("7", "Cash Flow Detail"),
+    ];
+    const names = netsuitePromptNames(prompts, new Set());
+    assert.equal(names.size, 3);
+    assert.equal(new Set(names.values()).size, 3);
+  });
+
+  it("keeps both entries that share a title, rather than dropping one", () => {
+    // The live library ships two called "Current Period Financial Overview";
+    // skipping the second made a prompt visible in NetSuite unpickable here.
+    const prompts = [
+      entry("1", "Current Period Financial Overview"),
+      entry("42", "Current Period Financial Overview"),
+    ];
+    const names = netsuitePromptNames(prompts, new Set());
+    assert.ok(names.has("1"));
+    assert.ok(names.has("42"));
+    assert.notEqual(names.get("1"), names.get("42"));
+    assert.match(names.get("42") as string, /_42$/);
+  });
+
+  it("never takes a name a built-in already has", () => {
+    const taken = new Set(BUILTIN_MCP_PROMPTS.map((p) => p.name));
+    const names = netsuitePromptNames(
+      [entry("1", "Start a NetSuite task")],
+      taken,
+    );
+    for (const name of names.values()) {
+      assert.ok(!taken.has(name));
+    }
+  });
+
+  it("is stable, so a name from the list still resolves on get", () => {
+    const prompts = [entry("1", "A"), entry("2", "A"), entry("3", "B")];
+    assert.deepEqual(
+      [...netsuitePromptNames(prompts, new Set()).entries()],
+      [...netsuitePromptNames(prompts, new Set()).entries()],
     );
   });
 });

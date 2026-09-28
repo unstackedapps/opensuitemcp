@@ -134,6 +134,63 @@ describe("frontmatter", () => {
     assert.equal(parsed.description, "Tie vendor statements to payables.");
   });
 
+  it("reads a folded description, which is how a long one is written", () => {
+    // Found live: every Connected skill described itself to an agent as ">".
+    const parsed = parseSkillFrontmatter(
+      [
+        "---",
+        "name: ponytail-audit",
+        "description: >",
+        "  Scan the whole tree instead of a diff.",
+        "  Rank findings biggest cut first.",
+        "---",
+        "",
+        "# Body",
+      ].join("\n"),
+    );
+    assert.equal(parsed.name, "ponytail-audit");
+    assert.equal(
+      parsed.description,
+      "Scan the whole tree instead of a diff. Rank findings biggest cut first.",
+    );
+  });
+
+  it("reads a literal block, keeping its line breaks", () => {
+    const parsed = parseSkillFrontmatter(
+      ["---", "description: |", "  One.", "  Two.", "---", ""].join("\n"),
+    );
+    assert.equal(parsed.description, "One.\nTwo.");
+  });
+
+  it("reads the chomping forms too", () => {
+    for (const marker of [">-", ">+", "|-", "|+"]) {
+      const parsed = parseSkillFrontmatter(
+        ["---", `description: ${marker}`, "  Kept.", "---", ""].join("\n"),
+      );
+      assert.equal(parsed.description, "Kept.", marker);
+    }
+  });
+
+  it("still reads a plain one-line value", () => {
+    const parsed = parseSkillFrontmatter(
+      ["---", "name: Plain", 'description: "Quoted value."', "---", ""].join(
+        "\n",
+      ),
+    );
+    assert.equal(parsed.name, "Plain");
+    assert.equal(parsed.description, "Quoted value.");
+  });
+
+  it("does not run a block past the next key", () => {
+    const parsed = parseSkillFrontmatter(
+      ["---", "description: >", "  Mine.", "name: Theirs", "---", ""].join(
+        "\n",
+      ),
+    );
+    assert.equal(parsed.description, "Mine.");
+    assert.equal(parsed.name, "Theirs");
+  });
+
   it("is left alone when the content already has some", () => {
     const original = "---\nname: Kept\n---\n\n# Body";
     assert.equal(

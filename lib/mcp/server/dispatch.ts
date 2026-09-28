@@ -7,7 +7,7 @@ import {
   BUILTIN_MCP_PROMPTS,
   builtinPromptMessages,
   NETSUITE_PROMPT_PREFIX,
-  netsuitePromptName,
+  netsuitePromptNames,
   netsuitePromptToMcp,
 } from "./prompt-surface";
 import {
@@ -254,18 +254,15 @@ const MCP_CAPABILITIES = {
  */
 async function listPrompts(principal: McpPrincipal) {
   const netsuitePrompts = await loadNetSuitePromptsOrNone(principal);
-  const seen = new Set(BUILTIN_MCP_PROMPTS.map((prompt) => prompt.name));
-  const published: ReturnType<typeof netsuitePromptToMcp>[] = [];
-  for (const prompt of netsuitePrompts) {
-    const mapped = netsuitePromptToMcp(prompt);
-    // Two library entries can slug to one name; the first wins rather than
-    // shadowing, so a name always resolves back to one prompt.
-    if (seen.has(mapped.name)) {
-      continue;
-    }
-    seen.add(mapped.name);
-    published.push(mapped);
-  }
+  const names = netsuitePromptNames(
+    netsuitePrompts,
+    new Set(BUILTIN_MCP_PROMPTS.map((prompt) => prompt.name)),
+  );
+  const published = netsuitePrompts
+    .filter((prompt) => names.has(prompt.id))
+    .map((prompt) =>
+      netsuitePromptToMcp(prompt, names.get(prompt.id) as string),
+    );
 
   return {
     prompts: [...BUILTIN_MCP_PROMPTS, ...published],
@@ -310,7 +307,13 @@ async function getPrompt(
 
   if (name.startsWith(NETSUITE_PROMPT_PREFIX)) {
     const prompts = await loadNetSuitePromptsOrNone(principal);
-    const match = prompts.find((prompt) => netsuitePromptName(prompt) === name);
+    // Resolved through the same naming pass that built the list, so a
+    // disambiguated name still finds its prompt.
+    const names = netsuitePromptNames(
+      prompts,
+      new Set(BUILTIN_MCP_PROMPTS.map((entry) => entry.name)),
+    );
+    const match = prompts.find((prompt) => names.get(prompt.id) === name);
     if (match) {
       // A client may send a number or a boolean for an argument; the filler
       // substitutes text, so anything else is stringified rather than dropped.
@@ -322,7 +325,7 @@ async function getPrompt(
       }
       const filled = fillPrompt(match.prompt, values);
       return ok(id, {
-        description: netsuitePromptToMcp(match).description,
+        description: netsuitePromptToMcp(match, name).description,
         messages: [
           {
             role: "user",
