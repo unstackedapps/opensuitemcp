@@ -8,9 +8,7 @@ Source-available **NetSuite MCP client** — chat UI for NetSuite’s AI Connect
 
 Bring your own LLM keys (**Google Gemini**, **Anthropic Claude**, **OpenAI**, or an **OpenAI-compatible** endpoint). Self-host for internal use. Commercial rights reserved by [Unstacked Apps, LLC](https://www.unstackedapps.com/).
 
-**Star this repo** if it helps your NetSuite team — it makes the project discoverable.
-
-**Current release:** [v5.5.0](https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.5.0) · [Changelog](CHANGELOG.md)
+**Current release:** [v5.6.0](https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.6.0) · [Changelog](CHANGELOG.md)
 
 <img src="./docs/screenshot-chat.png" alt="OpenSuiteMCP chat UI" width="100%" />
 
@@ -20,14 +18,13 @@ _Main chat UI._
 
 - **An agent writes skills** — a connected AI researches in your NetSuite account, then saves what it established with `osmcp_create_skill`, revises it with `osmcp_update_skill`, and removes it with `osmcp_delete_skill`
 - **A persona carries its skills** — pair any skill to any persona, built-in ones included, on the **Skills** tab of the persona editor. They apply whenever that persona is the one working
-- **Clone anything you can read** — a built-in persona, someone else's skill, an organization's skill. The copy is yours to change, and the original is untouched
-- **Skills say who wrote them** — the Skills panel credits an agent-written skill, and an agent may revise only its own
-- **Deleting tells you what it releases** — removing a skill names the personas that carried it; removing a persona leaves its skills in place
+- **Clone anything you can read** — a built-in persona, someone else's skill, an organization's skill, copied into one you own and can edit
+- **Skills say which agent wrote them** — the Skills panel shows the app's name and the product it connected from; an agent may revise or delete only agent-authored skills
+- **Deleting names what it releases** — removing a skill lists the personas that carried it
 - **Markdown renders** — the eye toggle previews a persona or skill as it reads
 - **A skill can be a folder** — `SKILL.md` plus the reference files it points at. Import and download one as a `.zip`; an agent reads a reference only when the instructions call for it
 - **Skills carry a description** — shown in the Skills panel, and what an agent reads when choosing between them
-- **Skills say which agent wrote them** — the app name and the product it connected from, not just “an agent”
-- **Prompts in your AI client's own menu** — four OpenSuiteMCP workflows, plus every prompt your NetSuite Companion library publishes, pickable from `/` in Claude or Cursor
+- **The server publishes prompts, not only tools** — `prompts/list` and `prompts/get`, carrying four OpenSuiteMCP workflows plus every prompt your NetSuite Companion library publishes
 
 ## What’s in 5.5
 
@@ -71,7 +68,7 @@ Open **Personas** from the App Portal or the header badge on a new chat. Pick a 
 
 Built-in personas ship in `.personas/*.md` in this repo. Custom personas are stored per user in Postgres.
 
-Pair skills to a persona on the **Skills** tab of its editor — built-in personas included, where the tab is the only part you can change. A paired skill applies whenever that persona is the one working, even when its mode is **Slash**.
+Pair skills to a persona on the **Skills** tab of its editor — built-in personas included, where the tab is the only part you can change. A paired skill applies whenever that persona is the one working, even when its mode is **Slash command**.
 
 **Clone** copies a persona, including the skills it carries.
 
@@ -81,18 +78,18 @@ Open **Skills** from the App Portal (or the sidebar). Four sources, three invoca
 
 | Source | Default | How it works |
 | --- | --- | --- |
-| **Oracle** | Off | Shared pack; Auto / Slash / Off. Core AI Connector instructions stay Auto. |
-| **Community** | Off | Shared pack from [opensuitemcp-community-skills](https://github.com/unstackedapps/opensuitemcp-community-skills); Auto / Slash / Off |
-| **Connected** | Slash | Paste a public GitHub repo/folder URL; Auto / Slash / Off |
-| **Custom** | Auto | Paste/import custom `SKILL.md`; Auto / Slash / Off |
+| **Oracle** | Disabled | Shared pack; Auto / Slash command / Disabled. Core AI Connector instructions stay Auto. |
+| **Community** | Disabled | Shared pack from [opensuitemcp-community-skills](https://github.com/unstackedapps/opensuitemcp-community-skills); Auto / Slash command / Disabled |
+| **Connected** | Slash command | Paste a public GitHub repo/folder URL; Auto / Slash command / Disabled |
+| **Custom** | Auto | Paste/import custom `SKILL.md`; Auto / Slash command / Disabled |
 
-**Auto** is injected for new messages. **Slash** only when you type `/skill-name`. **Off** is never injected. Composer `/` lists Auto and Slash skills. Modes apply to **new** messages, not as a per-thread override.
+**Auto** is injected into every new message. **Slash command** is injected when you type `/skill-name`. Composer `/` lists Auto and Slash command skills. A mode change applies to every message you send after it, in every thread.
 
-A skill written by a connected agent is credited to the agent and starts as **Slash**, so it applies when you invoke it or when a persona carrying it is working. A skill you add yourself starts as **Auto**.
+A skill written by a connected agent is credited to the agent and starts as **Slash command**, so it applies when you invoke it or when a persona carrying it is working. A skill you add yourself starts as **Auto**.
 
-**Clone** copies any skill — including one your organization published — into one you own. **Import .md or .zip** loads a skill folder; the download button returns it.
+**Clone** on a custom skill row copies it into one you own, including a skill your organization published. Over MCP, `osmcp_clone_skill` copies any of the four sources. **Import .md or .zip** in the skill editor loads a `SKILL.md` and the files beside it; the download button on a custom row returns the folder as a `.zip`.
 
-A skill can carry reference files beside its `SKILL.md`, the way Oracle and Community packs do. Up to 32 files, 64,000 characters each, 256,000 for the whole skill.
+A skill can carry reference files beside its `SKILL.md`, the way Oracle and Community packs do. `SKILL.md` holds up to 32,000 characters. Beside it, up to 32 reference files, 64,000 characters each and 256,000 across them.
 
 Shared packs are **not** vendored in git. Sync them with:
 
@@ -107,7 +104,7 @@ That downloads Oracle’s [agent-skills](https://github.com/oracle/netsuite-suit
 - `https://github.com/mattpocock/skills/tree/main/skills/productivity`
 - `owner/repo` shorthand
 
-Public repos only in v1. Synced files live under `.data/connected-skills/<userId>/…`.
+Public repos only. Synced files live under `.data/connected-skills/<userId>/<sourceId>/` (or `CONNECTED_SKILLS_DIR`).
 
 <img src="./docs/screenshot-skills.png" alt="OpenSuiteMCP Skills panel" width="100%" />
 
@@ -140,17 +137,29 @@ their permissions, their tool policy.
 Create the app under **App Portal → Agent apps → New app**, choosing how it
 connects:
 
-- **OAuth 2.1** — every install is its own OAuth 2.1 authorization server, so the
-  client needs nothing but the URL. It sends you here to approve the app, then
-  refreshes its own token.
+- **OAuth 2.1** — every install is its own OAuth 2.1 authorization server. A client
+  that supports DCR registers itself from the URL alone; for one that does not,
+  tick **Connector needs a client ID and secret** and paste its callback URL.
+  It sends you here to approve the app, then refreshes its own token.
 - **Bearer auth** — a token in a header, for an app with no person behind it, a
   client with no OAuth support, or an install that is not on HTTPS.
 
-Either way the app reaches exactly what you have enabled in OpenSuiteMCP — the
-credential adds no gate of its own — and both appear in one list you can rename,
-re-role and revoke. The server URL derives from your install's public address,
-so self-hosted, sandbox and hosted installs each have their own and none of them
-depend on the others.
+Either way the app reaches what you have enabled in OpenSuiteMCP, and both appear
+in one list you can rename, re-role and revoke. The server URL derives from your
+install's public address, so self-hosted, sandbox and hosted installs each have
+their own.
+
+A connected agent reads and writes the workspace's skills: `osmcp_create_skill`,
+`osmcp_clone_skill`, `osmcp_update_skill`, `osmcp_delete_skill`,
+`osmcp_read_skill_file` and `osmcp_pair_skills`, alongside the persona and chat
+tools. An agent may revise or delete only agent-authored skills; anything else it
+clones first.
+
+The server answers `prompts/list` and `prompts/get` as well as `tools/*`. Four
+built-ins ship — **Start a NetSuite task**, **Choose the right specialist**,
+**Record this session in OpenSuiteMCP**, **Save what you learned as a skill** —
+alongside every prompt your NetSuite Companion library publishes, named
+`netsuite_…`. Claude Desktop does not list them today.
 
 The exact thing to paste, per client, is in
 [Connect an agent](docs/connect-an-agent.md). Protocol and tool reference:
@@ -225,29 +234,27 @@ The exact thing to paste, per client, is in
    pnpm dev
    ```
 
-   Uses webpack by default (Turbopack can fail resolving `@ai-sdk/provider-utils` dynamic imports). Optional: `pnpm dev:turbo` if you want to try Turbopack.
+   Uses webpack (Turbopack can fail resolving `@ai-sdk/provider-utils` dynamic imports). `pnpm dev:turbo` runs Turbopack.
 
    App: [http://localhost:3000](http://localhost:3000)
 
 6. **First sign-in**
-
-   The installer must be an **active NetSuite user** — locked, inactive, or wrong-email accounts cannot complete OIDC sign-in.
 
    **Organization install** — open the app; you are redirected to `/setup`.
 
    - **NetSuite (recommended):** follow [NetSuite OIDC login](docs/netsuite-oidc-login.md), enter account ID and client ID on `/setup`, then sign in with NetSuite. The NetSuite user must be able to log in and their email must match `OSMCP_ROOT_EMAIL`.
    - **Local password (legacy):** use the password form on `/setup` with the same email as `OSMCP_ROOT_EMAIL`.
 
-   After bootstrap you are org **owner**. Open **Admin** from the sidebar (owners and admins) to manage users, providers, NetSuite accounts, and skills (Admin CRUD ships in a later phase; shell is available now).
+   After bootstrap you are org **owner**. Open **Admin** from the sidebar (owners and admins) for **Users**, **LLM Providers**, **Web Search**, **NetSuite**, **Skills**, **Personas** and **Agent apps**.
 
    **Solo install** — open the app; you land on `/login`. Use **NetSuite** to register OIDC and sign in with an account you can access now, or **Email** for a local account. Full NetSuite steps: [NetSuite OIDC login](docs/netsuite-oidc-login.md).
 
-7. **Configure in the App Portal** (sidebar icons open the same portal)
+7. **Configure in the App Portal**
 
    - **AI Provider** — Add Google, Anthropic, OpenAI, or a custom OpenAI-compatible endpoint and API key (stored encrypted)
    - **NetSuite** — Add an account ID, complete Integration / DCR setup, connect
    - **Personas** — Pick a built-in specialist or create a custom persona
-   - **Skills** — Enable Oracle, Community, and/or custom skills; connect GitHub packs for `/` slash skills
+   - **Skills** — Enable Oracle, Community, Connected and custom skills; connect a GitHub repo, or **Import .md or .zip**. Each skill is **Auto**, **Slash command** or **Disabled**
    - **Prompts** — Browse Companion templates when NetSuite + Companion are available
 
 ## Install environment variables
@@ -260,7 +267,7 @@ Written by `pnpm setup:backend` (or set manually for production):
 | `OSMCP_ROOT_EMAIL` | Required | — | Active NetSuite user email; only this user can become org owner on `/setup` |
 | `OSMCP_NS_ACCOUNT_ID` | Optional | Optional | NetSuite account for OIDC app login |
 | `OSMCP_NS_OIDC_CLIENT_ID` | Optional | Optional | OIDC integration client ID for app login |
-| `OSMCP_ENABLE_GUEST` | — | — | Set `true` only for demo/e2e; guest auto-login is off by default |
+| `OSMCP_ENABLE_GUEST` | — | — | Set `true` for guest auto-login in demo/e2e |
 
 Upgrading an existing install with users already in the database: see [docs/org-admin-upgrade.md](docs/org-admin-upgrade.md).
 
@@ -282,7 +289,7 @@ Official references:
 
 ## Usage limits (optional)
 
-Self-host defaults are generous. Override with env vars if needed:
+Override with env vars:
 
 | Variable | Default (OSS) | Purpose |
 | --- | --- | --- |
@@ -290,8 +297,6 @@ Self-host defaults are generous. Override with env vars if needed:
 | `MAX_MESSAGES_PER_DAY_GUEST` | `20` | Guest messages / 24h (only if `OSMCP_ENABLE_GUEST=true`) |
 | `CHAT_BURST_LIMIT_PER_MINUTE` | unset / `0` (off) | Redis burst cap; fail-open if Redis is down |
 | `MCP_CALL_LIMIT_PER_MINUTE` | unset / `0` (off) | Per-API-key MCP tool calls / minute; fail-open if Redis is down |
-
-Guest auto-login is **disabled** unless `OSMCP_ENABLE_GUEST=true`. Normal self-host and org installs require sign-in.
 
 ## Contributors
 
