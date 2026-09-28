@@ -774,7 +774,16 @@ export async function POST(request: Request) {
                 "proposeCustomPersona",
                 "getCurrentConfig",
               ]
-            : [...Object.keys(searchTools), "readWebpage", "getCurrentConfig"];
+            : [
+                ...Object.keys(searchTools),
+                "readWebpage",
+                "getCurrentConfig",
+                // experimental_activeTools is an allowlist: a tool registered
+                // and left out of it is hidden from the model entirely, which
+                // is how a skill's own instructions came to name a tool the
+                // model then reported it did not have.
+                "readSkillFile",
+              ];
           console.log(
             `[NetSuite] Active NetSuite tools (${netsuiteToolNames.length}):`,
             netsuiteToolNames,
