@@ -231,6 +231,60 @@ export function netsuitePromptNames(
   return names;
 }
 
+/**
+ * A prompt's blanks, as arguments a client can render.
+ *
+ * The internal placeholder id is `[current period]#0` — brackets and an
+ * occurrence index — which is addressable but not a name anyone should read
+ * in a form. The argument takes a slug of the label instead, and `placeholder`
+ * carries the id so a filled value gets back to the right blank. Repeats are
+ * numbered, because a prompt asking for two periods needs two fields.
+ */
+export function netsuitePromptArguments(
+  prompt: NetSuitePrompt,
+): Array<McpPromptArgument & { placeholder: string }> {
+  const used = new Map<string, number>();
+  return promptPlaceholders(prompt.prompt).map((placeholder) => {
+    const base = slugify(placeholder.label) || "value";
+    const seen = used.get(base) ?? 0;
+    used.set(base, seen + 1);
+    return {
+      name: seen === 0 ? base : `${base}_${seen + 1}`,
+      description: placeholder.label,
+      placeholder: placeholder.id,
+    };
+  });
+}
+
+/**
+ * The placeholder a supplied argument fills.
+ *
+ * Both the clean name and the raw placeholder id are accepted: a client that
+ * read the id from somewhere else should still work.
+ */
+export function netsuitePromptValues(
+  prompt: NetSuitePrompt,
+  args: Record<string, unknown> | undefined,
+): Record<string, string> {
+  if (!args) {
+    return {};
+  }
+  const byName = new Map(
+    netsuitePromptArguments(prompt).map((entry) => [
+      entry.name,
+      entry.placeholder,
+    ]),
+  );
+  const values: Record<string, string> = {};
+  for (const [key, value] of Object.entries(args)) {
+    if (value === null || value === undefined) {
+      continue;
+    }
+    values[byName.get(key) ?? key] = String(value);
+  }
+  return values;
+}
+
 export function netsuitePromptToMcp(
   prompt: NetSuitePrompt,
   name = netsuitePromptName(prompt),
@@ -250,9 +304,8 @@ export function netsuitePromptToMcp(
       .join(" "),
     // Placeholders are detected, not declared — NetSuite publishes no schema
     // for them — so none is marked required.
-    arguments: promptPlaceholders(prompt.prompt).map((placeholder) => ({
-      name: placeholder.id,
-      description: placeholder.label,
-    })),
+    arguments: netsuitePromptArguments(prompt).map(
+      ({ placeholder: _placeholder, ...argument }) => argument,
+    ),
   };
 }
