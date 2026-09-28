@@ -1468,35 +1468,3 @@ export const CloudIcon = ({ size = 16 }: { size?: number }) => (
     />
   </svg>
 );
-
-/**
- * Clone: two documents, with an arrow running from the first to the second.
- *
- * lucide has no such glyph. Copy is two squares and reads as clipboard copy,
- * which is what this action was mistaken for. The arrow sits above the pages
- * rather than between them because 24 units leaves no legible gap between two
- * documents at a 14px render.
- */
-export const CloneIcon = ({ size = 16 }: { size?: number }) => {
-  return (
-    <svg
-      aria-hidden="true"
-      fill="none"
-      height={size}
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="1.75"
-      viewBox="0 0 24 24"
-      width={size}
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <path d="M7.5 4h8" />
-      <path d="m13 1.5 2.5 2.5-2.5 2.5" />
-      <path d="M4.5 8.5H9L11 10.5V20.5A1.5 1.5 0 0 1 9.5 22h-5A1.5 1.5 0 0 1 3 20.5V10A1.5 1.5 0 0 1 4.5 8.5Z" />
-      <path d="M9 8.5v2h2" />
-      <path d="M14.5 8.5H19L21 10.5V20.5A1.5 1.5 0 0 1 19.5 22h-5A1.5 1.5 0 0 1 13 20.5V10A1.5 1.5 0 0 1 14.5 8.5Z" />
-      <path d="M19 8.5v2h2" />
-    </svg>
-  );
-};

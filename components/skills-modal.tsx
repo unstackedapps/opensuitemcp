@@ -6,6 +6,7 @@ import {
   ExternalLink,
   Eye,
   EyeOff,
+  Files,
   Loader2,
   Pencil,
   Plus,
@@ -18,7 +19,6 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import { ConfirmDestructiveDialog } from "@/components/confirm-destructive-dialog";
-import { CloneIcon } from "@/components/icons";
 import { Response } from "@/components/message-elements/response";
 import { OnboardingPanelSkeleton } from "@/components/onboarding/onboarding-panel-skeleton";
 import { OnboardingStepProse } from "@/components/onboarding/onboarding-step-prose";
@@ -1387,7 +1387,7 @@ export function SkillsPanel({
                         type="button"
                         variant="ghost"
                       >
-                        <CloneIcon size={14} />
+                        <Files className="size-3.5" />
                       </Button>
                       {skill.managedByOrg ? null : (
                         <>
