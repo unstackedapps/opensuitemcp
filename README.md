@@ -16,11 +16,32 @@ Bring your own LLM keys (**Google Gemini**, **Anthropic Claude**, **OpenAI**, or
 
 _Main chat UI._
 
+## What’s in 5.6
+
+- **An agent writes skills** — a connected AI researches in your NetSuite account, then saves what it established with `osmcp_create_skill`, revises it with `osmcp_update_skill`, and removes it with `osmcp_delete_skill`
+- **A persona carries its skills** — pair custom skills to a persona in the persona editor, and they apply whenever that persona is the one working
+- **Skills say who wrote them** — the Skills panel credits an agent-written skill, and an agent may revise only its own
+
+## What’s in 5.5
+
+- **Agent apps sign in over OAuth 2.1** — every install is its own authorization server. Press **New app** under **App Portal → Agent apps**, paste the Server URL into Claude, Cursor, Gemini or ChatGPT, and approve it on a consent screen here
+- **One dialog holds an app** — name, the product it connects from, persona, pinned NetSuite account, note and credential, created and rotated in the same place
+- **A credential can be read again** — a bearer token or an OAuth 2.1 client secret is stored encrypted and revealed on demand; a secret rotates in place while the client id stays
+- **[Connect an agent](docs/connect-an-agent.md)** — steps for Claude, Cursor, Gemini and ChatGPT
+
+## What’s in 5.4
+
+- **An agent writes personas and chooses which one it is** — `osmcp_create_persona`, `osmcp_update_persona`, `osmcp_delete_persona` and `osmcp_set_agent_persona`; `osmcp_whoami` reports the assignment to a fresh connection
+- **NetSuite's prompt library reaches an agent** — `osmcp_list_prompts` and `osmcp_get_prompt` read the Companion SuiteApp's prompts live from the account
+- **An agent's work appears as a thread** — `osmcp_create_chat` and `osmcp_append_chat` write into its owner's sidebar, with reasoning and tool calls rendered as this app renders its own
+- **A long result opens beside the conversation** — NetSuite output and generated scripts take a resizable pane with copy and download (desktop)
+
 ## What’s in 5.3
 
-- **Agent apps** — an external AI signs in with your install's URL, or is handed a bearer token, and works in your NetSuite workspace as you, with your permissions and your tool policy
-- **Agent-readable skills and personas** — an agent can list and read the instruction packs and specialist playbooks this workspace has enabled, and switch the active NetSuite account
-- **Org control** — **Admin → Agent apps** turns it on for an organization and can narrow it to named members
+- **Agent access** — OpenSuiteMCP acts as an MCP server, so an external AI works inside a user's NetSuite workspace as that user
+- **Per-user agent keys** — **App Portal → Agent access** mints keys, shown once and stored as a SHA-256 digest, each pinnable to one NetSuite account
+- **NetSuite tool passthrough** — every allowed NetSuite MCP Standard Tool re-exposed with its JSON Schema forwarded verbatim, plus the `osmcp_*` workspace tools
+- **Org control** — **Admin → Agent access** turns it on for an organization and can narrow it to named members
 
 ## What’s in 5.2
 
@@ -43,6 +64,8 @@ Open **Personas** from the App Portal or the header badge on a new chat. Pick a 
 
 Built-in personas ship in `.personas/*.md` in this repo. Custom personas are stored per user in Postgres.
 
+Pair custom skills to a persona in its editor. A paired skill applies whenever that persona is the one working, even when its mode is **Slash**.
+
 ## Skills
 
 Open **Skills** from the App Portal (or the sidebar). Four sources, three invocation modes:
@@ -55,6 +78,8 @@ Open **Skills** from the App Portal (or the sidebar). Four sources, three invoca
 | **Custom** | Auto | Paste/import custom `SKILL.md`; Auto / Slash / Off |
 
 **Auto** is injected for new messages. **Slash** only when you type `/skill-name`. **Off** is never injected. Composer `/` lists Auto and Slash skills. Modes apply to **new** messages, not as a per-thread override.
+
+A skill written by a connected agent is credited to the agent and starts as **Slash**, so it applies when you invoke it or when a persona carrying it is working.
 
 Shared packs are **not** vendored in git. Sync them with:
 

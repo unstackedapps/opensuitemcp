@@ -149,8 +149,8 @@ A single URL taking `POST`. Setup is in
 | `osmcp_list_netsuite_accounts` | Configured accounts and which is active |
 | `osmcp_list_chats` | The user's chat threads |
 | `osmcp_get_chat` | One chat transcript |
-| `osmcp_list_skills` | Skills from all four sources (Oracle, Community, Connected, Custom) the user has switched on |
-| `osmcp_list_personas` | Available NetSuite specialist personas |
+| `osmcp_list_skills` | Skills from all four sources (Oracle, Community, Connected, Custom) the user has switched on, each with `mode` and `authoredBy` |
+| `osmcp_list_personas` | Available NetSuite specialist personas, each with the `skillIds` it carries |
 | `osmcp_get_skill` | The full instructions of one skill |
 | `osmcp_get_persona` | The full instructions of one persona |
 | `osmcp_set_netsuite_account` | Switch the active NetSuite account |
@@ -184,6 +184,32 @@ recorded as it happened — entries of kind `text`, `reasoning`, or `tool`:
 A recorded call renders with its arguments and result. It is stored as
 `dynamic-tool`, so a call made elsewhere is never rendered as one this install
 made. Reasoning and tool parts belong to an `assistant` message only.
+
+### Persona and skill tools
+
+A persona is a specialist playbook — role, domains, risk posture, approach. A
+skill is the practice that specialist works by. Both are written into the
+user's own library and appear in their Personas and Skills panels.
+
+| Tool | What it does |
+| --- | --- |
+| `osmcp_create_persona` | Write a persona, with `adopt` to become it in the same call |
+| `osmcp_update_persona` | Revise a persona this app wrote |
+| `osmcp_delete_persona` | Remove a persona this app wrote |
+| `osmcp_set_agent_persona` | Assign a persona to this connection, or omit `personaId` to return to Ava |
+| `osmcp_create_skill` | Write a skill, with `mode` and `pairWith` |
+| `osmcp_update_skill` | Revise a skill this app wrote |
+| `osmcp_delete_skill` | Remove a skill this app wrote, detaching it from every persona carrying it |
+
+Three rules govern these:
+
+| Rule | Detail |
+| --- | --- |
+| **An agent revises only its own work** | A persona or skill carries `authoredBy`. One a person wrote, or an organization administrator published, is read-only here; write a new one instead |
+| **A new skill starts at `slash`** | It applies when its owner types `/skill-name`, or when a persona carrying it is working. Pass `mode: "auto"` to apply it to every chat turn |
+| **A persona carries its skills** | Pass `skillIds` on a persona, or `pairWith` on a skill. Those skills are injected for every turn that persona works |
+
+A persona this user has made their default cannot be deleted by an agent.
 
 ### NetSuite tools
 
