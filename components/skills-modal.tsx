@@ -1714,6 +1714,7 @@ export function SkillsPanel({
                     </>
                   }
                   author={customSkillAuthor(skill)}
+                  description={skill.description}
                   files={skill.files}
                   skillId={skill.id}
                   carriedBy={personasCarrying(
