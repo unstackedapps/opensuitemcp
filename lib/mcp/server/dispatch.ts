@@ -4,6 +4,13 @@ import { APP_VERSION } from "@/lib/app-release";
 import { allowMcpCallBurst } from "@/lib/rate-limit";
 import type { McpPrincipal } from "./authenticate";
 import {
+  BUILTIN_MCP_PROMPTS,
+  builtinPromptMessages,
+  NETSUITE_PROMPT_PREFIX,
+  netsuitePromptName,
+  netsuitePromptToMcp,
+} from "./prompt-surface";
+import {
   isHandshakeEraVersion,
   JSON_RPC_INTERNAL_ERROR,
   JSON_RPC_INVALID_PARAMS,
@@ -20,6 +27,7 @@ import {
 import { buildMcpServerInfo } from "./server-info";
 import { buildToolSurface, findTool, toWireTool } from "./tools";
 import { toolSurfaceDigest } from "./tools/digest";
+import { fillPrompt, loadNetSuitePromptsOrNone } from "./tools/prompts";
 import { type McpToolDefinition, toolError } from "./tools/types";
 import { validateToolArgs } from "./tools/validate-args";
 
@@ -113,6 +121,12 @@ export async function dispatchMcpRequest(params: {
       case "tools/call":
         return await callTool(id, request, principal);
 
+      case "prompts/list":
+        return ok(id, await listPrompts(principal));
+
+      case "prompts/get":
+        return await getPrompt(id, request, principal);
+
       default:
         return await notFoundMaybeTool(id, request.method, principal);
     }
@@ -200,7 +214,7 @@ function discoverResult(protocolVersion: McpProtocolVersion, origin: string) {
   return {
     supportedVersions: [...MCP_SUPPORTED_PROTOCOL_VERSIONS],
     protocolVersion,
-    capabilities: { tools: { listChanged: false } },
+    capabilities: MCP_CAPABILITIES,
     serverInfo: buildMcpServerInfo({ origin, version: APP_VERSION }),
     instructions: SERVER_INSTRUCTIONS,
     resultType: "complete",
@@ -214,9 +228,124 @@ function initializeResult(protocolVersion: McpProtocolVersion, origin: string) {
       protocolVersion === MCP_LATEST_PROTOCOL_VERSION
         ? "2025-11-25"
         : protocolVersion,
-    capabilities: { tools: { listChanged: false } },
+    capabilities: MCP_CAPABILITIES,
     serverInfo: buildMcpServerInfo({ origin, version: APP_VERSION }),
     instructions: SERVER_INSTRUCTIONS,
+  };
+}
+
+/**
+ * This server is stateless, so nothing can be pushed. Both listChanged flags
+ * are false and a client re-reads when it chooses; toolsDigest on tools/list
+ * is how a watching agent notices a change without a notification.
+ */
+const MCP_CAPABILITIES = {
+  tools: { listChanged: false },
+  prompts: { listChanged: false },
+} as const;
+
+/**
+ * Prompts a person picks from their client's own menu.
+ *
+ * The built-ins are the workflows this server knows and a model does not; the
+ * rest is whatever the connected NetSuite account publishes in its Companion
+ * library, which is the point — a NetSuite prompt becomes something to choose
+ * in Claude or Cursor rather than something to go and look up.
+ */
+async function listPrompts(principal: McpPrincipal) {
+  const netsuitePrompts = await loadNetSuitePromptsOrNone(principal);
+  const seen = new Set(BUILTIN_MCP_PROMPTS.map((prompt) => prompt.name));
+  const published: ReturnType<typeof netsuitePromptToMcp>[] = [];
+  for (const prompt of netsuitePrompts) {
+    const mapped = netsuitePromptToMcp(prompt);
+    // Two library entries can slug to one name; the first wins rather than
+    // shadowing, so a name always resolves back to one prompt.
+    if (seen.has(mapped.name)) {
+      continue;
+    }
+    seen.add(mapped.name);
+    published.push(mapped);
+  }
+
+  return {
+    prompts: [...BUILTIN_MCP_PROMPTS, ...published],
+    resultType: "complete",
+    ...PRIVATE_CACHE,
+  };
+}
+
+async function getPrompt(
+  id: string | number,
+  request: JsonRpcRequest,
+  principal: McpPrincipal,
+): Promise<DispatchOutcome> {
+  const params = (request.params ?? {}) as {
+    name?: unknown;
+    arguments?: unknown;
+  };
+  const name = typeof params.name === "string" ? params.name.trim() : "";
+  const args =
+    params.arguments && typeof params.arguments === "object"
+      ? (params.arguments as Record<string, unknown>)
+      : undefined;
+
+  if (!name) {
+    return {
+      response: jsonRpcError(
+        id,
+        JSON_RPC_INVALID_PARAMS,
+        "Pass a prompt name.",
+      ),
+      status: 200,
+    };
+  }
+
+  const builtin = BUILTIN_MCP_PROMPTS.find((prompt) => prompt.name === name);
+  if (builtin) {
+    return ok(id, {
+      description: builtin.description,
+      messages: builtinPromptMessages(name, args) ?? [],
+    });
+  }
+
+  if (name.startsWith(NETSUITE_PROMPT_PREFIX)) {
+    const prompts = await loadNetSuitePromptsOrNone(principal);
+    const match = prompts.find((prompt) => netsuitePromptName(prompt) === name);
+    if (match) {
+      // A client may send a number or a boolean for an argument; the filler
+      // substitutes text, so anything else is stringified rather than dropped.
+      const values: Record<string, string> = {};
+      for (const [key, value] of Object.entries(args ?? {})) {
+        if (value !== null && value !== undefined) {
+          values[key] = String(value);
+        }
+      }
+      const filled = fillPrompt(match.prompt, values);
+      return ok(id, {
+        description: netsuitePromptToMcp(match).description,
+        messages: [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text:
+                filled.unfilled.length > 0
+                  ? `${filled.text}\n\nStill to fill: ${filled.unfilled.map((entry) => entry.label).join(", ")}. A value in square brackets is a blank, not text to use as written.`
+                  : filled.text,
+            },
+          },
+        ],
+      });
+    }
+  }
+
+  return {
+    response: jsonRpcError(
+      id,
+      JSON_RPC_INVALID_PARAMS,
+      `No prompt \`${name}\`. Call prompts/list for the names this server publishes.`,
+    ),
+    status: 200,
   };
 }
 

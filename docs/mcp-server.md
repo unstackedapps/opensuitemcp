@@ -138,6 +138,31 @@ A single URL taking `POST`. Setup is in
 
 ---
 
+## Prompts
+
+A tool is something a model decides to call. A prompt is something a person
+picks, and clients render these in their own `/` menu — which is the only place
+a capability of this server is visible to the person using it.
+
+| Prompt | What it does |
+| --- | --- |
+| **Start a NetSuite task** | Confirm identity, adopt the assigned persona and its skills, open a thread, then work |
+| **Choose the right specialist** | Read the personas, judge which fits, switch to it |
+| **Record this session in OpenSuiteMCP** | Write what happened into a thread in the owner's sidebar |
+| **Save what you learned as a skill** | Turn what a session established into a skill, and pair it |
+
+Every prompt the connected NetSuite account publishes in its **Companion
+prompt library** is listed alongside them, named `netsuite_…`, with each
+detected blank as an argument. None is marked required — NetSuite publishes no
+schema for them, so they are detected rather than declared.
+
+`prompts/list` returns the built-in four on their own when no NetSuite account
+is connected, when its authorization has lapsed, or when the prompt-library
+tool is switched off. `osmcp_list_prompts` reports the reason to an agent that
+asks; a list that errored would show the person nothing at all.
+
+---
+
 ## The tool surface
 
 ### Workspace tools

@@ -23,10 +23,12 @@ describe("a skill round-trips through a zip", () => {
     const result = readSkillZip(writeSkillZip(bundle, "ic-je-review"));
     assert.ok(result.ok);
     assert.equal(result.bundle.content, bundle.content);
-    assert.deepEqual(result.bundle.files.map((file) => file.path).sort(), [
-      "references/intake.md",
-      "references/troubleshooting.md",
-    ]);
+    assert.deepEqual(
+      result.bundle.files
+        .map((file) => file.path)
+        .sort((left, right) => left.localeCompare(right)),
+      ["references/intake.md", "references/troubleshooting.md"],
+    );
   });
 
   it("drops the wrapping folder, so reference links still resolve", () => {

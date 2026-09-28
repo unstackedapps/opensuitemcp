@@ -267,3 +267,25 @@ const getPrompt: McpToolDefinition = {
 };
 
 export const promptTools: McpToolDefinition[] = [listPrompts, getPrompt];
+
+/**
+ * The account's prompt library, for `prompts/list`.
+ *
+ * Returns nothing rather than an error when NetSuite is unreachable, the
+ * account is unconnected, or the library tool is switched off: this runs on
+ * connect, and a client that cannot list prompts shows the person nothing at
+ * all. The built-in prompts stand on their own, and osmcp_list_prompts still
+ * reports the reason to an agent that asks.
+ */
+export async function loadNetSuitePromptsOrNone(
+  principal: McpPrincipal,
+): Promise<NetSuitePrompt[]> {
+  try {
+    const outcome = await loadPromptLibrary(principal);
+    return outcome.ok ? outcome.prompts : [];
+  } catch {
+    return [];
+  }
+}
+
+export { fillPrompt } from "@/lib/netsuite/prompt-library";
