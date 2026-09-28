@@ -6,6 +6,7 @@ import { loadNetSuitePassthroughTools } from "./netsuite-passthrough";
 import { personaTools } from "./personas";
 import { promptTools } from "./prompts";
 import { searchTools } from "./search";
+import { skillWriteTools } from "./skills";
 import type { McpToolDefinition } from "./types";
 import { workspaceTools } from "./workspace";
 
@@ -27,6 +28,7 @@ export async function buildToolSurface(
     ...chatWriteTools,
     ...personaTools,
     ...promptTools,
+    ...skillWriteTools,
     ...searchTools,
     ...netsuiteTools,
   ];

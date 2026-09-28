@@ -7,6 +7,7 @@ import {
   isPersonaBuilderId,
   PERSONA_BUILDER_ID,
 } from "./ids";
+import { normalizePairedSkillIds } from "./pairing";
 import type { CustomPersona, PersonaSource } from "./types";
 
 export {
@@ -169,6 +170,7 @@ export function normalizeCustomPersonas(value: unknown): CustomPersona[] {
       typeof record.shortName === "string" ? record.shortName.trim() : "";
     const primaryRoleRaw =
       typeof record.primaryRole === "string" ? record.primaryRole.trim() : "";
+    const pairedSkillIds = normalizePairedSkillIds(record.skillIds);
     out.push({
       id,
       name,
@@ -182,6 +184,7 @@ export function normalizeCustomPersonas(value: unknown): CustomPersona[] {
       ...(record.authoredBy === "agent"
         ? { authoredBy: "agent" as const }
         : {}),
+      ...(pairedSkillIds.length > 0 ? { skillIds: pairedSkillIds } : {}),
     });
   }
   return out;
@@ -311,6 +314,7 @@ export function listPersonasForClient(
   primaryRole: string;
   source: PersonaSource;
   authoredBy?: "agent";
+  skillIds?: string[];
 }> {
   const builtins = listBuiltinPersonas().map((p) => ({
     id: p.id,
@@ -326,6 +330,7 @@ export function listPersonasForClient(
     primaryRole: p.primaryRole ?? "Custom persona",
     source: "custom" as const,
     ...(p.authoredBy === "agent" ? { authoredBy: "agent" as const } : {}),
+    ...(p.skillIds?.length ? { skillIds: p.skillIds } : {}),
   }));
   return [...builtins, ...customs];
 }

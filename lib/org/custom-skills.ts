@@ -2,10 +2,17 @@ import "server-only";
 
 import { and, eq } from "drizzle-orm";
 import type { CustomSkill } from "@/lib/ai/skills/catalog";
+import {
+  isOrgManagedCustomSkillId,
+  ORG_CUSTOM_SKILL_ID_PREFIX,
+} from "@/lib/ai/skills/ids";
 import { db } from "@/lib/db/client";
 import { orgCustomSkill } from "@/lib/db/schema";
 
-export const ORG_CUSTOM_SKILL_ID_PREFIX = "org-custom:";
+export {
+  isOrgManagedCustomSkillId,
+  ORG_CUSTOM_SKILL_ID_PREFIX,
+} from "@/lib/ai/skills/ids";
 
 export type OrgCustomSkillRow = {
   id: string;
@@ -31,10 +38,6 @@ function rowToOrgCustomSkill(
 
 export function orgCustomSkillClientId(rowId: string): string {
   return `${ORG_CUSTOM_SKILL_ID_PREFIX}${rowId}`;
-}
-
-export function isOrgManagedCustomSkillId(id: string): boolean {
-  return id.startsWith(ORG_CUSTOM_SKILL_ID_PREFIX);
 }
 
 export function orgCustomSkillRowIdFromClientId(clientId: string): string {

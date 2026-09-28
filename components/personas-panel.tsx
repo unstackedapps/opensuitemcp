@@ -1,6 +1,13 @@
 "use client";
 
-import { Loader2, Pencil, Plus, Trash2, UserRound } from "lucide-react";
+import {
+  ChevronDown,
+  Loader2,
+  Pencil,
+  Plus,
+  Trash2,
+  UserRound,
+} from "lucide-react";
 import { useSession } from "next-auth/react";
 import {
   type ReactNode,
@@ -24,6 +31,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -52,13 +65,18 @@ type CustomPersona = {
   content: string;
   updatedAt: string;
   authoredBy?: "agent";
+  /** Custom skills this persona brings into a chat turn. */
+  skillIds?: string[];
 };
+
+type PairableSkill = { id: string; name: string };
 
 type SettingsPersonasPayload = {
   defaultPersonaId: string | null;
   hidePersonaPicker: boolean;
   customPersonas: CustomPersona[];
   personas: PersonaListItem[];
+  customSkills: PairableSkill[];
 };
 
 type PersonasPanelProps = {
@@ -80,6 +98,12 @@ async function fetchSettingsPersonas(): Promise<SettingsPersonasPayload> {
       ? data.customPersonas
       : [],
     personas: Array.isArray(data.personas) ? data.personas : [],
+    customSkills: Array.isArray(data.customSkills)
+      ? data.customSkills.map((skill: { id: string; name: string }) => ({
+          id: skill.id,
+          name: skill.name,
+        }))
+      : [],
   };
 }
 
@@ -185,6 +209,7 @@ export function PersonasPanel({
   const [editName, setEditName] = useState("");
   const [editShortName, setEditShortName] = useState("");
   const [editContent, setEditContent] = useState("");
+  const [editSkillIds, setEditSkillIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [startingInterview, setStartingInterview] = useState(false);
   const [pendingDeletePersona, setPendingDeletePersona] =
@@ -477,6 +502,7 @@ export function PersonasPanel({
                                   setEditName(custom.name);
                                   setEditShortName(custom.shortName ?? "");
                                   setEditContent(custom.content);
+                                  setEditSkillIds(custom.skillIds ?? []);
                                 }}
                                 size="icon"
                                 type="button"
@@ -540,6 +566,7 @@ export function PersonasPanel({
               editName.trim().split(/\s+/).at(0) ||
               editName.trim(),
             content: editContent.trim(),
+            skillIds: editSkillIds,
             updatedAt: new Date().toISOString(),
           };
           const exists = customPersonas.some((p) => p.id === editing.id);
@@ -557,6 +584,9 @@ export function PersonasPanel({
         shortName={editShortName}
         content={editContent}
         onContentChange={setEditContent}
+        skillIds={editSkillIds}
+        onSkillIdsChange={setEditSkillIds}
+        availableSkills={data?.customSkills ?? []}
         isNew={
           editing ? !customPersonas.some((p) => p.id === editing.id) : true
         }
@@ -627,6 +657,7 @@ export function PersonasPanel({
                   setEditName("");
                   setEditShortName("");
                   setEditContent("");
+                  setEditSkillIds([]);
                 }}
                 size="sm"
                 type="button"
@@ -658,10 +689,13 @@ type PersonaEditorDialogProps = {
   name: string;
   shortName: string;
   content: string;
+  skillIds: string[];
+  availableSkills: PairableSkill[];
   saving: boolean;
   onNameChange: (value: string) => void;
   onShortNameChange: (value: string) => void;
   onContentChange: (value: string) => void;
+  onSkillIdsChange: (value: string[]) => void;
   onCancel: () => void;
   onSave: () => void;
 };
@@ -672,16 +706,30 @@ function PersonaEditorDialog({
   name,
   shortName,
   content,
+  skillIds,
+  availableSkills,
   saving,
   onNameChange,
   onShortNameChange,
   onContentChange,
+  onSkillIdsChange,
   onCancel,
   onSave,
 }: PersonaEditorDialogProps) {
   const nameId = useId();
   const shortNameId = useId();
   const contentId = useId();
+  const skillsId = useId();
+  const paired = skillIds.filter((skillId) =>
+    availableSkills.some((skill) => skill.id === skillId),
+  );
+  const pairedLabel =
+    paired.length === 0
+      ? "None"
+      : paired.length === 1
+        ? (availableSkills.find((skill) => skill.id === paired[0])?.name ??
+          "1 skill")
+        : `${paired.length} skills`;
 
   return (
     <Dialog
@@ -714,17 +762,65 @@ function PersonaEditorDialog({
               value={name}
             />
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor={shortNameId}>Short name</Label>
-            <Input
-              id={shortNameId}
-              maxLength={40}
-              onChange={(event) => {
-                onShortNameChange(event.target.value);
-              }}
-              placeholder="Shown in sidebar / badge"
-              value={shortName}
-            />
+          <div
+            className={cn(
+              "grid gap-4",
+              availableSkills.length > 0 ? "sm:grid-cols-2" : null,
+            )}
+          >
+            <div className="space-y-1.5">
+              <Label htmlFor={shortNameId}>Short name</Label>
+              <Input
+                id={shortNameId}
+                maxLength={40}
+                onChange={(event) => {
+                  onShortNameChange(event.target.value);
+                }}
+                placeholder="Shown in sidebar / badge"
+                value={shortName}
+              />
+            </div>
+            {availableSkills.length > 0 ? (
+              <div className="space-y-1.5">
+                <Label htmlFor={skillsId}>Skills</Label>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      className="w-full justify-between font-normal"
+                      id={skillsId}
+                      type="button"
+                      variant="outline"
+                    >
+                      <span className="truncate">{pairedLabel}</span>
+                      <ChevronDown className="size-4 shrink-0 opacity-50" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="start"
+                    className="max-h-64 w-(--radix-dropdown-menu-trigger-width) overflow-y-auto"
+                  >
+                    {availableSkills.map((skill) => (
+                      <DropdownMenuCheckboxItem
+                        checked={paired.includes(skill.id)}
+                        key={skill.id}
+                        onCheckedChange={(checked) => {
+                          onSkillIdsChange(
+                            checked
+                              ? [...paired, skill.id].slice(0, 16)
+                              : paired.filter((id) => id !== skill.id),
+                          );
+                        }}
+                        onSelect={(event) => {
+                          event.preventDefault();
+                        }}
+                      >
+                        <span className="truncate">{skill.name}</span>
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            ) : null}
           </div>
           <div className="flex min-h-0 flex-1 flex-col space-y-1.5">
             <Label htmlFor={contentId}>Instructions</Label>
