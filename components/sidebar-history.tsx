@@ -10,6 +10,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import useSWR from "swr";
@@ -471,6 +472,17 @@ export function SidebarHistory({
   const [draggingChatId, setDraggingChatId] = useState<string | null>(null);
   const [draggingGroupId, setDraggingGroupId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  // The panel opens because someone reached for search, so the caret belongs in
+  // the field. After a frame, or the dialog's own focus handling takes it back.
+  useEffect(() => {
+    if (variant !== "panel") {
+      return;
+    }
+    const frame = requestAnimationFrame(() => searchRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [variant]);
 
   useEffect(() => {
     try {
@@ -930,6 +942,7 @@ export function SidebarHistory({
                   data-testid="sidebar-history-search"
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="Search chats and personas"
+                  ref={searchRef}
                   value={query}
                 />
               </div>
