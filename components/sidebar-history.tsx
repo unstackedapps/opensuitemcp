@@ -252,8 +252,6 @@ function ChatGroupSection({
         </span>
       </button>
 
-      {tools}
-
       <button
         className="flex size-5 shrink-0 items-center justify-center rounded text-sidebar-foreground/50 hover:text-sidebar-foreground"
         onClick={() => onNewChatInGroup(group?.id ?? null)}
@@ -265,6 +263,8 @@ function ChatGroupSection({
           {group ? `New chat in ${group.name}` : "New chat"}
         </span>
       </button>
+
+      {tools}
     </div>
   );
 
