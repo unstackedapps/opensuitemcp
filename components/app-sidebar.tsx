@@ -136,7 +136,7 @@ export function AppSidebar({ user }: { user: User | undefined }) {
           {showExpandedChrome ? (
             <SidebarMenu className="min-w-0 flex-1">
               <SidebarMenuItem>
-                <SidebarMenuButton asChild>
+                <SidebarMenuButton asChild className="pl-1">
                   <Link
                     href="/"
                     onClick={(event) => {
