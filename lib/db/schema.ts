@@ -46,6 +46,20 @@ export const user = pgTable("User", {
 
 export type User = InferSelectModel<typeof user>;
 
+export const chatGroup = pgTable("ChatGroup", {
+  id: uuid("id").primaryKey().notNull().defaultRandom(),
+  userId: uuid("userId")
+    .notNull()
+    .references(() => user.id),
+  name: varchar("name", { length: 80 }).notNull(),
+  /** The user's own order. Renaming a group must not move it. */
+  position: integer("position").notNull().default(0),
+  collapsed: boolean("collapsed").notNull().default(false),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+});
+
+export type ChatGroup = InferSelectModel<typeof chatGroup>;
+
 export const chat = pgTable("Chat", {
   id: uuid("id").primaryKey().notNull().defaultRandom(),
   createdAt: timestamp("createdAt").notNull(),
@@ -53,6 +67,10 @@ export const chat = pgTable("Chat", {
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
   /** Set when the owner opens the chat. Null means never opened. */
   lastViewedAt: timestamp("lastViewedAt"),
+  /** Null is Ungrouped. Deleting a group unfiles its chats rather than deleting them. */
+  groupId: uuid("groupId").references(() => chatGroup.id, {
+    onDelete: "set null",
+  }),
   title: text("title").notNull(),
   summary: text("summary"),
   userId: uuid("userId")
