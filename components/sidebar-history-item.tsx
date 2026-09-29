@@ -150,7 +150,7 @@ const PureChatItem = ({
       <SidebarMenuButton
         asChild
         className={cn(
-          "h-7 min-w-0 group-has-data-[sidebar=menu-action]/menu-item:pr-2",
+          "h-7 min-w-0 group-has-data-[sidebar=menu-action]/menu-item:pr-2!",
           tone === "panel"
             ? "hover:bg-muted/50! hover:text-foreground group-hover/menu-item:bg-muted/50! group-hover/menu-item:text-foreground data-[active=true]:bg-muted/70! data-[active=true]:font-medium data-[active=true]:text-foreground"
             : "group-hover/menu-item:bg-sidebar-accent group-hover/menu-item:text-sidebar-accent-foreground",

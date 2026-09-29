@@ -110,6 +110,9 @@ type SidebarContextProps = {
   /** Expanded width in px, dragged on the rail and kept in localStorage. */
   sidebarWidth: number;
   setSidebarWidth: (width: number) => void;
+  /** True while the rail is being dragged. Suppresses the width transition. */
+  isResizing: boolean;
+  setIsResizing: (resizing: boolean) => void;
 };
 
 const SidebarContext = createContext<SidebarContextProps | null>(null);
@@ -148,6 +151,7 @@ const SidebarProvider = forwardRef<
     const [sidebarWidth, setSidebarWidthState] = useState(
       Number.parseInt(SIDEBAR_WIDTH, 10),
     );
+    const [isResizing, setIsResizing] = useState(false);
 
     // Read after mount rather than in the initialiser: the server has no
     // localStorage, and a different first paint would be a hydration mismatch.
@@ -331,6 +335,8 @@ const SidebarProvider = forwardRef<
         revealText,
         sidebarWidth,
         setSidebarWidth,
+        isResizing,
+        setIsResizing,
       }),
       [
         state,
@@ -345,6 +351,7 @@ const SidebarProvider = forwardRef<
         revealText,
         sidebarWidth,
         setSidebarWidth,
+        isResizing,
       ]
     );
 
@@ -394,7 +401,8 @@ const Sidebar = forwardRef<
     },
     ref
   ) => {
-    const { isMobile, state, openMobile, setOpenMobile, peek } = useSidebar();
+    const { isMobile, state, openMobile, setOpenMobile, peek, isResizing } =
+      useSidebar();
     const visuallyExpanded = state === "expanded" || peek;
 
     if (collapsible === "none") {
@@ -465,14 +473,18 @@ const Sidebar = forwardRef<
               ? "w-0 duration-0"
               : state === "collapsed"
                 ? "w-(--sidebar-width-icon) duration-0"
-                : "w-(--sidebar-width) duration-200 ease-linear",
+                : isResizing
+                  ? "w-(--sidebar-width) duration-0"
+                  : "w-(--sidebar-width) duration-200 ease-linear",
             "group-data-[side=right]:rotate-180"
           )}
         />
         <div
           className={cn(
             "fixed inset-y-0 z-10 hidden h-svh overflow-hidden md:flex",
-            "transition-[width,box-shadow] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]",
+            isResizing
+              ? "transition-none"
+              : "transition-[width,box-shadow] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]",
             visuallyExpanded
               ? "w-(--sidebar-width)"
               : "w-(--sidebar-width-icon)",
@@ -548,7 +560,8 @@ SidebarTrigger.displayName = "SidebarTrigger";
 
 const SidebarRail = forwardRef<HTMLButtonElement, ComponentProps<"button">>(
   ({ className, ...props }, ref) => {
-    const { toggleSidebar, setSidebarWidth, state } = useSidebar();
+    const { toggleSidebar, setSidebarWidth, setIsResizing, state } =
+      useSidebar();
     const dragRef = useRef<{ startX: number; moved: boolean } | null>(null);
 
     const onPointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
@@ -558,6 +571,7 @@ const SidebarRail = forwardRef<HTMLButtonElement, ComponentProps<"button">>(
       }
       dragRef.current = { startX: event.clientX, moved: false };
       event.currentTarget.setPointerCapture(event.pointerId);
+      setIsResizing(true);
     };
 
     const onPointerMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
@@ -576,6 +590,7 @@ const SidebarRail = forwardRef<HTMLButtonElement, ComponentProps<"button">>(
     const endDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
       const drag = dragRef.current;
       dragRef.current = null;
+      setIsResizing(false);
       if (event.currentTarget.hasPointerCapture(event.pointerId)) {
         event.currentTarget.releasePointerCapture(event.pointerId);
       }
