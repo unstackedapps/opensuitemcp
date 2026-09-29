@@ -206,13 +206,16 @@ export function Chat({
     personaIdRef.current = personaId;
   }, [personaId]);
 
-  // Opening a chat is viewing it.
+  // Opening a chat is viewing it. The history cache has to be revalidated in
+  // the same breath, or the row keeps its dot until the next full page load.
   useEffect(() => {
     if (isReadonly) {
       return;
     }
-    void markChatViewed(id);
-  }, [id, isReadonly]);
+    void markChatViewed(id).then(() => {
+      mutate(unstable_serialize(getChatHistoryPaginationKey));
+    });
+  }, [id, isReadonly, mutate]);
 
   // Restore session pick or open modal on empty new chats
   useEffect(() => {

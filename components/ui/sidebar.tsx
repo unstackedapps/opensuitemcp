@@ -438,7 +438,9 @@ const Sidebar = forwardRef<
                     ? "w-(--sidebar-width)"
                     : "w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]"
                 )
-              : "group-data-[side=left]:border-r group-data-[side=right]:border-l",
+              : visuallyExpanded
+                ? "group-data-[side=left]:border-r group-data-[side=right]:border-l"
+                : "",
             peek &&
               state === "collapsed" &&
               "border-r border-sidebar-border shadow-lg",
