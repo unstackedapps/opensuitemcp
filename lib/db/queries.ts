@@ -926,6 +926,44 @@ export async function deleteChatGroup({
   }
 }
 
+/** Writes the whole order in one transaction: a half-applied reorder would
+ * leave two groups claiming the same position and the list flipping between
+ * them on reload. Ids that are not this user's are ignored. */
+export async function reorderChatGroups({
+  userId,
+  ids,
+}: {
+  userId: string;
+  ids: string[];
+}) {
+  try {
+    await db.transaction(async (tx) => {
+      const owned = await tx
+        .select({ id: chatGroup.id })
+        .from(chatGroup)
+        .where(eq(chatGroup.userId, userId));
+      const mine = new Set(owned.map((row) => row.id));
+
+      let position = 0;
+      for (const id of ids) {
+        if (!mine.has(id)) {
+          continue;
+        }
+        await tx
+          .update(chatGroup)
+          .set({ position })
+          .where(and(eq(chatGroup.id, id), eq(chatGroup.userId, userId)));
+        position += 1;
+      }
+    });
+  } catch (_error) {
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to reorder chat groups",
+    );
+  }
+}
+
 export async function setChatGroup({
   chatId,
   userId,

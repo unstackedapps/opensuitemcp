@@ -45,7 +45,11 @@ import {
   SlidersIcon,
   TrashIcon,
 } from "./icons";
-import { ChatItem } from "./sidebar-history-item";
+import {
+  CHAT_DRAG_TYPE,
+  ChatItem,
+  GROUP_DRAG_TYPE,
+} from "./sidebar-history-item";
 import { toast } from "./toast";
 import {
   DropdownMenu,
@@ -111,8 +115,20 @@ function ChatGroupSection({
   activeChatId,
   chats,
   collapsed,
+  draggingChatId,
+  dropActive,
   filtering,
   group,
+  onDragChatEnd,
+  onDragChatStart,
+  onDropChat,
+  onDropGroupBefore,
+  onGroupDragEnd,
+  onGroupDragStart,
+  onHoverTarget,
+  onNudgeGroup,
+  canNudgeUp,
+  canNudgeDown,
   groups,
   onDelete,
   onDeleteGroup,
@@ -130,8 +146,20 @@ function ChatGroupSection({
   activeChatId: string | undefined;
   chats: ChatWithActivity[];
   collapsed: boolean;
+  draggingChatId: string | null;
+  dropActive: boolean;
   filtering: boolean;
   group: ChatGroup | null;
+  onDragChatEnd: () => void;
+  onDragChatStart: (chatId: string) => void;
+  onDropChat: (groupId: string | null) => void;
+  onDropGroupBefore: (targetId: string) => void;
+  onGroupDragEnd: () => void;
+  onGroupDragStart: (groupId: string) => void;
+  onHoverTarget: (key: string | null) => void;
+  onNudgeGroup: (groupId: string, delta: number) => void;
+  canNudgeUp: boolean;
+  canNudgeDown: boolean;
   groups: ChatGroup[];
   onDelete: (chatId: string) => void;
   onDeleteGroup: (group: ChatGroup) => void;
@@ -153,10 +181,75 @@ function ChatGroupSection({
     return null;
   }
 
+  const targetKey = group?.id ?? "ungrouped";
+
   return (
-    <div>
+    // biome-ignore lint/a11y/noStaticElementInteractions: drop zone; the row menu's Move to group is the keyboard path
+    // biome-ignore lint/a11y/noNoninteractiveElementInteractions: drop zone; the row menu's Move to group is the keyboard path
+    <div
+      className={cn(
+        "rounded-md",
+        dropActive && "bg-sidebar-accent/60 ring-1 ring-sidebar-border",
+      )}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+          onHoverTarget(null);
+        }
+      }}
+      onDragOver={(event) => {
+        if (!event.dataTransfer.types.includes(CHAT_DRAG_TYPE)) {
+          return;
+        }
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+        onHoverTarget(targetKey);
+      }}
+      onDrop={(event) => {
+        if (!event.dataTransfer.types.includes(CHAT_DRAG_TYPE)) {
+          return;
+        }
+        event.preventDefault();
+        onHoverTarget(null);
+        onDropChat(group?.id ?? null);
+      }}
+    >
       {showHeader ? (
-        <div className="group/group-header flex h-6 items-center gap-1 pr-1 pl-2">
+        // biome-ignore lint/a11y/noStaticElementInteractions: drag handle; Move up and Move down are the keyboard path
+        // biome-ignore lint/a11y/noNoninteractiveElementInteractions: drag handle; Move up and Move down are the keyboard path
+        <div
+          className="group/group-header flex h-6 items-center gap-1 pr-1 pl-2"
+          draggable={group !== null}
+          onDragEnd={onGroupDragEnd}
+          onDragOver={(event) => {
+            if (
+              !(group && event.dataTransfer.types.includes(GROUP_DRAG_TYPE))
+            ) {
+              return;
+            }
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "move";
+          }}
+          onDragStart={(event) => {
+            if (!group) {
+              return;
+            }
+            event.stopPropagation();
+            event.dataTransfer.setData(GROUP_DRAG_TYPE, group.id);
+            event.dataTransfer.setData("text/plain", group.name);
+            event.dataTransfer.effectAllowed = "move";
+            onGroupDragStart(group.id);
+          }}
+          onDrop={(event) => {
+            if (
+              !(group && event.dataTransfer.types.includes(GROUP_DRAG_TYPE))
+            ) {
+              return;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            onDropGroupBefore(group.id);
+          }}
+        >
           <button
             aria-expanded={!collapsed}
             className="-ml-1 flex size-4 shrink-0 items-center justify-center rounded text-sidebar-foreground/50 hover:text-sidebar-foreground"
@@ -207,6 +300,22 @@ function ChatGroupSection({
                     <PencilEditIcon size={14} />
                     <span>Rename group</span>
                   </DropdownMenuItem>
+                  {/* The keyboard path to the order that dragging a header
+                      gives a pointer. */}
+                  <DropdownMenuItem
+                    className="cursor-pointer"
+                    disabled={!canNudgeUp}
+                    onSelect={() => onNudgeGroup(group.id, -1)}
+                  >
+                    <span>Move up</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="cursor-pointer"
+                    disabled={!canNudgeDown}
+                    onSelect={() => onNudgeGroup(group.id, 1)}
+                  >
+                    <span>Move down</span>
+                  </DropdownMenuItem>
                   <DropdownMenuItem
                     className="cursor-pointer text-destructive focus:bg-destructive/15 focus:text-destructive dark:text-red-500"
                     onSelect={() => onDeleteGroup(group)}
@@ -226,9 +335,12 @@ function ChatGroupSection({
           {chats.map((chat) => (
             <ChatItem
               chat={chat}
+              dragging={draggingChatId === chat.id}
               groups={groups}
               isActive={chat.id === activeChatId}
               key={chat.id}
+              onDragChatEnd={onDragChatEnd}
+              onDragChatStart={onDragChatStart}
               onDelete={onDelete}
               onMoveToGroup={onMoveToGroup}
               onNewGroupWith={onNewGroupWith}
@@ -348,6 +460,9 @@ export function SidebarHistory({
   const [newGroupName, setNewGroupName] = useState("");
   const [showNewGroup, setShowNewGroup] = useState(false);
   const [ungroupedCollapsed, setUngroupedCollapsedState] = useState(false);
+  const [draggingChatId, setDraggingChatId] = useState<string | null>(null);
+  const [draggingGroupId, setDraggingGroupId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -563,6 +678,81 @@ export function SidebarHistory({
     await mutateGroups();
   }, [mutateGroups, refresh, renameTarget]);
 
+  const dropChatInGroup = useCallback(
+    (groupId: string | null) => {
+      const chatId = draggingChatId;
+      setDraggingChatId(null);
+      if (!chatId) {
+        return;
+      }
+      const moving = allChats.find((candidate) => candidate.id === chatId);
+      if (moving && (moving.groupId ?? null) === groupId) {
+        return;
+      }
+      void moveToGroup(chatId, groupId);
+    },
+    [allChats, draggingChatId, moveToGroup],
+  );
+
+  const applyGroupOrder = useCallback(
+    async (order: string[]) => {
+      const byId = new Map(
+        groups.map((candidate) => [candidate.id, candidate]),
+      );
+      await mutateGroups(
+        {
+          groups: order
+            .map((groupId, index) => {
+              const found = byId.get(groupId);
+              return found ? { ...found, position: index } : null;
+            })
+            .filter((candidate): candidate is ChatGroup => candidate !== null),
+        },
+        { revalidate: false },
+      );
+
+      await fetch(GROUPS_KEY, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: order }),
+      });
+    },
+    [groups, mutateGroups],
+  );
+
+  const dropGroupBefore = useCallback(
+    (targetId: string) => {
+      const sourceId = draggingGroupId;
+      setDraggingGroupId(null);
+      if (!sourceId || sourceId === targetId) {
+        return;
+      }
+      const order = groups.map((candidate) => candidate.id);
+      const from = order.indexOf(sourceId);
+      const to = order.indexOf(targetId);
+      if (from < 0 || to < 0) {
+        return;
+      }
+      order.splice(to, 0, ...order.splice(from, 1));
+      void applyGroupOrder(order);
+    },
+    [applyGroupOrder, draggingGroupId, groups],
+  );
+
+  const nudgeGroup = useCallback(
+    (groupId: string, delta: number) => {
+      const order = groups.map((candidate) => candidate.id);
+      const from = order.indexOf(groupId);
+      const to = from + delta;
+      if (from < 0 || to < 0 || to >= order.length) {
+        return;
+      }
+      order.splice(to, 0, ...order.splice(from, 1));
+      void applyGroupOrder(order);
+    },
+    [applyGroupOrder, groups],
+  );
+
   const confirmDeleteGroup = useCallback(async () => {
     if (!groupToDelete) {
       return;
@@ -755,7 +945,7 @@ export function SidebarHistory({
               </div>
             ) : (
               <div className="flex flex-col gap-3">
-                {groups.map((group) => (
+                {groups.map((group, index) => (
                   <ChatGroupSection
                     activeChatId={activeChatId}
                     chats={sortChats(
@@ -764,6 +954,18 @@ export function SidebarHistory({
                     )}
                     filtering={filtering}
                     collapsed={group.collapsed}
+                    dropActive={dropTarget === group.id}
+                    draggingChatId={draggingChatId}
+                    onDragChatEnd={() => setDraggingChatId(null)}
+                    onDragChatStart={setDraggingChatId}
+                    onDropChat={dropChatInGroup}
+                    canNudgeDown={index < groups.length - 1}
+                    canNudgeUp={index > 0}
+                    onDropGroupBefore={dropGroupBefore}
+                    onNudgeGroup={nudgeGroup}
+                    onGroupDragEnd={() => setDraggingGroupId(null)}
+                    onGroupDragStart={setDraggingGroupId}
+                    onHoverTarget={setDropTarget}
                     group={group}
                     groups={groups}
                     key={group.id}
@@ -812,6 +1014,18 @@ export function SidebarHistory({
                   chats={ungrouped}
                   filtering={filtering}
                   collapsed={ungroupedCollapsed}
+                  dropActive={dropTarget === "ungrouped"}
+                  draggingChatId={draggingChatId}
+                  onDragChatEnd={() => setDraggingChatId(null)}
+                  onDragChatStart={setDraggingChatId}
+                  onDropChat={dropChatInGroup}
+                  canNudgeDown={false}
+                  canNudgeUp={false}
+                  onDropGroupBefore={dropGroupBefore}
+                  onNudgeGroup={nudgeGroup}
+                  onGroupDragEnd={() => setDraggingGroupId(null)}
+                  onGroupDragStart={setDraggingGroupId}
+                  onHoverTarget={setDropTarget}
                   group={null}
                   groups={groups}
                   onDelete={requestDeleteChat}

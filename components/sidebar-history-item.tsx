@@ -97,6 +97,10 @@ const EMPTY_PERSONA_CUSTOMS: Array<{
 
 const EMPTY_GROUPS: ChatGroup[] = [];
 
+/** Lowercase: the drag-and-drop API lowercases custom types on read. */
+export const CHAT_DRAG_TYPE = "application/x-osmcp-chat";
+export const GROUP_DRAG_TYPE = "application/x-osmcp-group";
+
 const PureChatItem = ({
   chat,
   groups = EMPTY_GROUPS,
@@ -108,6 +112,9 @@ const PureChatItem = ({
   personaCustoms = EMPTY_PERSONA_CUSTOMS,
   setOpenMobile,
   tone = "sidebar",
+  dragging = false,
+  onDragChatStart,
+  onDragChatEnd,
 }: {
   chat: ChatWithActivity;
   groups?: ChatGroup[];
@@ -117,6 +124,9 @@ const PureChatItem = ({
   onNewGroupWith: (chatId: string) => void;
   onRename: (chatId: string) => void;
   personaCustoms?: Array<{ id: string; shortName?: string; name?: string }>;
+  dragging?: boolean;
+  onDragChatStart?: (chatId: string) => void;
+  onDragChatEnd?: () => void;
   setOpenMobile: (open: boolean) => void;
   tone?: "sidebar" | "panel";
 }) => {
@@ -146,7 +156,20 @@ const PureChatItem = ({
         );
 
   return (
-    <SidebarMenuItem>
+    <SidebarMenuItem
+      className={cn(dragging && "opacity-40")}
+      draggable={onDragChatStart !== undefined}
+      onDragEnd={onDragChatEnd}
+      onDragStart={(event) => {
+        // A row is a link, and a dragged link writes its href by default. The
+        // payload has to be replaced or the drop target reads a URL.
+        event.dataTransfer.clearData();
+        event.dataTransfer.setData(CHAT_DRAG_TYPE, chat.id);
+        event.dataTransfer.setData("text/plain", chat.title);
+        event.dataTransfer.effectAllowed = "move";
+        onDragChatStart?.(chat.id);
+      }}
+    >
       <SidebarMenuButton
         asChild
         className={cn(
@@ -325,6 +348,9 @@ export const ChatItem = memo(PureChatItem, (prevProps, nextProps) => {
     return false;
   }
   if (prevProps.groups !== nextProps.groups) {
+    return false;
+  }
+  if (prevProps.dragging !== nextProps.dragging) {
     return false;
   }
   if (prevProps.personaCustoms !== nextProps.personaCustoms) {

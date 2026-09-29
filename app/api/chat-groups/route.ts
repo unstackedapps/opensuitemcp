@@ -1,5 +1,9 @@
 import { auth } from "@/app/(auth)/auth";
-import { createChatGroup, getChatGroupsByUserId } from "@/lib/db/queries";
+import {
+  createChatGroup,
+  getChatGroupsByUserId,
+  reorderChatGroups,
+} from "@/lib/db/queries";
 import { ChatSDKError } from "@/lib/errors";
 
 const MAX_NAME = 80;
@@ -43,4 +47,22 @@ export async function POST(request: Request) {
   }
 
   return Response.json({ group: created }, { status: 201 });
+}
+
+export async function PATCH(request: Request) {
+  const session = await auth();
+
+  if (!session?.user) {
+    return new ChatSDKError("unauthorized:chat").toResponse();
+  }
+
+  const { ids } = (await request.json()) as { ids?: unknown };
+
+  if (!Array.isArray(ids) || ids.some((id) => typeof id !== "string")) {
+    return new ChatSDKError("bad_request:api").toResponse();
+  }
+
+  await reorderChatGroups({ userId: session.user.id, ids: ids as string[] });
+
+  return Response.json({ success: true });
 }
