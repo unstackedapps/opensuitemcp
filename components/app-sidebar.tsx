@@ -22,6 +22,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PUBLIC_DOCS_ORIGIN } from "@/lib/constants";
 import { isOrgAdminRole } from "@/lib/org/types";
 
 function SidebarCollapseButton({
@@ -98,7 +99,9 @@ export function AppSidebar({ user }: { user: User | undefined }) {
         setPeek(true);
       }}
     >
-      <SidebarHeader>
+      {/* pt-1.5 matches the header's py-1.5: both rows then centre on the same
+          line, which p-2 put 2px out. */}
+      <SidebarHeader className="pt-1.5">
         {/* The product name sits here, so the main header can carry the thread
             title. The collapse control leads the row, which is where the expand
             control stands when the panel is shut, so it does not move. */}
@@ -117,7 +120,15 @@ export function AppSidebar({ user }: { user: User | undefined }) {
             />
           )}
           {showExpandedChrome ? (
-            <AppWordmark className="min-w-0 flex-1 truncate px-1 text-sidebar-foreground" />
+            <a
+              className="min-w-0 flex-1 truncate rounded px-1 text-sidebar-foreground/90 transition-colors hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+              href={PUBLIC_DOCS_ORIGIN}
+              rel="noopener noreferrer"
+              target="_blank"
+              title="Open opensuitemcp.com"
+            >
+              <AppWordmark />
+            </a>
           ) : null}
         </div>
 
