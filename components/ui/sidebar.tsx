@@ -48,7 +48,8 @@ const SIDEBAR_KEYBOARD_SHORTCUT = "b";
 const SIDEBAR_WIDTH_MIN = 232;
 const SIDEBAR_WIDTH_MAX = 410;
 const SIDEBAR_WIDTH_STORAGE_KEY = "sidebar:width";
-const PEEK_CLOSE_DELAY_MS = 250;
+/** Grace for crossing a gap or reaching a menu, before the panel starts to close. */
+const PEEK_CLOSE_DELAY_MS = 100;
 /** Persistent expand width animation (`duration-200`). Peek uses the same duration with ease-out. */
 const SIDEBAR_EXPAND_MS = 200;
 
