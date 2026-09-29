@@ -296,7 +296,7 @@ const PurePreviewMessage = ({
 
                     return (
                       <Card
-                        className="w-full rounded-tl-3xl rounded-tr rounded-br-3xl rounded-bl-3xl bg-sidebar text-sidebar-foreground shadow-none"
+                        className="w-full rounded-tl-3xl rounded-tr rounded-br-3xl rounded-bl-3xl bg-muted text-foreground shadow-none"
                         key={key}
                       >
                         <CardContent className="px-2 py-1">

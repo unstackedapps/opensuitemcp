@@ -45,7 +45,7 @@ function PureChatHeader({
     mounted && windowWidth !== undefined ? windowWidth < 768 : false;
 
   const personaBadgeClassName = cn(
-    "order-3 truncate rounded-md border px-2 py-1 text-muted-foreground text-xs",
+    "order-3 truncate rounded-md border bg-muted px-2 py-1 text-muted-foreground text-xs",
     onPersonaClick
       ? "inline-flex cursor-pointer transition-colors hover:border-primary hover:bg-primary/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       : "hidden md:inline-flex",
