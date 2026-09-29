@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { User } from "next-auth";
 import type { FocusEvent } from "react";
+import { AppWordmark } from "@/components/app-wordmark";
 import { SidebarHistory } from "@/components/sidebar-history";
 import { SidebarUserNav } from "@/components/sidebar-user-nav";
 import {
@@ -98,7 +99,9 @@ export function AppSidebar({ user }: { user: User | undefined }) {
       }}
     >
       <SidebarHeader>
-        <div className="flex items-center gap-1">
+        {/* The product name sits here, so the main header can carry the thread
+            title. Collapsed, the rail keeps the expand control alone. */}
+        <div className="flex h-8 items-center gap-1">
           {isMobile || !sidebarCollapsed ? null : (
             <SidebarCollapseButton
               label="Expand sidebar"
@@ -106,6 +109,18 @@ export function AppSidebar({ user }: { user: User | undefined }) {
               onPeekStart={handlePeekStart}
             />
           )}
+          {showExpandedChrome ? (
+            <AppWordmark className="min-w-0 flex-1 truncate px-1 text-sidebar-foreground" />
+          ) : null}
+          {isMobile || sidebarCollapsed ? null : (
+            <SidebarCollapseButton
+              label="Collapse sidebar"
+              onClick={handleCollapseClick}
+            />
+          )}
+        </div>
+
+        <div className="flex items-center gap-1">
           {showExpandedChrome ? (
             <SidebarMenu className="min-w-0 flex-1">
               <SidebarMenuItem>
@@ -151,12 +166,6 @@ export function AppSidebar({ user }: { user: User | undefined }) {
               </SidebarMenuItem>
             </SidebarMenu>
           ) : null}
-          {isMobile || sidebarCollapsed ? null : (
-            <SidebarCollapseButton
-              label="Collapse sidebar"
-              onClick={handleCollapseClick}
-            />
-          )}
         </div>
       </SidebarHeader>
 
