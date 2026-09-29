@@ -13,37 +13,37 @@
 
 /* define design tokens (light mode) - Gemini-inspired balanced inverse */
 :root {
-  --background: hsl(0 0% 100%);
-  --foreground: hsl(0 0% 10%);
-  --card: hsl(0 0% 94%);
+  --background: hsl(45 33% 98%);
+  --foreground: hsl(40 9% 12%);
+  --card: hsl(45 22% 95%);
   --card-foreground: hsl(0 0% 10%);
-  --popover: hsl(0 0% 100%);
+  --popover: hsl(45 40% 99%);
   --popover-foreground: hsl(0 0% 10%);
   --primary: hsl(0 0% 10%);
   --primary-foreground: hsl(0 0% 98%);
-  --secondary: hsl(0 0% 94%);
+  --secondary: hsl(45 22% 95%);
   --secondary-foreground: hsl(0 0% 10%);
-  --muted: hsl(0 0% 94%);
-  --muted-foreground: hsl(0 0% 40%);
-  --accent: hsl(0 0% 94%);
+  --muted: hsl(45 22% 95%);
+  --muted-foreground: hsl(45 7% 42%);
+  --accent: hsl(45 22% 95%);
   --accent-foreground: hsl(0 0% 10%);
   --destructive: hsl(0 84.2% 60.2%);
   --destructive-foreground: hsl(0 0% 98%);
-  --border: hsl(0 0% 85%);
-  --input: hsl(0 0% 91%);
+  --border: hsl(45 13% 87%);
+  --input: hsl(45 16% 93%);
   --ring: hsl(0 0% 10%);
   --chart-1: hsl(12 76% 61%);
   --chart-2: hsl(173 58% 39%);
   --chart-3: hsl(197 37% 24%);
   --chart-4: hsl(43 74% 66%);
   --chart-5: hsl(27 87% 67%);
-  --sidebar-background: hsl(0 0% 96%);
-  --sidebar-foreground: hsl(0 0% 23%);
+  --sidebar-background: hsl(45 33% 98%);
+  --sidebar-foreground: hsl(45 8% 30%);
   --sidebar-primary: hsl(0 0% 10%);
   --sidebar-primary-foreground: hsl(0 0% 98%);
-  --sidebar-accent: hsl(0 0% 94%);
+  --sidebar-accent: hsl(45 20% 92%);
   --sidebar-accent-foreground: hsl(0 0% 10%);
-  --sidebar-border: hsl(0 0% 88%);
+  --sidebar-border: hsl(45 13% 87%);
   --sidebar-ring: var(--ring);
   --chat-dot-finished: hsl(213 72% 47%);
   --chat-dot-needs-user: hsl(33 79% 43%);
@@ -51,7 +51,7 @@
   --chat-dot-idle: hsl(0 0% 76%);
   /* border radius unit */
   --radius: 0.5rem;
-  --sidebar: hsl(0 0% 96%);
+  --sidebar: hsl(45 33% 98%);
 }
 
 /* define design tokens (dark mode) - Gemini-inspired colors */

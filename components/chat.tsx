@@ -191,6 +191,9 @@ export function Chat({
   const aiProviderIdRef = useRef(aiProviderId);
   const personaIdRef = useRef(personaId);
   const errorOccurredRef = useRef(false);
+  // A chat started from a group's + carries ?group=. The row does not exist
+  // until the first turn saves, so the filing waits for onFinish.
+  const pendingGroupRef = useRef<string | null>(null);
   const startingInterviewRef = useRef(false);
 
   // Update refs when values change (these are used inside transport callbacks)
@@ -453,6 +456,16 @@ export function Chat({
         );
       }
 
+      const pendingGroup = pendingGroupRef.current;
+      if (pendingGroup) {
+        pendingGroupRef.current = null;
+        await fetch(`/api/chat/${id}/group`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ groupId: pendingGroup }),
+        });
+      }
+
       // After the delay above, so it lands behind the server's updatedAt bump.
       // Without it the chat you are reading turns blue while you read it.
       await markChatViewed(id);
@@ -657,6 +670,14 @@ export function Chat({
 
   const searchParams = useSearchParams();
   const query = searchParams.get("query");
+
+  useEffect(() => {
+    const group = searchParams.get("group");
+    if (group) {
+      pendingGroupRef.current = group;
+      window.history.replaceState({}, "", `/chat/${id}`);
+    }
+  }, [searchParams, id]);
 
   const [hasAppendedQuery, setHasAppendedQuery] = useState(false);
 

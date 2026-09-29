@@ -14,6 +14,7 @@ import {
   lt,
   notLike,
   type SQL,
+  sql,
 } from "drizzle-orm";
 import type { VisibilityType } from "@/components/visibility-selector";
 import type { ChatWithActivity } from "@/lib/chat-status";
@@ -33,6 +34,7 @@ import { isLiveSql, lastOutcomeSql } from "./chat-activity-sql";
 import { db } from "./client";
 import {
   chat,
+  chatGroup,
   type DBMessage,
   message,
   stream,
@@ -795,6 +797,164 @@ export async function markChatViewed({
       "bad_request:database",
       "Failed to mark chat viewed",
     );
+  }
+}
+
+export async function renameChat({
+  chatId,
+  userId,
+  title,
+}: {
+  chatId: string;
+  userId: string;
+  title: string;
+}) {
+  try {
+    await db
+      .update(chat)
+      .set({ title })
+      .where(and(eq(chat.id, chatId), eq(chat.userId, userId)));
+  } catch (_error) {
+    throw new ChatSDKError("bad_request:database", "Failed to rename chat");
+  }
+}
+
+export async function getChatGroupsByUserId({ userId }: { userId: string }) {
+  try {
+    return await db
+      .select()
+      .from(chatGroup)
+      .where(eq(chatGroup.userId, userId))
+      .orderBy(asc(chatGroup.position), asc(chatGroup.createdAt));
+  } catch (_error) {
+    throw new ChatSDKError("bad_request:database", "Failed to get chat groups");
+  }
+}
+
+export async function createChatGroup({
+  userId,
+  name,
+}: {
+  userId: string;
+  name: string;
+}) {
+  try {
+    const [{ next } = { next: 0 }] = await db
+      .select({ next: sql<number>`coalesce(max("position"), -1) + 1` })
+      .from(chatGroup)
+      .where(eq(chatGroup.userId, userId));
+
+    const [created] = await db
+      .insert(chatGroup)
+      .values({ userId, name, position: next })
+      .returning();
+
+    return created;
+  } catch (error) {
+    // 23505 is the unique index on (userId, lower(name)). The caller turns it
+    // into a message naming the group, rather than a generic failure.
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (error as { code?: unknown }).code === "23505"
+    ) {
+      return null;
+    }
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to create chat group",
+    );
+  }
+}
+
+export async function updateChatGroup({
+  id,
+  userId,
+  name,
+  collapsed,
+}: {
+  id: string;
+  userId: string;
+  name?: string;
+  collapsed?: boolean;
+}) {
+  try {
+    const values: Partial<{ name: string; collapsed: boolean }> = {};
+    if (name !== undefined) {
+      values.name = name;
+    }
+    if (collapsed !== undefined) {
+      values.collapsed = collapsed;
+    }
+    if (Object.keys(values).length === 0) {
+      return;
+    }
+
+    await db
+      .update(chatGroup)
+      .set(values)
+      .where(and(eq(chatGroup.id, id), eq(chatGroup.userId, userId)));
+  } catch (_error) {
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to update chat group",
+    );
+  }
+}
+
+/** The chats stay. Chat."groupId" is ON DELETE SET NULL, so they land in Ungrouped. */
+export async function deleteChatGroup({
+  id,
+  userId,
+}: {
+  id: string;
+  userId: string;
+}) {
+  try {
+    await db
+      .delete(chatGroup)
+      .where(and(eq(chatGroup.id, id), eq(chatGroup.userId, userId)));
+  } catch (_error) {
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to delete chat group",
+    );
+  }
+}
+
+export async function setChatGroup({
+  chatId,
+  userId,
+  groupId,
+}: {
+  chatId: string;
+  userId: string;
+  groupId: string | null;
+}) {
+  try {
+    // A null groupId is Ungrouped. A non-null one has to belong to this user,
+    // or a crafted id would file someone else's group id onto your chat.
+    if (groupId !== null) {
+      const [owned] = await db
+        .select({ id: chatGroup.id })
+        .from(chatGroup)
+        .where(and(eq(chatGroup.id, groupId), eq(chatGroup.userId, userId)))
+        .limit(1);
+
+      if (!owned) {
+        return false;
+      }
+    }
+
+    await db
+      .update(chat)
+      .set({ groupId })
+      .where(and(eq(chat.id, chatId), eq(chat.userId, userId)));
+
+    return true;
+  } catch (_error) {
+    throw new ChatSDKError("bad_request:database", "Failed to set chat group");
   }
 }
 

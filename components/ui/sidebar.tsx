@@ -9,6 +9,7 @@ import {
   createContext,
   type ElementRef,
   forwardRef,
+  type PointerEvent as ReactPointerEvent,
   useCallback,
   useContext,
   useEffect,
@@ -44,6 +45,9 @@ const SIDEBAR_WIDTH = "388px";
 const SIDEBAR_WIDTH_MOBILE = "20rem";
 const SIDEBAR_WIDTH_ICON = "3rem";
 const SIDEBAR_KEYBOARD_SHORTCUT = "b";
+const SIDEBAR_WIDTH_MIN = 232;
+const SIDEBAR_WIDTH_MAX = 410;
+const SIDEBAR_WIDTH_STORAGE_KEY = "sidebar:width";
 const PEEK_CLOSE_DELAY_MS = 250;
 /** Persistent expand width animation (`duration-200`). Peek uses the same duration with ease-out. */
 const SIDEBAR_EXPAND_MS = 200;
@@ -103,6 +107,9 @@ type SidebarContextProps = {
   closePeekSoon: () => void;
   /** False while a pinned expand is still animating in. Peek reveals immediately. */
   revealText: boolean;
+  /** Expanded width in px, dragged on the rail and kept in localStorage. */
+  sidebarWidth: number;
+  setSidebarWidth: (width: number) => void;
 };
 
 const SidebarContext = createContext<SidebarContextProps | null>(null);
@@ -138,6 +145,44 @@ const SidebarProvider = forwardRef<
   ) => {
     const isMobile = useIsMobile();
     const [openMobile, setOpenMobile] = useState(false);
+    const [sidebarWidth, setSidebarWidthState] = useState(
+      Number.parseInt(SIDEBAR_WIDTH, 10),
+    );
+
+    // Read after mount rather than in the initialiser: the server has no
+    // localStorage, and a different first paint would be a hydration mismatch.
+    useEffect(() => {
+      try {
+        const stored = window.localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY);
+        if (stored) {
+          const parsed = Number.parseInt(stored, 10);
+          if (Number.isFinite(parsed)) {
+            setSidebarWidthState(
+              Math.min(SIDEBAR_WIDTH_MAX, Math.max(SIDEBAR_WIDTH_MIN, parsed)),
+            );
+          }
+        }
+      } catch {
+        // Private windows and blocked site data both throw. The default width
+        // is correct either way.
+      }
+    }, []);
+
+    const setSidebarWidth = useCallback((width: number) => {
+      const clamped = Math.min(
+        SIDEBAR_WIDTH_MAX,
+        Math.max(SIDEBAR_WIDTH_MIN, Math.round(width)),
+      );
+      setSidebarWidthState(clamped);
+      try {
+        window.localStorage.setItem(
+          SIDEBAR_WIDTH_STORAGE_KEY,
+          String(clamped),
+        );
+      } catch {
+        // Width simply does not persist.
+      }
+    }, []);
     const [peek, setPeekState] = useState(false);
     const [revealText, setRevealText] = useState(openProp ?? defaultOpen);
     const peekCloseTimerRef = useRef<number | null>(null);
@@ -284,6 +329,8 @@ const SidebarProvider = forwardRef<
         setPeek,
         closePeekSoon,
         revealText,
+        sidebarWidth,
+        setSidebarWidth,
       }),
       [
         state,
@@ -296,6 +343,8 @@ const SidebarProvider = forwardRef<
         setPeek,
         closePeekSoon,
         revealText,
+        sidebarWidth,
+        setSidebarWidth,
       ]
     );
 
@@ -310,7 +359,7 @@ const SidebarProvider = forwardRef<
             ref={ref}
             style={
               {
-                "--sidebar-width": SIDEBAR_WIDTH,
+                "--sidebar-width": `${sidebarWidth}px`,
                 "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,
                 ...style,
               } as CSSProperties
@@ -499,7 +548,41 @@ SidebarTrigger.displayName = "SidebarTrigger";
 
 const SidebarRail = forwardRef<HTMLButtonElement, ComponentProps<"button">>(
   ({ className, ...props }, ref) => {
-    const { toggleSidebar } = useSidebar();
+    const { toggleSidebar, setSidebarWidth, state } = useSidebar();
+    const dragRef = useRef<{ startX: number; moved: boolean } | null>(null);
+
+    const onPointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+      // Collapsed, the rail is only a toggle — there is no width to drag.
+      if (state !== "expanded" || event.button !== 0) {
+        return;
+      }
+      dragRef.current = { startX: event.clientX, moved: false };
+      event.currentTarget.setPointerCapture(event.pointerId);
+    };
+
+    const onPointerMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+      const drag = dragRef.current;
+      if (!drag) {
+        return;
+      }
+      // A few pixels of slop, so a click that trembles still toggles.
+      if (!drag.moved && Math.abs(event.clientX - drag.startX) < 4) {
+        return;
+      }
+      drag.moved = true;
+      setSidebarWidth(event.clientX);
+    };
+
+    const endDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
+      const drag = dragRef.current;
+      dragRef.current = null;
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+      if (drag && !drag.moved) {
+        toggleSidebar();
+      }
+    };
 
     return (
       <button
@@ -514,10 +597,20 @@ const SidebarRail = forwardRef<HTMLButtonElement, ComponentProps<"button">>(
           className
         )}
         data-sidebar="rail"
-        onClick={toggleSidebar}
+        onClick={(event) => {
+          // The pointer handlers own the toggle, so a drag that ends on the
+          // rail does not also collapse it.
+          if (event.detail === 0) {
+            toggleSidebar();
+          }
+        }}
+        onPointerCancel={endDrag}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endDrag}
         ref={ref}
         tabIndex={-1}
-        title="Toggle Sidebar"
+        title="Drag to resize · click to collapse"
         {...props}
       />
     );
