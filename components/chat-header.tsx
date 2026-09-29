@@ -50,8 +50,10 @@ function PureChatHeader({
 
   const personaBadgeClassName = cn(
     "truncate rounded-md px-2 py-1 text-muted-foreground text-xs",
+    // The border is on the control only. After the first message the persona is
+    // fixed and this renders as plain text, which must not look clickable.
     onPersonaClick
-      ? "inline-flex cursor-pointer transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      ? "inline-flex cursor-pointer border border-border transition-colors hover:border-foreground/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       : "hidden md:inline-flex",
   );
 
