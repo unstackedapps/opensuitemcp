@@ -121,7 +121,7 @@ export function AppSidebar({ user }: { user: User | undefined }) {
           )}
           {showExpandedChrome ? (
             <a
-              className="flex min-w-0 flex-1 items-center rounded px-1 text-sidebar-foreground/90 transition-colors hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+              className="flex min-w-0 flex-1 items-center rounded px-1 text-foreground/95 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
               href={PUBLIC_DOCS_ORIGIN}
               rel="noopener noreferrer"
               target="_blank"
@@ -161,7 +161,9 @@ export function AppSidebar({ user }: { user: User | undefined }) {
                       router.refresh();
                     }}
                   >
-                    <Plus />
+                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-sidebar-accent">
+                      <Plus className="size-3.5" />
+                    </span>
                     {revealText ? (
                       <span>New Chat</span>
                     ) : (
