@@ -14,7 +14,7 @@
 -- first sort after deploy is already right.
 --
 -- Chat."lastViewedAt": two of the four dots are "…and unviewed", and no read state
--- existed anywhere in the schema.
+-- existed anywhere in the schema. Seeded to "updatedAt" so history opens quiet.
 ALTER TABLE "Stream" ADD COLUMN IF NOT EXISTS "finishedAt" timestamp;
 --> statement-breakpoint
 ALTER TABLE "Stream" ADD COLUMN IF NOT EXISTS "outcome" varchar(16);
@@ -34,6 +34,11 @@ ALTER TABLE "Chat" ALTER COLUMN "updatedAt" SET DEFAULT now();
 ALTER TABLE "Chat" ALTER COLUMN "updatedAt" SET NOT NULL;
 --> statement-breakpoint
 ALTER TABLE "Chat" ADD COLUMN IF NOT EXISTS "lastViewedAt" timestamp;
+--> statement-breakpoint
+-- Everything that happened before this feature existed counts as seen.
+-- Left null, every chat in history renders finished-and-unviewed and the
+-- sidebar opens claiming the whole archive is unread.
+UPDATE "Chat" SET "lastViewedAt" = "updatedAt" WHERE "lastViewedAt" IS NULL;
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "Chat_user_updated_idx" ON "Chat" ("userId","updatedAt" DESC);
 --> statement-breakpoint
