@@ -25,6 +25,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import { Input } from "@/components/ui/input";
 import {
   SidebarGroup,
@@ -40,7 +47,6 @@ import type { ChatGroup } from "@/lib/db/schema";
 import { cn, fetcher } from "@/lib/utils";
 import {
   ChevronDownIcon,
-  MoreVerticalIcon,
   PencilEditIcon,
   PlusIcon,
   SlidersIcon,
@@ -186,6 +192,81 @@ function ChatGroupSection({
 
   const targetKey = group?.id ?? "ungrouped";
 
+  const headerRow = (
+    // biome-ignore lint/a11y/noStaticElementInteractions: drag handle; Move up and Move down are the keyboard path
+    // biome-ignore lint/a11y/noNoninteractiveElementInteractions: drag handle; Move up and Move down are the keyboard path
+    <div
+      className="group/group-header flex h-6 items-center gap-1 pr-1 pl-2"
+      draggable={group !== null}
+      onDragEnd={onGroupDragEnd}
+      onDragOver={(event) => {
+        if (!(group && event.dataTransfer.types.includes(GROUP_DRAG_TYPE))) {
+          return;
+        }
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+      }}
+      onDragStart={(event) => {
+        if (!group) {
+          return;
+        }
+        event.stopPropagation();
+        event.dataTransfer.setData(GROUP_DRAG_TYPE, group.id);
+        event.dataTransfer.setData("text/plain", group.name);
+        event.dataTransfer.effectAllowed = "move";
+        onGroupDragStart(group.id);
+      }}
+      onDrop={(event) => {
+        if (!(group && event.dataTransfer.types.includes(GROUP_DRAG_TYPE))) {
+          return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        onDropGroupBefore(group.id);
+      }}
+    >
+      {/* The name and its chevron are one control: the whole title is the
+            hit area, so collapsing does not ask for a 20px target. */}
+      <button
+        aria-expanded={!collapsed}
+        className="group/title -ml-1 flex min-w-0 flex-1 items-center gap-1 rounded px-1 text-left"
+        onClick={onToggle}
+        type="button"
+      >
+        <span className="min-w-0 truncate text-[12px] text-sidebar-foreground/45">
+          {group ? group.name : "Ungrouped"}
+        </span>
+        <span
+          className={cn(
+            "shrink-0 text-sidebar-foreground/45 transition",
+            collapsed
+              ? "-rotate-90 opacity-100"
+              : "opacity-0 group-hover/group-header:opacity-100",
+          )}
+        >
+          <ChevronDownIcon size={12} />
+        </span>
+        <span className="sr-only">
+          {collapsed ? "Expand" : "Collapse"} {group ? group.name : "Ungrouped"}
+        </span>
+      </button>
+
+      {tools}
+
+      <button
+        className="flex size-5 shrink-0 items-center justify-center rounded text-sidebar-foreground/50 hover:text-sidebar-foreground"
+        onClick={() => onNewChatInGroup(group?.id ?? null)}
+        title={group ? `New chat in ${group.name}` : "New chat"}
+        type="button"
+      >
+        <PlusIcon size={13} />
+        <span className="sr-only">
+          {group ? `New chat in ${group.name}` : "New chat"}
+        </span>
+      </button>
+    </div>
+  );
+
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: drop zone; the row menu's Move to group is the keyboard path
     // biome-ignore lint/a11y/noNoninteractiveElementInteractions: drop zone; the row menu's Move to group is the keyboard path
@@ -217,129 +298,44 @@ function ChatGroupSection({
       }}
     >
       {showHeader ? (
-        // biome-ignore lint/a11y/noStaticElementInteractions: drag handle; Move up and Move down are the keyboard path
-        // biome-ignore lint/a11y/noNoninteractiveElementInteractions: drag handle; Move up and Move down are the keyboard path
-        <div
-          className="group/group-header flex h-6 items-center gap-1 pr-1 pl-2"
-          draggable={group !== null}
-          onDragEnd={onGroupDragEnd}
-          onDragOver={(event) => {
-            if (
-              !(group && event.dataTransfer.types.includes(GROUP_DRAG_TYPE))
-            ) {
-              return;
-            }
-            event.preventDefault();
-            event.dataTransfer.dropEffect = "move";
-          }}
-          onDragStart={(event) => {
-            if (!group) {
-              return;
-            }
-            event.stopPropagation();
-            event.dataTransfer.setData(GROUP_DRAG_TYPE, group.id);
-            event.dataTransfer.setData("text/plain", group.name);
-            event.dataTransfer.effectAllowed = "move";
-            onGroupDragStart(group.id);
-          }}
-          onDrop={(event) => {
-            if (
-              !(group && event.dataTransfer.types.includes(GROUP_DRAG_TYPE))
-            ) {
-              return;
-            }
-            event.preventDefault();
-            event.stopPropagation();
-            onDropGroupBefore(group.id);
-          }}
-        >
-          {/* Nothing sits left of the name, so every group title starts on the
-              same edge as nothing else in the list. */}
-          <span className="min-w-0 flex-1 truncate text-[11px] text-sidebar-foreground/50">
-            {group ? group.name : "Ungrouped"}
-          </span>
-
-          <button
-            aria-expanded={!collapsed}
-            className={cn(
-              "flex size-5 shrink-0 items-center justify-center rounded text-sidebar-foreground/50 hover:bg-black/10 hover:text-sidebar-foreground",
-              "opacity-0 focus-visible:opacity-100 group-hover/group-header:opacity-100",
-              collapsed && "opacity-100",
-            )}
-            onClick={onToggle}
-            type="button"
-          >
-            <span
-              className={cn("transition-transform", collapsed && "-rotate-90")}
-            >
-              <ChevronDownIcon size={12} />
-            </span>
-            <span className="sr-only">
-              {collapsed ? "Expand" : "Collapse"}{" "}
-              {group ? group.name : "Ungrouped"}
-            </span>
-          </button>
-
-          <button
-            className="flex size-5 shrink-0 items-center justify-center rounded text-sidebar-foreground/50 hover:bg-black/10 hover:text-sidebar-foreground"
-            onClick={() => onNewChatInGroup(group?.id ?? null)}
-            title={group ? `New chat in ${group.name}` : "New chat"}
-            type="button"
-          >
-            <PlusIcon size={13} />
-            <span className="sr-only">
-              {group ? `New chat in ${group.name}` : "New chat"}
-            </span>
-          </button>
-
-          {tools}
-
-          {group ? (
-            <DropdownMenu modal={false}>
-              <DropdownMenuTrigger asChild>
-                <button
-                  className="flex size-5 shrink-0 items-center justify-center rounded text-sidebar-foreground/50 opacity-0 hover:bg-black/10 hover:text-sidebar-foreground focus-visible:opacity-100 data-[state=open]:opacity-100 group-hover/group-header:opacity-100"
-                  type="button"
-                >
-                  <MoreVerticalIcon size={13} />
-                  <span className="sr-only">{group.name} options</span>
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" side="bottom">
-                <DropdownMenuItem
-                  className="cursor-pointer"
-                  onSelect={() => onRenameGroup(group)}
-                >
-                  <PencilEditIcon size={14} />
-                  <span>Rename group</span>
-                </DropdownMenuItem>
-                {/* The keyboard path to the order that dragging a header
-                      gives a pointer. */}
-                <DropdownMenuItem
-                  className="cursor-pointer"
-                  disabled={!canNudgeUp}
-                  onSelect={() => onNudgeGroup(group.id, -1)}
-                >
-                  <span>Move up</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  className="cursor-pointer"
-                  disabled={!canNudgeDown}
-                  onSelect={() => onNudgeGroup(group.id, 1)}
-                >
-                  <span>Move down</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  className="cursor-pointer text-destructive focus:bg-destructive/15 focus:text-destructive dark:text-red-500"
-                  onSelect={() => onDeleteGroup(group)}
-                >
-                  <TrashIcon size={14} />
-                  <span>Delete group</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : null}
-        </div>
+        group ? (
+          <ContextMenu>
+            <ContextMenuTrigger asChild>{headerRow}</ContextMenuTrigger>
+            <ContextMenuContent>
+              <ContextMenuItem
+                className="cursor-pointer"
+                onSelect={() => onRenameGroup(group)}
+              >
+                <PencilEditIcon size={14} />
+                <span>Rename group</span>
+              </ContextMenuItem>
+              <ContextMenuItem
+                className="cursor-pointer"
+                disabled={!canNudgeUp}
+                onSelect={() => onNudgeGroup(group.id, -1)}
+              >
+                <span>Move up</span>
+              </ContextMenuItem>
+              <ContextMenuItem
+                className="cursor-pointer"
+                disabled={!canNudgeDown}
+                onSelect={() => onNudgeGroup(group.id, 1)}
+              >
+                <span>Move down</span>
+              </ContextMenuItem>
+              <ContextMenuSeparator />
+              <ContextMenuItem
+                className="cursor-pointer text-destructive focus:bg-destructive/15 focus:text-destructive dark:text-red-500"
+                onSelect={() => onDeleteGroup(group)}
+              >
+                <TrashIcon size={14} />
+                <span>Delete group</span>
+              </ContextMenuItem>
+            </ContextMenuContent>
+          </ContextMenu>
+        ) : (
+          headerRow
+        )
       ) : null}
 
       {collapsed ? null : (
@@ -832,7 +828,7 @@ export function SidebarHistory({
     variant === "panel" ? null : (
       <>
         <button
-          className="flex size-5 shrink-0 items-center justify-center rounded text-sidebar-foreground/50 hover:bg-black/10 hover:text-sidebar-foreground"
+          className="flex size-5 shrink-0 items-center justify-center rounded text-sidebar-foreground/50 hover:text-sidebar-foreground"
           onClick={() => openPortal("chats")}
           title="Search chats"
           type="button"
@@ -844,7 +840,7 @@ export function SidebarHistory({
           <DropdownMenuTrigger asChild>
             <button
               className={cn(
-                "flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                "flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:text-sidebar-foreground",
                 personaFilter.length > 0 && "text-sidebar-foreground",
               )}
               title="Filter, sort and group"
