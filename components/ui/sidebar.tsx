@@ -564,7 +564,7 @@ SidebarTrigger.displayName = "SidebarTrigger";
 
 const SidebarRail = forwardRef<HTMLButtonElement, ComponentProps<"button">>(
   ({ className, ...props }, ref) => {
-    const { toggleSidebar, setSidebarWidth, setIsResizing, state } =
+    const { toggleSidebar, setSidebarWidth, setIsResizing, state, peek } =
       useSidebar();
     const dragRef = useRef<{ startX: number; moved: boolean } | null>(null);
 
@@ -602,6 +602,10 @@ const SidebarRail = forwardRef<HTMLButtonElement, ComponentProps<"button">>(
         toggleSidebar();
       }
     };
+
+    if (state !== "expanded" || peek) {
+      return null;
+    }
 
     return (
       <button
