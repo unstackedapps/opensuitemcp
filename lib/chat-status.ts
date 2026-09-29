@@ -2,11 +2,33 @@ import type { Chat } from "@/lib/db/schema";
 
 export type StreamOutcome = "completed" | "error";
 
-/** A chat row as the sidebar reads it: the row plus what its streams say. */
-export type ChatWithActivity = Chat & {
+/**
+ * A chat row as the sidebar reads it: the row plus what its streams say.
+ *
+ * The timestamps are `Date | string` because the sidebar is fed by
+ * `Response.json`, which renders a Date as an ISO string. Typing them as Date
+ * and calling `.getTime()` on the result throws on every row.
+ */
+export type ChatWithActivity = Omit<
+  Chat,
+  "createdAt" | "updatedAt" | "lastViewedAt"
+> & {
+  createdAt: Date | string;
+  updatedAt: Date | string;
+  lastViewedAt: Date | string | null;
   isLive: boolean;
   lastOutcome: StreamOutcome | null;
 };
+
+function millis(value: Date | string): number {
+  return value instanceof Date ? value.getTime() : new Date(value).getTime();
+}
+
+/** Same reason as `millis`: the value is a Date on the server, a string once it
+ * has been through Response.json. */
+export function toIso(value: Date | string): string {
+  return value instanceof Date ? value.toISOString() : value;
+}
 
 /**
  * Four states, one per dot.
@@ -24,7 +46,7 @@ export function chatStatus(chat: ChatWithActivity): ChatStatus {
 
   const unviewed =
     chat.lastViewedAt === null ||
-    chat.updatedAt.getTime() > chat.lastViewedAt.getTime();
+    millis(chat.updatedAt) > millis(chat.lastViewedAt);
 
   if (!unviewed) {
     return "idle";

@@ -14,6 +14,7 @@ import {
   readUserSkillContent,
   resolveUserSkillSurface,
 } from "@/lib/ai/skills/user-surface";
+import { toIso } from "@/lib/chat-status";
 import {
   getChatById,
   getChatsByUserId,
@@ -268,7 +269,7 @@ const listChats: McpToolDefinition = {
     const rows = page.chats.map((row) => ({
       id: row.id,
       title: row.title,
-      createdAt: row.createdAt.toISOString(),
+      createdAt: toIso(row.createdAt),
       visibility: row.visibility,
     }));
 

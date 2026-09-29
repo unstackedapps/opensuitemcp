@@ -24,9 +24,7 @@ describe("chatStatus", () => {
 
   it("viewed after the last change is idle", () => {
     assert.equal(
-      chatStatus(
-        chat({ lastViewedAt: new Date("2026-09-28T12:00:01Z") }),
-      ),
+      chatStatus(chat({ lastViewedAt: new Date("2026-09-28T12:00:01Z") })),
       "idle",
     );
   });
@@ -57,14 +55,41 @@ describe("chatStatus", () => {
 
   it("changed since the last view is finished", () => {
     assert.equal(
-      chatStatus(
-        chat({ lastViewedAt: new Date("2026-09-28T11:59:59Z") }),
-      ),
+      chatStatus(chat({ lastViewedAt: new Date("2026-09-28T11:59:59Z") })),
       "finished",
     );
   });
 
   it("a completed run the user has not seen is finished, not needsUser", () => {
     assert.equal(chatStatus(chat({ lastOutcome: "completed" })), "finished");
+  });
+
+  // The sidebar is fed by Response.json, so every timestamp arrives as a
+  // string. Calling .getTime() on one threw on every row and took the app down.
+  it("reads timestamps that arrived over the wire as ISO strings", () => {
+    const wire = JSON.parse(
+      JSON.stringify(
+        chat({
+          updatedAt: new Date("2026-09-28T12:00:00Z"),
+          lastViewedAt: new Date("2026-09-28T11:59:59Z"),
+        }),
+      ),
+    ) as ChatWithActivity;
+
+    assert.equal(typeof wire.updatedAt, "string");
+    assert.equal(chatStatus(wire), "finished");
+  });
+
+  it("treats a viewed chat as idle over the wire too", () => {
+    const wire = JSON.parse(
+      JSON.stringify(
+        chat({
+          updatedAt: new Date("2026-09-28T12:00:00Z"),
+          lastViewedAt: new Date("2026-09-28T12:00:01Z"),
+        }),
+      ),
+    ) as ChatWithActivity;
+
+    assert.equal(chatStatus(wire), "idle");
   });
 });

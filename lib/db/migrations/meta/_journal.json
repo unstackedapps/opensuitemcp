@@ -281,6 +281,13 @@
       "when": 1790226320197,
       "tag": "0039_chat_activity_state",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1790229920197,
+      "tag": "0040_chat_groups",
+      "breakpoints": true
     }
   ]
 }
