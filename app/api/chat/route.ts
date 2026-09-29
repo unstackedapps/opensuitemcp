@@ -161,6 +161,7 @@ export async function POST(request: Request) {
       personaId: requestPersonaId,
       refiningPersonaId: requestRefiningPersonaId,
       invokedConnectedSkillIds: requestInvokedConnectedSkillIds,
+      groupId: requestGroupId,
     }: {
       id: string;
       message: ChatMessage;
@@ -170,6 +171,7 @@ export async function POST(request: Request) {
       personaId?: string | null;
       refiningPersonaId?: string | null;
       invokedConnectedSkillIds?: string[];
+      groupId?: string | null;
     } = requestBody;
 
     const session = await auth();
@@ -354,6 +356,7 @@ export async function POST(request: Request) {
           visibility: selectedVisibilityType,
           aiProviderId: stampedProviderId,
           personaId: stampedPersonaId,
+          groupId: requestGroupId ?? null,
         });
 
         if (titleProvider !== "custom" && titleApiKey) {

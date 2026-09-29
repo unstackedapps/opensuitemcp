@@ -3,7 +3,7 @@
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import { unstable_serialize } from "swr/infinite";
 import { CanvasPanel } from "@/components/canvas/canvas-panel";
@@ -196,6 +196,26 @@ export function Chat({
   // A chat started from a group's + carries ?group=. The row does not exist
   // until the first turn saves, so the filing waits for onFinish.
   const pendingGroupRef = useRef<string | null>(null);
+
+  // The group the heading's plus was clicked in. It rides along with the first
+  // message so the chat is written into the group, rather than being moved
+  // after the turn — a turn that errors or is navigated away from never moved.
+  const readPendingGroup = useCallback(() => {
+    if (pendingGroupRef.current) {
+      return pendingGroupRef.current;
+    }
+    try {
+      return window.sessionStorage.getItem(`${PENDING_GROUP_KEY}${id}`);
+    } catch {
+      return null;
+    }
+  }, [id]);
+
+  // The transport is built once, so it reads the helper through a ref.
+  const readPendingGroupRef = useRef(readPendingGroup);
+  useEffect(() => {
+    readPendingGroupRef.current = readPendingGroup;
+  }, [readPendingGroup]);
   const startingInterviewRef = useRef(false);
 
   // Update refs when values change (these are used inside transport callbacks)
@@ -410,6 +430,7 @@ export function Chat({
               selectedVisibilityType: visibilityTypeRef.current,
               aiProviderId: aiProviderIdRef.current,
               personaId: personaIdRef.current ?? "ava",
+              groupId: readPendingGroupRef.current(),
               ...request.body,
             },
           };
@@ -458,33 +479,22 @@ export function Chat({
         );
       }
 
-      let pendingGroup = pendingGroupRef.current;
-      if (!pendingGroup) {
-        try {
-          pendingGroup = window.sessionStorage.getItem(
-            `${PENDING_GROUP_KEY}${id}`,
-          );
-        } catch {
-          pendingGroup = null;
-        }
-      }
-      if (pendingGroup) {
-        pendingGroupRef.current = null;
-        try {
-          window.sessionStorage.removeItem(`${PENDING_GROUP_KEY}${id}`);
-        } catch {
-          // Nothing to clear.
-        }
-        await fetch(`/api/chat/${id}/group`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ groupId: pendingGroup }),
-        });
+      // The group went in with the first message, so the chat is already
+      // filed. Drop the pick so a later turn does not carry it again.
+      pendingGroupRef.current = null;
+      try {
+        window.sessionStorage.removeItem(`${PENDING_GROUP_KEY}${id}`);
+      } catch {
+        // Nothing to clear.
       }
 
       // After the delay above, so it lands behind the server's updatedAt bump.
       // Without it the chat you are reading turns blue while you read it.
-      await markChatViewed(id);
+      // Only while it is still the chat on screen: a turn that finishes after
+      // you moved to another chat is one you have not read, so it stays blue.
+      if (window.location.pathname === `/chat/${id}`) {
+        await markChatViewed(id);
+      }
       mutate(unstable_serialize(getChatHistoryPaginationKey));
     },
     onError: (error) => {
@@ -715,7 +725,7 @@ export function Chat({
           lastViewedAt: now,
           isLive: true,
           lastOutcome: null,
-          groupId: null,
+          groupId: readPendingGroup(),
           agentActiveAt: null,
           summary: null,
           visibility: initialVisibilityType,
@@ -729,7 +739,7 @@ export function Chat({
       },
       { revalidate: true },
     );
-  }, [status, mutate, id, initialVisibilityType, personaId]);
+  }, [status, mutate, id, initialVisibilityType, personaId, readPendingGroup]);
 
   const searchParams = useSearchParams();
   const query = searchParams.get("query");
