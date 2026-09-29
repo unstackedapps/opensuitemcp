@@ -121,13 +121,13 @@ export function AppSidebar({ user }: { user: User | undefined }) {
           )}
           {showExpandedChrome ? (
             <a
-              className="min-w-0 flex-1 truncate rounded px-1 text-sidebar-foreground/90 transition-colors hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+              className="flex min-w-0 flex-1 items-center rounded px-1 text-sidebar-foreground/90 transition-colors hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
               href={PUBLIC_DOCS_ORIGIN}
               rel="noopener noreferrer"
               target="_blank"
               title="Open opensuitemcp.com"
             >
-              <AppWordmark />
+              <AppWordmark className="min-w-0 truncate" />
             </a>
           ) : null}
         </div>
