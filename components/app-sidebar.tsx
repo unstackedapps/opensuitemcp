@@ -76,7 +76,6 @@ export function AppSidebar({ user }: { user: User | undefined }) {
 
   return (
     <Sidebar
-      className="group-data-[side=left]:border-r-0"
       collapsible="icon"
       onBlur={(event: FocusEvent<HTMLDivElement>) => {
         if (isMobile || !sidebarCollapsed) {
