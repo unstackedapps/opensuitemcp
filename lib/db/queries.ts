@@ -188,6 +188,7 @@ export async function saveChat({
   personaId,
   refiningPersonaId,
   personaInterview,
+  groupId,
 }: {
   id: string;
   userId: string;
@@ -198,8 +199,21 @@ export async function saveChat({
   personaId?: string | null;
   refiningPersonaId?: string | null;
   personaInterview?: PersonaInterviewState | null;
+  groupId?: string | null;
 }) {
   try {
+    // The group arrives from the client, so it has to belong to this user or a
+    // crafted id would file someone else's group id onto your chat.
+    let ownedGroupId: string | null = null;
+    if (groupId) {
+      const [owned] = await db
+        .select({ id: chatGroup.id })
+        .from(chatGroup)
+        .where(and(eq(chatGroup.id, groupId), eq(chatGroup.userId, userId)))
+        .limit(1);
+      ownedGroupId = owned ? groupId : null;
+    }
+
     return await db.insert(chat).values({
       id,
       createdAt: new Date(),
@@ -211,6 +225,7 @@ export async function saveChat({
       personaId: personaId ?? null,
       refiningPersonaId: refiningPersonaId ?? null,
       personaInterview: personaInterview ?? null,
+      groupId: ownedGroupId,
     });
   } catch (_error) {
     throw new ChatSDKError("bad_request:database", "Failed to save chat");

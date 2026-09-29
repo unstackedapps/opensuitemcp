@@ -234,12 +234,12 @@ function ChatGroupSection({
         onClick={onToggle}
         type="button"
       >
-        <span className="min-w-0 truncate text-[12px] text-sidebar-foreground/45">
+        <span className="min-w-0 truncate text-[12px] text-sidebar-foreground/45 transition-colors group-hover/title:text-sidebar-foreground">
           {group ? group.name : "Ungrouped"}
         </span>
         <span
           className={cn(
-            "shrink-0 text-sidebar-foreground/45 transition",
+            "shrink-0 text-sidebar-foreground/45 transition group-hover/title:text-sidebar-foreground",
             collapsed
               ? "-rotate-90 opacity-100"
               : "opacity-0 group-hover/group-header:opacity-100",
@@ -852,13 +852,13 @@ export function SidebarHistory({
           <DropdownMenuTrigger asChild>
             <button
               className={cn(
-                "flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:text-sidebar-foreground",
+                "flex size-5 shrink-0 items-center justify-center rounded text-sidebar-foreground/50 hover:text-sidebar-foreground",
                 personaFilter.length > 0 && "text-sidebar-foreground",
               )}
               title="Filter, sort and group"
               type="button"
             >
-              <SlidersIcon size={15} />
+              <SlidersIcon size={14} />
               <span className="sr-only">Filter, sort and group</span>
             </button>
           </DropdownMenuTrigger>

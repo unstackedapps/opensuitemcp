@@ -36,6 +36,8 @@ export const postRequestBodySchema = z.object({
   aiProviderId: z.string().max(64).optional().nullable(),
   personaId: z.string().max(64).optional().nullable(),
   refiningPersonaId: z.string().max(64).optional().nullable(),
+  /** The group a new chat is filed into, from the heading's plus */
+  groupId: z.string().uuid().optional().nullable(),
   /** Skills invoked via / in the composer for this turn only */
   invokedConnectedSkillIds: z.array(z.string().max(256)).max(20).optional(),
 });
