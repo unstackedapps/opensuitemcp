@@ -125,7 +125,7 @@ const PureChatItem = ({
     chatId: chat.id,
     initialVisibilityType: chat.visibility,
   });
-  const status = chatStatus(chat);
+  const status = chatStatus(chat, isActive);
   const personaLabel = clientPersonaShortNameWithCustoms(
     chat.personaId,
     personaCustoms,
@@ -330,7 +330,10 @@ export const ChatItem = memo(PureChatItem, (prevProps, nextProps) => {
   if (prevProps.personaCustoms !== nextProps.personaCustoms) {
     return false;
   }
-  if (chatStatus(prevProps.chat) !== chatStatus(nextProps.chat)) {
+  if (
+    chatStatus(prevProps.chat, prevProps.isActive) !==
+    chatStatus(nextProps.chat, nextProps.isActive)
+  ) {
     return false;
   }
   return true;

@@ -80,6 +80,24 @@ describe("chatStatus", () => {
     assert.equal(chatStatus(wire), "finished");
   });
 
+  it("the chat on screen never reads finished, so no dot flashes at it", () => {
+    const justFinished = chat({ lastViewedAt: null, lastOutcome: "completed" });
+    assert.equal(chatStatus(justFinished), "finished");
+    assert.equal(chatStatus(justFinished, true), "idle");
+  });
+
+  it("the chat on screen still pulses while its turn runs", () => {
+    assert.equal(chatStatus(chat({ isLive: true }), true), "working");
+  });
+
+  it("drops the cap dot for the chat on screen, which shows the banner", () => {
+    assert.equal(chatStatus(chat({ maxIterationsReached: true })), "needsUser");
+    assert.equal(
+      chatStatus(chat({ maxIterationsReached: true }), true),
+      "idle",
+    );
+  });
+
   it("treats a viewed chat as idle over the wire too", () => {
     const wire = JSON.parse(
       JSON.stringify(
