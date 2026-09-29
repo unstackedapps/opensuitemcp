@@ -3,7 +3,12 @@ import { memo } from "react";
 import { useAppPortal } from "@/components/portal/context";
 import { useChatVisibility } from "@/hooks/use-chat-visibility";
 import { clientPersonaShortNameWithCustoms } from "@/lib/ai/personas/ids";
-import type { Chat } from "@/lib/db/schema";
+import {
+  CHAT_STATUS_LABEL,
+  type ChatStatus,
+  type ChatWithActivity,
+  chatStatus,
+} from "@/lib/chat-status";
 import { cn } from "@/lib/utils";
 import {
   CheckCircleFillIcon,
@@ -49,6 +54,36 @@ function FadedSidebarText({
   );
 }
 
+const DOT_COLOR: Record<Exclude<ChatStatus, "idle">, string> = {
+  working: "var(--chat-dot-working)",
+  needsUser: "var(--chat-dot-needs-user)",
+  finished: "var(--chat-dot-finished)",
+};
+
+function StatusDot({ status }: { status: ChatStatus }) {
+  const label = CHAT_STATUS_LABEL[status];
+
+  return (
+    <span
+      aria-hidden={label === "" ? "true" : undefined}
+      className="flex size-3.5 shrink-0 items-center justify-center"
+      title={label || undefined}
+    >
+      <span
+        className={cn(
+          "size-[7px] rounded-full",
+          status === "working" && "animate-pulse",
+          status === "idle" && "border border-[var(--chat-dot-idle)]",
+        )}
+        style={
+          status === "idle" ? undefined : { backgroundColor: DOT_COLOR[status] }
+        }
+      />
+      {label ? <span className="sr-only">{label}</span> : null}
+    </span>
+  );
+}
+
 const EMPTY_PERSONA_CUSTOMS: Array<{
   id: string;
   shortName?: string;
@@ -63,7 +98,7 @@ const PureChatItem = ({
   setOpenMobile,
   tone = "sidebar",
 }: {
-  chat: Chat;
+  chat: ChatWithActivity;
   isActive: boolean;
   onDelete: (chatId: string) => void;
   personaCustoms?: Array<{ id: string; shortName?: string; name?: string }>;
@@ -75,6 +110,7 @@ const PureChatItem = ({
     chatId: chat.id,
     initialVisibilityType: chat.visibility,
   });
+  const status = chatStatus(chat);
   const personaLabel = clientPersonaShortNameWithCustoms(
     chat.personaId,
     personaCustoms,
@@ -113,7 +149,8 @@ const PureChatItem = ({
             closePortal();
           }}
         >
-          <FadedSidebarText className="text-sm leading-5">
+          <StatusDot status={status} />
+          <FadedSidebarText className="text-[13px] leading-[18px]">
             {chat.title}
           </FadedSidebarText>
           <span
@@ -217,6 +254,9 @@ export const ChatItem = memo(PureChatItem, (prevProps, nextProps) => {
     return false;
   }
   if (prevProps.chat.personaId !== nextProps.chat.personaId) {
+    return false;
+  }
+  if (chatStatus(prevProps.chat) !== chatStatus(nextProps.chat)) {
     return false;
   }
   if (prevProps.personaCustoms !== nextProps.personaCustoms) {

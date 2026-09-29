@@ -27,22 +27,22 @@ import {
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { clientPersonaShortNameWithCustoms } from "@/lib/ai/personas/ids";
-import type { Chat } from "@/lib/db/schema";
+import type { ChatWithActivity } from "@/lib/chat-status";
 import { cn, fetcher } from "@/lib/utils";
 import { LoaderIcon } from "./icons";
 import { ChatItem } from "./sidebar-history-item";
 import { toast } from "./toast";
 
 type GroupedChats = {
-  today: Chat[];
-  yesterday: Chat[];
-  lastWeek: Chat[];
-  lastMonth: Chat[];
-  older: Chat[];
+  today: ChatWithActivity[];
+  yesterday: ChatWithActivity[];
+  lastWeek: ChatWithActivity[];
+  lastMonth: ChatWithActivity[];
+  older: ChatWithActivity[];
 };
 
 export type ChatHistory = {
-  chats: Chat[];
+  chats: ChatWithActivity[];
   hasMore: boolean;
 };
 
@@ -54,7 +54,7 @@ type PersonasPayload = {
 };
 
 function chatMatchesQuery(
-  chat: Chat,
+  chat: ChatWithActivity,
   query: string,
   customs: Array<{ id: string; shortName?: string; name?: string }>,
 ): boolean {
@@ -70,14 +70,14 @@ function chatMatchesQuery(
   );
 }
 
-const groupChatsByDate = (chats: Chat[]): GroupedChats => {
+const groupChatsByDate = (chats: ChatWithActivity[]): GroupedChats => {
   const now = new Date();
   const oneWeekAgo = subWeeks(now, 1);
   const oneMonthAgo = subMonths(now, 1);
 
   return chats.reduce(
     (groups, chat) => {
-      const chatDate = new Date(chat.createdAt);
+      const chatDate = new Date(chat.updatedAt);
 
       if (isToday(chatDate)) {
         groups.today.push(chat);
@@ -113,7 +113,7 @@ function ChatDayGroup({
   tone = "sidebar",
 }: {
   label: string;
-  chats: Chat[];
+  chats: ChatWithActivity[];
   activeChatId: string | undefined;
   onDelete: (chatId: string) => void;
   personaCustoms: Array<{ id: string; shortName?: string; name?: string }>;

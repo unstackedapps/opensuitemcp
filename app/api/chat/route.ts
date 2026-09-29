@@ -77,6 +77,7 @@ import { isProductionEnvironment, isTestEnvironment } from "@/lib/constants";
 import {
   createStreamId,
   deleteChatById,
+  finishStream,
   getChatById,
   getMessageCountByUserId,
   getMessagesByChatId,
@@ -1090,6 +1091,10 @@ export async function POST(request: Request) {
       },
       generateId: generateUUID,
       onFinish: async ({ messages }) => {
+        // Ahead of the early return below: the sidebar's "working" dot clears on
+        // finishedAt, and a failed run has to clear it too.
+        await finishStream({ streamId, outcome: "completed" });
+
         // Don't save messages if an error occurred - error is already saved in onError
         if (hasErrorOccurred) {
           console.log("[Chat] Skipping onFinish save - error occurred");
@@ -1139,6 +1144,9 @@ export async function POST(request: Request) {
       onError: (error: unknown) => {
         // Mark that an error occurred to prevent onFinish from saving empty messages
         hasErrorOccurred = true;
+
+        // Fire-and-forget, like the error message save below.
+        void finishStream({ streamId, outcome: "error" });
 
         // Log error for debugging - SDK will handle propagation to client
         console.error("[Chat] Error in onError handler:", error);

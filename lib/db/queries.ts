@@ -6,14 +6,17 @@ import {
   count,
   desc,
   eq,
+  getTableColumns,
   gt,
   gte,
   inArray,
+  isNull,
   lt,
   notLike,
   type SQL,
 } from "drizzle-orm";
 import type { VisibilityType } from "@/components/visibility-selector";
+import type { ChatWithActivity } from "@/lib/chat-status";
 import { assignUserToDefaultOrgMember } from "@/lib/org/queries";
 import type {
   CustomPersona,
@@ -26,9 +29,9 @@ import { ChatSDKError } from "../errors";
 import type { NetsuiteMcpToolSettings } from "../netsuite/mcp-tool-settings";
 import type { AppUsage } from "../usage";
 import { generateUUID } from "../utils";
+import { isLiveSql, lastOutcomeSql } from "./chat-activity-sql";
 import { db } from "./client";
 import {
-  type Chat,
   chat,
   type DBMessage,
   message,
@@ -276,19 +279,24 @@ export async function getChatsByUserId({
   try {
     const extendedLimit = limit + 1;
 
+    // Two correlated subqueries rather than a join: a chat has many streams and
+    // a join would fan the rows out before the limit applies.
+    const isLive = isLiveSql.as("isLive");
+    const lastOutcome = lastOutcomeSql.as("lastOutcome");
+
     const query = (whereCondition?: SQL<any>) =>
       db
-        .select()
+        .select({ ...getTableColumns(chat), isLive, lastOutcome })
         .from(chat)
         .where(
           whereCondition
             ? and(whereCondition, eq(chat.userId, id))
             : eq(chat.userId, id),
         )
-        .orderBy(desc(chat.createdAt))
+        .orderBy(desc(chat.updatedAt))
         .limit(extendedLimit);
 
-    let filteredChats: Chat[] = [];
+    let filteredChats: ChatWithActivity[] = [];
 
     if (startingAfter) {
       const [selectedChat] = await db
@@ -304,7 +312,7 @@ export async function getChatsByUserId({
         );
       }
 
-      filteredChats = await query(gt(chat.createdAt, selectedChat.createdAt));
+      filteredChats = await query(gt(chat.updatedAt, selectedChat.updatedAt));
     } else if (endingBefore) {
       const [selectedChat] = await db
         .select()
@@ -319,7 +327,7 @@ export async function getChatsByUserId({
         );
       }
 
-      filteredChats = await query(lt(chat.createdAt, selectedChat.createdAt));
+      filteredChats = await query(lt(chat.updatedAt, selectedChat.updatedAt));
     } else {
       filteredChats = await query();
     }
@@ -354,7 +362,17 @@ export async function getChatById({ id }: { id: string }) {
 
 export async function saveMessages({ messages }: { messages: DBMessage[] }) {
   try {
-    return await db.insert(message).values(messages);
+    return await db.transaction(async (tx) => {
+      const inserted = await tx.insert(message).values(messages);
+      const chatIds = [...new Set(messages.map((m) => m.chatId))];
+      if (chatIds.length > 0) {
+        await tx
+          .update(chat)
+          .set({ updatedAt: new Date() })
+          .where(inArray(chat.id, chatIds));
+      }
+      return inserted;
+    });
   } catch (_error) {
     throw new ChatSDKError("bad_request:database", "Failed to save messages");
   }
@@ -411,6 +429,10 @@ export async function appendChatMessage({
       const createdAt = new Date(Math.max(Date.now(), previous + 1));
 
       await tx.insert(message).values({ id, chatId, role, parts, createdAt });
+      await tx
+        .update(chat)
+        .set({ updatedAt: createdAt })
+        .where(eq(chat.id, chatId));
 
       return { createdAt, chatTitle: owner.title };
     });
@@ -729,6 +751,49 @@ export async function createStreamId({
     throw new ChatSDKError(
       "bad_request:database",
       "Failed to create stream id",
+    );
+  }
+}
+
+export async function finishStream({
+  streamId,
+  outcome,
+}: {
+  streamId: string;
+  outcome: "completed" | "error";
+}) {
+  try {
+    // 'error' always wins, whichever hook fires first: onError and onFinish can
+    // both run for one failed stream, and the SDK does not order them.
+    await db
+      .update(stream)
+      .set({ finishedAt: new Date(), outcome })
+      .where(
+        outcome === "error"
+          ? eq(stream.id, streamId)
+          : and(eq(stream.id, streamId), isNull(stream.finishedAt)),
+      );
+  } catch (_error) {
+    throw new ChatSDKError("bad_request:database", "Failed to finish stream");
+  }
+}
+
+export async function markChatViewed({
+  chatId,
+  userId,
+}: {
+  chatId: string;
+  userId: string;
+}) {
+  try {
+    await db
+      .update(chat)
+      .set({ lastViewedAt: new Date() })
+      .where(and(eq(chat.id, chatId), eq(chat.userId, userId)));
+  } catch (_error) {
+    throw new ChatSDKError(
+      "bad_request:database",
+      "Failed to mark chat viewed",
     );
   }
 }
