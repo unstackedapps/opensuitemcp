@@ -668,6 +668,15 @@ export function Chat({
     }
   }, [status]);
 
+  // The moment a turn starts, its Stream row exists and the row should read as
+  // working. Waiting for the next poll would show the dot seconds late in the
+  // one chat the user is looking at.
+  useEffect(() => {
+    if (status === "submitted" || status === "streaming") {
+      mutate(unstable_serialize(getChatHistoryPaginationKey));
+    }
+  }, [status, mutate]);
+
   const searchParams = useSearchParams();
   const query = searchParams.get("query");
 

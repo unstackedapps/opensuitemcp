@@ -4,7 +4,13 @@ import { motion } from "framer-motion";
 import { Search } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import type { User } from "next-auth";
-import { type CSSProperties, useCallback, useMemo, useState } from "react";
+import {
+  type CSSProperties,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import useSWR from "swr";
 import useSWRInfinite from "swr/infinite";
 import {
@@ -65,6 +71,7 @@ type SortKey = "activity" | "title";
 const PAGE_SIZE = 20;
 const HISTORY_SKELETON_WIDTHS = [44, 32, 28, 64, 52] as const;
 const GROUPS_KEY = "/api/chat-groups";
+const UNGROUPED_COLLAPSED_KEY = "sidebar:ungrouped-collapsed";
 
 type PersonasPayload = {
   personas?: Array<{ id: string; name?: string; shortName?: string }>;
@@ -103,6 +110,7 @@ function sortChats(
 function ChatGroupSection({
   activeChatId,
   chats,
+  collapsed,
   filtering,
   group,
   groups,
@@ -113,7 +121,7 @@ function ChatGroupSection({
   onNewGroupWith,
   onRename,
   onRenameGroup,
-  onToggleCollapsed,
+  onToggle,
   personaCustoms,
   setOpenMobile,
   showHeader,
@@ -121,6 +129,7 @@ function ChatGroupSection({
 }: {
   activeChatId: string | undefined;
   chats: ChatWithActivity[];
+  collapsed: boolean;
   filtering: boolean;
   group: ChatGroup | null;
   groups: ChatGroup[];
@@ -131,14 +140,12 @@ function ChatGroupSection({
   onNewGroupWith: (chatId: string) => void;
   onRename: (chatId: string) => void;
   onRenameGroup: (group: ChatGroup) => void;
-  onToggleCollapsed: (group: ChatGroup) => void;
+  onToggle: () => void;
   personaCustoms: PersonaRef[];
   setOpenMobile: (open: boolean) => void;
   showHeader: boolean;
   tone: "sidebar" | "panel";
 }) {
-  const collapsed = group?.collapsed ?? false;
-
   // An empty group you made still shows, because you need its + to fill it.
   // A group with no matches under a search or filter is just a stranded
   // heading, so it goes.
@@ -150,26 +157,22 @@ function ChatGroupSection({
     <div>
       {showHeader ? (
         <div className="group/group-header flex h-6 items-center gap-1 pr-1 pl-2">
-          {group ? (
-            <button
-              aria-expanded={!collapsed}
-              className="-ml-1 flex size-4 shrink-0 items-center justify-center rounded text-sidebar-foreground/50 hover:text-sidebar-foreground"
-              onClick={() => onToggleCollapsed(group)}
-              type="button"
+          <button
+            aria-expanded={!collapsed}
+            className="-ml-1 flex size-4 shrink-0 items-center justify-center rounded text-sidebar-foreground/50 hover:text-sidebar-foreground"
+            onClick={onToggle}
+            type="button"
+          >
+            <span
+              className={cn("transition-transform", collapsed && "-rotate-90")}
             >
-              <span
-                className={cn(
-                  "transition-transform",
-                  collapsed && "-rotate-90",
-                )}
-              >
-                <ChevronDownIcon size={12} />
-              </span>
-              <span className="sr-only">
-                {collapsed ? "Expand" : "Collapse"} {group.name}
-              </span>
-            </button>
-          ) : null}
+              <ChevronDownIcon size={12} />
+            </span>
+            <span className="sr-only">
+              {collapsed ? "Expand" : "Collapse"}{" "}
+              {group ? group.name : "Ungrouped"}
+            </span>
+          </button>
 
           <span className="min-w-0 flex-1 truncate text-[11px] text-sidebar-foreground/50">
             {group ? group.name : "Ungrouped"}
@@ -319,6 +322,11 @@ export function SidebarHistory({
     mutate,
   } = useSWRInfinite<ChatHistory>(getChatHistoryPaginationKey, fetcher, {
     fallbackData: [],
+    // A turn creates its Stream row and clears it at the end, and nothing in
+    // the sidebar asked again in between — so a chat never rendered as
+    // working, least of all one an agent is driving in another thread. SWR
+    // skips hidden tabs, so a background window costs nothing.
+    refreshInterval: 10_000,
   });
 
   const router = useRouter();
@@ -338,6 +346,29 @@ export function SidebarHistory({
   );
   const [newGroupName, setNewGroupName] = useState("");
   const [showNewGroup, setShowNewGroup] = useState(false);
+  const [ungroupedCollapsed, setUngroupedCollapsedState] = useState(false);
+
+  useEffect(() => {
+    try {
+      setUngroupedCollapsedState(
+        window.localStorage.getItem(UNGROUPED_COLLAPSED_KEY) === "1",
+      );
+    } catch {
+      // Private windows and blocked site data both throw. Expanded is correct.
+    }
+  }, []);
+
+  const toggleUngrouped = useCallback(() => {
+    setUngroupedCollapsedState((current) => {
+      const next = !current;
+      try {
+        window.localStorage.setItem(UNGROUPED_COLLAPSED_KEY, next ? "1" : "0");
+      } catch {
+        // The state simply does not persist.
+      }
+      return next;
+    });
+  }, []);
 
   const { data: personasPayload } = useSWR<PersonasPayload>(
     user ? "/api/personas" : null,
@@ -701,6 +732,7 @@ export function SidebarHistory({
                       sort,
                     )}
                     filtering={filtering}
+                    collapsed={group.collapsed}
                     group={group}
                     groups={groups}
                     key={group.id}
@@ -734,8 +766,8 @@ export function SidebarHistory({
                         value: target.name,
                       })
                     }
-                    onToggleCollapsed={(target) => {
-                      void toggleCollapsed(target);
+                    onToggle={() => {
+                      void toggleCollapsed(group);
                     }}
                     personaCustoms={personaCustoms}
                     setOpenMobile={setOpenMobile}
@@ -748,6 +780,7 @@ export function SidebarHistory({
                   activeChatId={activeChatId}
                   chats={ungrouped}
                   filtering={filtering}
+                  collapsed={ungroupedCollapsed}
                   group={null}
                   groups={groups}
                   onDelete={requestDeleteChat}
@@ -780,9 +813,7 @@ export function SidebarHistory({
                       value: target.name,
                     })
                   }
-                  onToggleCollapsed={(target) => {
-                    void toggleCollapsed(target);
-                  }}
+                  onToggle={toggleUngrouped}
                   personaCustoms={personaCustoms}
                   setOpenMobile={setOpenMobile}
                   showHeader={groups.length > 0}
