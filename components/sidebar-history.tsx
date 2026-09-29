@@ -103,6 +103,7 @@ function sortChats(
 function ChatGroupSection({
   activeChatId,
   chats,
+  filtering,
   group,
   groups,
   onDelete,
@@ -120,6 +121,7 @@ function ChatGroupSection({
 }: {
   activeChatId: string | undefined;
   chats: ChatWithActivity[];
+  filtering: boolean;
   group: ChatGroup | null;
   groups: ChatGroup[];
   onDelete: (chatId: string) => void;
@@ -137,7 +139,10 @@ function ChatGroupSection({
 }) {
   const collapsed = group?.collapsed ?? false;
 
-  if (chats.length === 0 && group === null) {
+  // An empty group you made still shows, because you need its + to fill it.
+  // A group with no matches under a search or filter is just a stranded
+  // heading, so it goes.
+  if (chats.length === 0 && (group === null || filtering)) {
     return null;
   }
 
@@ -564,6 +569,7 @@ export function SidebarHistory({
         ),
     );
 
+  const filtering = query.trim().length > 0 || personaFilter.length > 0;
   const activeChatId = typeof id === "string" ? id : undefined;
   const ungrouped = sortChats(
     visibleChats.filter((chat) => chat.groupId === null),
@@ -694,6 +700,7 @@ export function SidebarHistory({
                       visibleChats.filter((chat) => chat.groupId === group.id),
                       sort,
                     )}
+                    filtering={filtering}
                     group={group}
                     groups={groups}
                     key={group.id}
@@ -740,6 +747,7 @@ export function SidebarHistory({
                 <ChatGroupSection
                   activeChatId={activeChatId}
                   chats={ungrouped}
+                  filtering={filtering}
                   group={null}
                   groups={groups}
                   onDelete={requestDeleteChat}
