@@ -376,19 +376,13 @@ export function SidebarHistory({
   // Only personas that actually appear in the loaded chats are offered, so the
   // filter never lists something that would return nothing.
   const personaOptions = useMemo(() => {
-    const seen = new Map<string, string>();
+    const labels = new Set<string>();
     for (const chat of allChats) {
-      const key = chat.personaId ?? "";
-      if (!seen.has(key)) {
-        seen.set(
-          key,
-          clientPersonaShortNameWithCustoms(chat.personaId, personaCustoms),
-        );
-      }
+      labels.add(
+        clientPersonaShortNameWithCustoms(chat.personaId, personaCustoms),
+      );
     }
-    return [...seen.entries()]
-      .map(([value, label]) => ({ value, label }))
-      .sort((a, b) => a.label.localeCompare(b.label));
+    return [...labels].sort((a, b) => a.localeCompare(b));
   }, [allChats, personaCustoms]);
 
   const requestDeleteChat = (chatId: string) => {
@@ -565,7 +559,9 @@ export function SidebarHistory({
     .filter(
       (chat) =>
         personaFilter.length === 0 ||
-        personaFilter.includes(chat.personaId ?? ""),
+        personaFilter.includes(
+          clientPersonaShortNameWithCustoms(chat.personaId, personaCustoms),
+        ),
     );
 
   const activeChatId = typeof id === "string" ? id : undefined;
@@ -639,23 +635,21 @@ export function SidebarHistory({
                     <>
                       <DropdownMenuSeparator />
                       <DropdownMenuLabel>Persona</DropdownMenuLabel>
-                      {personaOptions.map((option) => (
+                      {personaOptions.map((label) => (
                         <DropdownMenuCheckboxItem
-                          checked={personaFilter.includes(option.value)}
+                          checked={personaFilter.includes(label)}
                           className="cursor-pointer"
-                          key={option.value}
+                          key={label}
                           onCheckedChange={(checked) =>
                             setPersonaFilter((current) =>
                               checked
-                                ? [...current, option.value]
-                                : current.filter(
-                                    (value) => value !== option.value,
-                                  ),
+                                ? [...current, label]
+                                : current.filter((value) => value !== label),
                             )
                           }
                           onSelect={(event) => event.preventDefault()}
                         >
-                          {option.label}
+                          {label}
                         </DropdownMenuCheckboxItem>
                       ))}
                       {personaFilter.length > 0 ? (
