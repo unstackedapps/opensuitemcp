@@ -49,6 +49,10 @@ export type User = InferSelectModel<typeof user>;
 export const chat = pgTable("Chat", {
   id: uuid("id").primaryKey().notNull().defaultRandom(),
   createdAt: timestamp("createdAt").notNull(),
+  /** Touched by every message save, so history sorts by activity, not birth. */
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  /** Set when the owner opens the chat. Null means never opened. */
+  lastViewedAt: timestamp("lastViewedAt"),
   title: text("title").notNull(),
   summary: text("summary"),
   userId: uuid("userId")
@@ -113,6 +117,9 @@ export const stream = pgTable(
     id: uuid("id").notNull().defaultRandom(),
     chatId: uuid("chatId").notNull(),
     createdAt: timestamp("createdAt").notNull(),
+    /** Null while the run is live. A null older than STREAM_STALE_MS is a dead run. */
+    finishedAt: timestamp("finishedAt"),
+    outcome: varchar("outcome", { enum: ["completed", "error"] }),
   },
   (table) => ({
     pk: primaryKey({ columns: [table.id] }),

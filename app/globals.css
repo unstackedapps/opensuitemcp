@@ -45,6 +45,10 @@
   --sidebar-accent-foreground: hsl(0 0% 10%);
   --sidebar-border: hsl(0 0% 88%);
   --sidebar-ring: var(--ring);
+  --chat-dot-finished: hsl(213 72% 47%);
+  --chat-dot-needs-user: hsl(33 79% 43%);
+  --chat-dot-working: hsl(0 0% 52%);
+  --chat-dot-idle: hsl(0 0% 76%);
   /* border radius unit */
   --radius: 0.5rem;
   --sidebar: hsl(0 0% 96%);
@@ -52,40 +56,44 @@
 
 /* define design tokens (dark mode) - Gemini-inspired colors */
 .dark {
-  --background: hsl(210 3% 11%);
+  --background: hsl(48 3% 12%);
   /* Soft warm off-white — avoids harsh pure white on dark */
-  --foreground: hsl(40 8% 88%);
-  --card: hsl(240 2% 15%);
-  --card-foreground: hsl(40 8% 88%);
-  --popover: hsl(210 3% 11%);
+  --foreground: hsl(48 10% 87%);
+  --card: hsl(48 3% 16%);
+  --card-foreground: hsl(48 10% 87%);
+  --popover: hsl(48 3% 14%);
   --popover-foreground: hsl(40 6% 82%);
   --primary: hsl(40 6% 82%);
-  --primary-foreground: hsl(210 3% 11%);
-  --secondary: hsl(240 2% 15%);
+  --primary-foreground: hsl(48 3% 12%);
+  --secondary: hsl(48 3% 16%);
   --secondary-foreground: hsl(40 6% 82%);
-  --muted: hsl(240 2% 15%);
-  --muted-foreground: hsl(40 4% 62%);
-  --accent: hsl(240 2% 15%);
+  --muted: hsl(48 3% 16%);
+  --muted-foreground: hsl(48 5% 57%);
+  --accent: hsl(48 3% 16%);
   --accent-foreground: hsl(40 6% 82%);
   --destructive: hsl(0 72% 58%);
   --destructive-foreground: hsl(0 0% 98%);
-  --border: hsl(240 2% 20%);
-  --input: hsl(210 3% 20%);
+  --border: hsl(48 3% 21%);
+  --input: hsl(48 3% 20%);
   --ring: hsl(40 6% 70%);
   --chart-1: hsl(220 70% 50%);
   --chart-2: hsl(160 60% 45%);
   --chart-3: hsl(30 80% 55%);
   --chart-4: hsl(280 65% 60%);
   --chart-5: hsl(340 75% 55%);
-  --sidebar-background: hsl(210 4% 16%);
-  --sidebar-foreground: hsl(40 6% 78%);
+  --sidebar-background: hsl(48 3% 9%);
+  --sidebar-foreground: hsl(48 6% 72%);
   --sidebar-primary: hsl(224.3 76.3% 48%);
   --sidebar-primary-foreground: hsl(40 8% 92%);
-  --sidebar-accent: hsl(210 4% 22%);
+  --sidebar-accent: hsl(48 3% 16%);
   --sidebar-accent-foreground: hsl(40 6% 82%);
-  --sidebar-border: hsl(240 2% 20%);
+  --sidebar-border: hsl(48 3% 21%);
   --sidebar-ring: var(--ring);
-  --sidebar: hsl(210 4% 16%);
+  --sidebar: hsl(48 3% 9%);
+  --chat-dot-finished: hsl(213 74% 61%);
+  --chat-dot-needs-user: hsl(38 66% 54%);
+  --chat-dot-working: hsl(48 5% 57%);
+  --chat-dot-idle: hsl(48 3% 32%);
 }
 
 /* define theme */

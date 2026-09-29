@@ -46,6 +46,7 @@ import {
   readSessionPersonaId,
   writeSessionPersonaId,
 } from "@/lib/ai/personas/preferences";
+import { markChatViewed } from "@/lib/chat-viewed";
 import type { Vote } from "@/lib/db/schema";
 import { ChatSDKError } from "@/lib/errors";
 import type { ChatMessage } from "@/lib/types";
@@ -204,6 +205,14 @@ export function Chat({
   useEffect(() => {
     personaIdRef.current = personaId;
   }, [personaId]);
+
+  // Opening a chat is viewing it.
+  useEffect(() => {
+    if (isReadonly) {
+      return;
+    }
+    void markChatViewed(id);
+  }, [id, isReadonly]);
 
   // Restore session pick or open modal on empty new chats
   useEffect(() => {
@@ -440,6 +449,11 @@ export function Chat({
           error,
         );
       }
+
+      // After the delay above, so it lands behind the server's updatedAt bump.
+      // Without it the chat you are reading turns blue while you read it.
+      await markChatViewed(id);
+      mutate(unstable_serialize(getChatHistoryPaginationKey));
     },
     onError: (error) => {
       // Mark that an error occurred

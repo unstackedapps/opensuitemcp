@@ -274,6 +274,13 @@
       "when": 1790222720197,
       "tag": "0038_user_skill_files",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1790226320197,
+      "tag": "0039_chat_activity_state",
+      "breakpoints": true
     }
   ]
 }
