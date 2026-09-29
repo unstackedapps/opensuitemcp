@@ -4,7 +4,7 @@ import { PanelLeft, Plus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { User } from "next-auth";
-import type { FocusEvent } from "react";
+import { type FocusEvent, useRef } from "react";
 import { AppWordmark } from "@/components/app-wordmark";
 import { SidebarHistory } from "@/components/sidebar-history";
 import { SidebarUserNav } from "@/components/sidebar-user-nav";
@@ -29,10 +29,13 @@ function SidebarCollapseButton({
   label,
   onClick,
   onPeekStart,
+  onPeekRelease,
 }: {
   label: string;
   onClick: () => void;
   onPeekStart?: () => void;
+  /** The pointer has left, so a peek this control blocked can start again. */
+  onPeekRelease?: () => void;
 }) {
   return (
     <SidebarMenuButton
@@ -42,6 +45,7 @@ function SidebarCollapseButton({
       onClick={onClick}
       onFocus={onPeekStart}
       onMouseEnter={onPeekStart}
+      onMouseLeave={onPeekRelease}
       type="button"
     >
       <PanelLeft />
@@ -65,14 +69,25 @@ export function AppSidebar({ user }: { user: User | undefined }) {
   const showExpandedChrome = isMobile || !sidebarCollapsed || peek;
   const showAdminLink = isOrgAdminRole(user?.role);
 
+  // Collapsing swaps this control for the expand one, which is a different
+  // element in the same place: React mounts it under the cursor, mouseEnter
+  // fires, and the panel peeks straight back open. Clicking is an instruction
+  // to close, so peek waits until the pointer has actually left the control.
+  const peekBlockedRef = useRef(false);
+
   const handlePeekStart = () => {
-    if (isMobile || !sidebarCollapsed) {
+    if (isMobile || !sidebarCollapsed || peekBlockedRef.current) {
       return;
     }
     setPeek(true);
   };
 
+  const handlePeekRelease = () => {
+    peekBlockedRef.current = false;
+  };
+
   const handleCollapseClick = () => {
+    peekBlockedRef.current = true;
     setPeek(false);
     toggleSidebar();
   };
@@ -110,6 +125,7 @@ export function AppSidebar({ user }: { user: User | undefined }) {
             <SidebarCollapseButton
               label="Expand sidebar"
               onClick={handleCollapseClick}
+              onPeekRelease={handlePeekRelease}
               onPeekStart={handlePeekStart}
             />
           )}
@@ -117,6 +133,7 @@ export function AppSidebar({ user }: { user: User | undefined }) {
             <SidebarCollapseButton
               label="Collapse sidebar"
               onClick={handleCollapseClick}
+              onPeekRelease={handlePeekRelease}
             />
           )}
           {showExpandedChrome ? (
