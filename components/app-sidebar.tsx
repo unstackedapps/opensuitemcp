@@ -100,7 +100,8 @@ export function AppSidebar({ user }: { user: User | undefined }) {
     >
       <SidebarHeader>
         {/* The product name sits here, so the main header can carry the thread
-            title. Collapsed, the rail keeps the expand control alone. */}
+            title. The collapse control leads the row, which is where the expand
+            control stands when the panel is shut, so it does not move. */}
         <div className="flex h-8 items-center gap-1">
           {isMobile || !sidebarCollapsed ? null : (
             <SidebarCollapseButton
@@ -109,15 +110,15 @@ export function AppSidebar({ user }: { user: User | undefined }) {
               onPeekStart={handlePeekStart}
             />
           )}
-          {showExpandedChrome ? (
-            <AppWordmark className="min-w-0 flex-1 truncate px-1 text-sidebar-foreground" />
-          ) : null}
           {isMobile || sidebarCollapsed ? null : (
             <SidebarCollapseButton
               label="Collapse sidebar"
               onClick={handleCollapseClick}
             />
           )}
+          {showExpandedChrome ? (
+            <AppWordmark className="min-w-0 flex-1 truncate px-1 text-sidebar-foreground" />
+          ) : null}
         </div>
 
         <div className="flex items-center gap-1">
