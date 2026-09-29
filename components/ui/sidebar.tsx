@@ -516,7 +516,11 @@ const Sidebar = forwardRef<
         >
           <div
             className={cn(
-              "flex h-full flex-col bg-sidebar group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:border group-data-[variant=floating]:border-sidebar-border group-data-[variant=floating]:shadow [&::-webkit-scrollbar]:hidden",
+              // Collapsed, the rail is not a panel any more — it reads as part
+              // of the canvas, so it takes the canvas colour and the divider
+              // stays hidden.
+              visuallyExpanded ? "bg-sidebar" : "bg-background",
+              "flex h-full flex-col group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:border group-data-[variant=floating]:border-sidebar-border group-data-[variant=floating]:shadow [&::-webkit-scrollbar]:hidden",
               visuallyExpanded
                 ? "w-(--sidebar-width) min-w-(--sidebar-width)"
                 : "w-full"
