@@ -56,20 +56,20 @@
 
 /* define design tokens (dark mode) - Gemini-inspired colors */
 .dark {
-  --background: hsl(48 3% 12%);
+  --background: hsl(48 3% 9%);
   /* Soft warm off-white — avoids harsh pure white on dark */
   --foreground: hsl(48 10% 87%);
-  --card: hsl(48 3% 16%);
+  --card: hsl(48 3% 14%);
   --card-foreground: hsl(48 10% 87%);
-  --popover: hsl(48 3% 14%);
+  --popover: hsl(48 3% 13%);
   --popover-foreground: hsl(40 6% 82%);
   --primary: hsl(40 6% 82%);
-  --primary-foreground: hsl(48 3% 12%);
-  --secondary: hsl(48 3% 16%);
+  --primary-foreground: hsl(48 3% 9%);
+  --secondary: hsl(48 3% 14%);
   --secondary-foreground: hsl(40 6% 82%);
-  --muted: hsl(48 3% 16%);
+  --muted: hsl(48 3% 14%);
   --muted-foreground: hsl(48 5% 57%);
-  --accent: hsl(48 3% 16%);
+  --accent: hsl(48 3% 14%);
   --accent-foreground: hsl(40 6% 82%);
   --destructive: hsl(0 72% 58%);
   --destructive-foreground: hsl(0 0% 98%);

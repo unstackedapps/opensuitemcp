@@ -144,6 +144,7 @@ const PureChatItem = ({
       >
         <Link
           href={`/chat/${chat.id}`}
+          title={`${chat.title}\n${personaLabel}`}
           onClick={() => {
             setOpenMobile(false);
             closePortal();
@@ -153,12 +154,6 @@ const PureChatItem = ({
           <FadedSidebarText className="text-[13px] leading-[18px]">
             {chat.title}
           </FadedSidebarText>
-          <span
-            className="max-w-27 shrink-0 truncate rounded-full border border-border/50 bg-muted/60 px-1.5 py-px text-[10px] text-muted-foreground leading-4"
-            title={personaLabel}
-          >
-            {personaLabel}
-          </span>
         </Link>
       </SidebarMenuButton>
 
