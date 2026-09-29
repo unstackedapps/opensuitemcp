@@ -701,7 +701,10 @@ export function Chat({
   // A brand new chat has no row yet — the server writes it as the turn starts —
   // so revalidating alone leaves it out of the sidebar for up to a poll, which
   // is exactly while it is thinking. It goes in optimistically as "New chat",
-  // and the next fetch replaces it with the real row and its title.
+  // and onFinish's revalidate replaces it with the real row and its title.
+  //
+  // Not revalidated here: the fetch would land before the turn has written the
+  // row, so the list that came back dropped the row again for a frame.
   useEffect(() => {
     if (status !== "submitted" && status !== "streaming") {
       return;
@@ -737,7 +740,7 @@ export function Chat({
           ...pages.slice(1),
         ];
       },
-      { revalidate: true },
+      { revalidate: false },
     );
   }, [status, mutate, id, initialVisibilityType, personaId, readPendingGroup]);
 
