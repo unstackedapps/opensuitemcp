@@ -175,7 +175,7 @@ const PureChatItem = ({
       <DropdownMenu modal={false}>
         <div
           className={cn(
-            "pointer-events-none absolute inset-y-0 right-0 z-10 flex w-16 items-center justify-end overflow-hidden rounded-r-md pr-1.5",
+            "pointer-events-none absolute inset-y-0 right-0 z-10 flex w-16 items-center justify-end overflow-hidden rounded-r-md pr-1",
             "mask-[linear-gradient(to_left,black_2rem,transparent)]",
             "opacity-0 transition-opacity duration-150",
             "group-hover/menu-item:opacity-100 group-focus-within/menu-item:opacity-100",
@@ -186,14 +186,14 @@ const PureChatItem = ({
           <DropdownMenuTrigger asChild>
             <SidebarMenuAction
               className={cn(
-                "static top-auto right-auto size-5 translate-y-0 rounded bg-transparent p-0 hover:bg-black/10",
+                "static top-auto right-auto size-4 translate-y-0 rounded bg-transparent p-0 opacity-70 hover:bg-black/10 hover:opacity-100",
                 "pointer-events-none group-hover/menu-item:pointer-events-auto",
                 "group-focus-within/menu-item:pointer-events-auto data-[state=open]:pointer-events-auto",
                 "max-sm:pointer-events-auto",
               )}
               type="button"
             >
-              <MoreVerticalIcon size={14} />
+              <MoreVerticalIcon size={13} />
               <span className="sr-only">More</span>
             </SidebarMenuAction>
           </DropdownMenuTrigger>

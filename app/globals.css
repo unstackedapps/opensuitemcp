@@ -13,7 +13,7 @@
 
 /* define design tokens (light mode) - Gemini-inspired balanced inverse */
 :root {
-  --background: hsl(45 33% 98%);
+  --background: hsl(45 40% 99.5%);
   --foreground: hsl(40 9% 12%);
   --card: hsl(45 22% 95%);
   --card-foreground: hsl(0 0% 10%);
@@ -37,7 +37,7 @@
   --chart-3: hsl(197 37% 24%);
   --chart-4: hsl(43 74% 66%);
   --chart-5: hsl(27 87% 67%);
-  --sidebar-background: hsl(45 33% 98%);
+  --sidebar-background: hsl(45 24% 97%);
   --sidebar-foreground: hsl(45 8% 30%);
   --sidebar-primary: hsl(0 0% 10%);
   --sidebar-primary-foreground: hsl(0 0% 98%);
@@ -51,12 +51,12 @@
   --chat-dot-idle: hsl(0 0% 76%);
   /* border radius unit */
   --radius: 0.5rem;
-  --sidebar: hsl(45 33% 98%);
+  --sidebar: hsl(45 24% 97%);
 }
 
 /* define design tokens (dark mode) - Gemini-inspired colors */
 .dark {
-  --background: hsl(48 3% 9%);
+  --background: hsl(48 3% 11%);
   /* Soft warm off-white — avoids harsh pure white on dark */
   --foreground: hsl(48 10% 87%);
   --card: hsl(48 3% 14%);
@@ -81,7 +81,7 @@
   --chart-3: hsl(30 80% 55%);
   --chart-4: hsl(280 65% 60%);
   --chart-5: hsl(340 75% 55%);
-  --sidebar-background: hsl(48 3% 9%);
+  --sidebar-background: hsl(48 3% 7%);
   --sidebar-foreground: hsl(48 6% 72%);
   --sidebar-primary: hsl(224.3 76.3% 48%);
   --sidebar-primary-foreground: hsl(40 8% 92%);
@@ -89,7 +89,7 @@
   --sidebar-accent-foreground: hsl(40 6% 82%);
   --sidebar-border: hsl(48 3% 21%);
   --sidebar-ring: var(--ring);
-  --sidebar: hsl(48 3% 9%);
+  --sidebar: hsl(48 3% 7%);
   --chat-dot-finished: hsl(213 74% 61%);
   --chat-dot-needs-user: hsl(38 66% 54%);
   --chat-dot-working: hsl(48 5% 57%);

@@ -13,6 +13,7 @@ import {
 } from "react";
 import useSWR from "swr";
 import useSWRInfinite from "swr/infinite";
+import { useAppPortal } from "@/components/portal/context";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -311,6 +312,7 @@ export function SidebarHistory({
   variant?: "sidebar" | "panel";
 }) {
   const { setOpenMobile, revealText } = useSidebar();
+  const { openPortal } = useAppPortal();
   const { id } = useParams();
 
   const {
@@ -432,14 +434,20 @@ export function SidebarHistory({
     // fetch resolves on 403 and 404 as readily as on 200, so the old code ran
     // its success branch either way: the row vanished, the toast claimed the
     // chat was deleted, and the next revalidation put it back.
-    const deletePromise = fetch(`/api/chat?id=${target}`, {
-      method: "DELETE",
-    }).then(async (response) => {
+    const runDelete = async () => {
+      const response = await fetch(`/api/chat?id=${target}`, {
+        method: "DELETE",
+      });
+
       if (!response.ok) {
-        const body = (await response.json().catch(() => null)) as {
-          message?: string;
-        } | null;
-        throw new Error(body?.message ?? "Failed to delete chat");
+        let message = "Failed to delete chat";
+        try {
+          const body = (await response.json()) as { message?: string };
+          message = body?.message ?? message;
+        } catch {
+          // A body that is not JSON tells us nothing more than the status did.
+        }
+        throw new Error(message);
       }
 
       await mutate(
@@ -454,9 +462,9 @@ export function SidebarHistory({
       if (target === id) {
         router.push("/");
       }
-    });
+    };
 
-    toast.promise(deletePromise, {
+    toast.promise(runDelete(), {
       loading: "Deleting chat...",
       success: () => "Chat deleted",
       error: (error: unknown) =>
@@ -627,21 +635,35 @@ export function SidebarHistory({
             )}
           >
             <div className="flex items-center gap-1">
-              <div className="relative min-w-0 flex-1">
-                <Search className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                <SidebarInput
-                  aria-label="Search chats and personas"
-                  className={cn(
-                    "h-8 pl-7 text-sm focus-visible:ring-0 md:h-8 md:px-2.5 md:pl-7",
-                    variant === "panel" &&
-                      "border-border/50 bg-muted/40 shadow-none focus-visible:border-border",
-                  )}
-                  data-testid="sidebar-history-search"
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search chats and personas"
-                  value={query}
-                />
-              </div>
+              {variant === "panel" ? (
+                <div className="relative min-w-0 flex-1">
+                  <Search className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <SidebarInput
+                    aria-label="Search chats and personas"
+                    className="h-8 border-border/50 bg-muted/40 pl-7 text-sm shadow-none focus-visible:border-border focus-visible:ring-0 md:h-8 md:px-2.5 md:pl-7"
+                    data-testid="sidebar-history-search"
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="Search chats and personas"
+                    value={query}
+                  />
+                </div>
+              ) : (
+                <>
+                  {/* The field took a whole row to duplicate the search the
+                      Chats panel already has, so the sidebar keeps the icon
+                      and sends you there. */}
+                  <button
+                    className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    onClick={() => openPortal("chats")}
+                    title="Search chats"
+                    type="button"
+                  >
+                    <Search className="size-4" />
+                    <span className="sr-only">Search chats</span>
+                  </button>
+                  <div className="min-w-0 flex-1" />
+                </>
+              )}
 
               <DropdownMenu modal={false}>
                 <DropdownMenuTrigger asChild>

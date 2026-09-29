@@ -671,11 +671,49 @@ export function Chat({
   // The moment a turn starts, its Stream row exists and the row should read as
   // working. Waiting for the next poll would show the dot seconds late in the
   // one chat the user is looking at.
+  //
+  // A brand new chat has no row yet — the server writes it as the turn starts —
+  // so revalidating alone leaves it out of the sidebar for up to a poll, which
+  // is exactly while it is thinking. It goes in optimistically as "New chat",
+  // and the next fetch replaces it with the real row and its title.
   useEffect(() => {
-    if (status === "submitted" || status === "streaming") {
-      mutate(unstable_serialize(getChatHistoryPaginationKey));
+    if (status !== "submitted" && status !== "streaming") {
+      return;
     }
-  }, [status, mutate]);
+
+    void mutate(
+      unstable_serialize(getChatHistoryPaginationKey),
+      (pages?: ChatHistory[]) => {
+        if (!pages?.length) {
+          return pages;
+        }
+        if (pages.some((page) => page.chats.some((chat) => chat.id === id))) {
+          return pages;
+        }
+        const now = new Date().toISOString();
+        const optimistic = {
+          id,
+          title: "New chat",
+          createdAt: now,
+          updatedAt: now,
+          lastViewedAt: now,
+          isLive: true,
+          lastOutcome: null,
+          groupId: null,
+          agentActiveAt: null,
+          summary: null,
+          visibility: initialVisibilityType,
+          personaId: personaId ?? null,
+          maxIterationsReached: false,
+        } as unknown as ChatHistory["chats"][number];
+        return [
+          { ...pages[0], chats: [optimistic, ...pages[0].chats] },
+          ...pages.slice(1),
+        ];
+      },
+      { revalidate: true },
+    );
+  }, [status, mutate, id, initialVisibilityType, personaId]);
 
   const searchParams = useSearchParams();
   const query = searchParams.get("query");
