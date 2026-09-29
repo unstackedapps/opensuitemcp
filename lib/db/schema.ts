@@ -67,6 +67,8 @@ export const chat = pgTable("Chat", {
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
   /** Set when the owner opens the chat. Null means never opened. */
   lastViewedAt: timestamp("lastViewedAt"),
+  /** Stamped by every MCP append. Recent means an agent is working the thread. */
+  agentActiveAt: timestamp("agentActiveAt"),
   /** Null is Ungrouped. Deleting a group unfiles its chats rather than deleting them. */
   groupId: uuid("groupId").references(() => chatGroup.id, {
     onDelete: "set null",

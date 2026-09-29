@@ -38,7 +38,6 @@ import type { ChatGroup } from "@/lib/db/schema";
 import { cn, fetcher } from "@/lib/utils";
 import {
   ChevronDownIcon,
-  LoaderIcon,
   MoreVerticalIcon,
   PencilEditIcon,
   PlusIcon,
@@ -427,32 +426,42 @@ export function SidebarHistory({
   };
 
   const handleDelete = () => {
-    const deletePromise = fetch(`/api/chat?id=${deleteId}`, {
+    const target = deleteId;
+    setShowDeleteDialog(false);
+
+    // fetch resolves on 403 and 404 as readily as on 200, so the old code ran
+    // its success branch either way: the row vanished, the toast claimed the
+    // chat was deleted, and the next revalidation put it back.
+    const deletePromise = fetch(`/api/chat?id=${target}`, {
       method: "DELETE",
+    }).then(async (response) => {
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as {
+          message?: string;
+        } | null;
+        throw new Error(body?.message ?? "Failed to delete chat");
+      }
+
+      await mutate(
+        (chatHistories) =>
+          chatHistories?.map((chatHistory) => ({
+            ...chatHistory,
+            chats: chatHistory.chats.filter((chat) => chat.id !== target),
+          })),
+        { revalidate: false },
+      );
+
+      if (target === id) {
+        router.push("/");
+      }
     });
 
     toast.promise(deletePromise, {
       loading: "Deleting chat...",
-      success: () => {
-        mutate((chatHistories) => {
-          if (chatHistories) {
-            return chatHistories.map((chatHistory) => ({
-              ...chatHistory,
-              chats: chatHistory.chats.filter((chat) => chat.id !== deleteId),
-            }));
-          }
-        });
-
-        return "Chat deleted successfully";
-      },
-      error: "Failed to delete chat",
+      success: () => "Chat deleted",
+      error: (error: unknown) =>
+        error instanceof Error ? error.message : "Failed to delete chat",
     });
-
-    setShowDeleteDialog(false);
-
-    if (deleteId === id) {
-      router.push("/");
-    }
   };
 
   const moveToGroup = useCallback(
@@ -830,15 +839,6 @@ export function SidebarHistory({
               }
             }}
           />
-
-          {isValidating && !hasReachedEnd ? (
-            <div className="mt-8 flex flex-row items-center gap-2 p-2 text-zinc-500 dark:text-zinc-400">
-              <div className="animate-spin">
-                <LoaderIcon />
-              </div>
-              <div>Loading Chats...</div>
-            </div>
-          ) : null}
         </SidebarGroupContent>
       </SidebarGroup>
 
