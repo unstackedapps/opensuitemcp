@@ -368,6 +368,10 @@ const SidebarProvider = forwardRef<
               {
                 "--sidebar-width": `${sidebarWidth}px`,
                 "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,
+                "--sidebar-edge":
+                  state === "collapsed"
+                    ? SIDEBAR_WIDTH_ICON
+                    : `${sidebarWidth}px`,
                 ...style,
               } as CSSProperties
             }
@@ -603,10 +607,9 @@ const SidebarRail = forwardRef<HTMLButtonElement, ComponentProps<"button">>(
       <button
         aria-label="Toggle Sidebar"
         className={cn(
-          // The container clips to its own box, so a rail hanging off the edge
-          // loses that half to overflow: 16px wide, 8px grabbable. Sitting it
-          // flush inside keeps the whole width live.
-          "absolute inset-y-0 z-20 hidden w-4 transition-all ease-linear after:absolute after:inset-y-0 after:left-1/2 after:w-0.5 hover:after:bg-sidebar-border group-data-[side=left]:right-0 group-data-[side=right]:left-0 sm:flex",
+          "fixed inset-y-0 z-20 hidden w-4 after:absolute after:inset-y-0 after:left-1/2 after:w-0.5 hover:after:bg-sidebar-border sm:flex",
+          "group-data-[side=left]:-translate-x-1/2 group-data-[side=left]:left-(--sidebar-edge)",
+          "group-data-[side=right]:right-(--sidebar-edge) group-data-[side=right]:translate-x-1/2",
           "in-data-[side=left]:cursor-w-resize in-data-[side=right]:cursor-e-resize",
           "[[data-side=left][data-state=collapsed]_&]:cursor-e-resize [[data-side=right][data-state=collapsed]_&]:cursor-w-resize",
           "group-data-[collapsible=offcanvas]:translate-x-0 group-data-[collapsible=offcanvas]:hover:bg-sidebar group-data-[collapsible=offcanvas]:after:left-full",
