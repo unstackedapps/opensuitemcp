@@ -95,6 +95,8 @@ function mergePersonaLists(
   return CLIENT_BUILTIN_PERSONAS;
 }
 
+const PENDING_GROUP_KEY = "pendingGroup:";
+
 export function Chat({
   id,
   initialMessages,
@@ -456,9 +458,23 @@ export function Chat({
         );
       }
 
-      const pendingGroup = pendingGroupRef.current;
+      let pendingGroup = pendingGroupRef.current;
+      if (!pendingGroup) {
+        try {
+          pendingGroup = window.sessionStorage.getItem(
+            `${PENDING_GROUP_KEY}${id}`,
+          );
+        } catch {
+          pendingGroup = null;
+        }
+      }
       if (pendingGroup) {
         pendingGroupRef.current = null;
+        try {
+          window.sessionStorage.removeItem(`${PENDING_GROUP_KEY}${id}`);
+        } catch {
+          // Nothing to clear.
+        }
         await fetch(`/api/chat/${id}/group`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -722,6 +738,11 @@ export function Chat({
     const group = searchParams.get("group");
     if (group) {
       pendingGroupRef.current = group;
+      try {
+        window.sessionStorage.setItem(`${PENDING_GROUP_KEY}${id}`, group);
+      } catch {
+        // The ref still carries it for this mount.
+      }
       window.history.replaceState({}, "", `/chat/${id}`);
     }
   }, [searchParams, id]);

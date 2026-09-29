@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import type { User } from "next-auth";
 import {
   type CSSProperties,
+  type ReactNode,
   useCallback,
   useEffect,
   useMemo,
@@ -127,6 +128,7 @@ function ChatGroupSection({
   onGroupDragStart,
   onHoverTarget,
   onNudgeGroup,
+  tools,
   canNudgeUp,
   canNudgeDown,
   groups,
@@ -157,6 +159,7 @@ function ChatGroupSection({
   onGroupDragEnd: () => void;
   onGroupDragStart: (groupId: string) => void;
   onHoverTarget: (key: string | null) => void;
+  tools?: ReactNode;
   onNudgeGroup: (groupId: string, delta: number) => void;
   canNudgeUp: boolean;
   canNudgeDown: boolean;
@@ -164,7 +167,7 @@ function ChatGroupSection({
   onDelete: (chatId: string) => void;
   onDeleteGroup: (group: ChatGroup) => void;
   onMoveToGroup: (chatId: string, groupId: string | null) => void;
-  onNewChatInGroup: (groupId: string) => void;
+  onNewChatInGroup: (groupId: string | null) => void;
   onNewGroupWith: (chatId: string) => void;
   onRename: (chatId: string) => void;
   onRenameGroup: (group: ChatGroup) => void;
@@ -250,9 +253,19 @@ function ChatGroupSection({
             onDropGroupBefore(group.id);
           }}
         >
+          {/* Nothing sits left of the name, so every group title starts on the
+              same edge as nothing else in the list. */}
+          <span className="min-w-0 flex-1 truncate text-[11px] text-sidebar-foreground/50">
+            {group ? group.name : "Ungrouped"}
+          </span>
+
           <button
             aria-expanded={!collapsed}
-            className="-ml-1 flex size-4 shrink-0 items-center justify-center rounded text-sidebar-foreground/50 hover:text-sidebar-foreground"
+            className={cn(
+              "flex size-5 shrink-0 items-center justify-center rounded text-sidebar-foreground/50 hover:bg-black/10 hover:text-sidebar-foreground",
+              "opacity-0 focus-visible:opacity-100 group-hover/group-header:opacity-100",
+              collapsed && "opacity-100",
+            )}
             onClick={onToggle}
             type="button"
           >
@@ -267,65 +280,64 @@ function ChatGroupSection({
             </span>
           </button>
 
-          <span className="min-w-0 flex-1 truncate text-[11px] text-sidebar-foreground/50">
-            {group ? group.name : "Ungrouped"}
-          </span>
+          <button
+            className="flex size-5 shrink-0 items-center justify-center rounded text-sidebar-foreground/50 hover:bg-black/10 hover:text-sidebar-foreground"
+            onClick={() => onNewChatInGroup(group?.id ?? null)}
+            title={group ? `New chat in ${group.name}` : "New chat"}
+            type="button"
+          >
+            <PlusIcon size={13} />
+            <span className="sr-only">
+              {group ? `New chat in ${group.name}` : "New chat"}
+            </span>
+          </button>
+
+          {tools}
 
           {group ? (
-            <>
-              <button
-                className="flex size-5 shrink-0 items-center justify-center rounded text-sidebar-foreground/50 opacity-0 hover:bg-black/10 hover:text-sidebar-foreground focus-visible:opacity-100 group-hover/group-header:opacity-100"
-                onClick={() => onNewChatInGroup(group.id)}
-                title={`New chat in ${group.name}`}
-                type="button"
-              >
-                <PlusIcon size={13} />
-                <span className="sr-only">New chat in {group.name}</span>
-              </button>
-              <DropdownMenu modal={false}>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    className="flex size-5 shrink-0 items-center justify-center rounded text-sidebar-foreground/50 opacity-0 hover:bg-black/10 hover:text-sidebar-foreground focus-visible:opacity-100 data-[state=open]:opacity-100 group-hover/group-header:opacity-100"
-                    type="button"
-                  >
-                    <MoreVerticalIcon size={13} />
-                    <span className="sr-only">{group.name} options</span>
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" side="bottom">
-                  <DropdownMenuItem
-                    className="cursor-pointer"
-                    onSelect={() => onRenameGroup(group)}
-                  >
-                    <PencilEditIcon size={14} />
-                    <span>Rename group</span>
-                  </DropdownMenuItem>
-                  {/* The keyboard path to the order that dragging a header
+            <DropdownMenu modal={false}>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="flex size-5 shrink-0 items-center justify-center rounded text-sidebar-foreground/50 opacity-0 hover:bg-black/10 hover:text-sidebar-foreground focus-visible:opacity-100 data-[state=open]:opacity-100 group-hover/group-header:opacity-100"
+                  type="button"
+                >
+                  <MoreVerticalIcon size={13} />
+                  <span className="sr-only">{group.name} options</span>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" side="bottom">
+                <DropdownMenuItem
+                  className="cursor-pointer"
+                  onSelect={() => onRenameGroup(group)}
+                >
+                  <PencilEditIcon size={14} />
+                  <span>Rename group</span>
+                </DropdownMenuItem>
+                {/* The keyboard path to the order that dragging a header
                       gives a pointer. */}
-                  <DropdownMenuItem
-                    className="cursor-pointer"
-                    disabled={!canNudgeUp}
-                    onSelect={() => onNudgeGroup(group.id, -1)}
-                  >
-                    <span>Move up</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="cursor-pointer"
-                    disabled={!canNudgeDown}
-                    onSelect={() => onNudgeGroup(group.id, 1)}
-                  >
-                    <span>Move down</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="cursor-pointer text-destructive focus:bg-destructive/15 focus:text-destructive dark:text-red-500"
-                    onSelect={() => onDeleteGroup(group)}
-                  >
-                    <TrashIcon size={14} />
-                    <span>Delete group</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </>
+                <DropdownMenuItem
+                  className="cursor-pointer"
+                  disabled={!canNudgeUp}
+                  onSelect={() => onNudgeGroup(group.id, -1)}
+                >
+                  <span>Move up</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="cursor-pointer"
+                  disabled={!canNudgeDown}
+                  onSelect={() => onNudgeGroup(group.id, 1)}
+                >
+                  <span>Move down</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="cursor-pointer text-destructive focus:bg-destructive/15 focus:text-destructive dark:text-red-500"
+                  onSelect={() => onDeleteGroup(group)}
+                >
+                  <TrashIcon size={14} />
+                  <span>Delete group</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           ) : null}
         </div>
       ) : null}
@@ -814,129 +826,119 @@ export function SidebarHistory({
     sort,
   );
 
+  // Search and sort ride on the first heading rather than a row of their own,
+  // which is a row of the list back.
+  const listTools =
+    variant === "panel" ? null : (
+      <>
+        <button
+          className="flex size-5 shrink-0 items-center justify-center rounded text-sidebar-foreground/50 hover:bg-black/10 hover:text-sidebar-foreground"
+          onClick={() => openPortal("chats")}
+          title="Search chats"
+          type="button"
+        >
+          <Search className="size-3.5" />
+          <span className="sr-only">Search chats</span>
+        </button>
+        <DropdownMenu modal={false}>
+          <DropdownMenuTrigger asChild>
+            <button
+              className={cn(
+                "flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                personaFilter.length > 0 && "text-sidebar-foreground",
+              )}
+              title="Filter, sort and group"
+              type="button"
+            >
+              <SlidersIcon size={15} />
+              <span className="sr-only">Filter, sort and group</span>
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-52" side="bottom">
+            <DropdownMenuLabel>Sort</DropdownMenuLabel>
+            <DropdownMenuRadioGroup
+              onValueChange={(value) => setSort(value as SortKey)}
+              value={sort}
+            >
+              <DropdownMenuRadioItem
+                className="cursor-pointer"
+                value="activity"
+              >
+                Activity
+              </DropdownMenuRadioItem>
+              <DropdownMenuRadioItem className="cursor-pointer" value="title">
+                Title
+              </DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+
+            {personaOptions.length > 0 ? (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>Persona</DropdownMenuLabel>
+                {personaOptions.map((label) => (
+                  <DropdownMenuCheckboxItem
+                    checked={personaFilter.includes(label)}
+                    className="cursor-pointer"
+                    key={label}
+                    onCheckedChange={(checked) =>
+                      setPersonaFilter((current) =>
+                        checked
+                          ? [...current, label]
+                          : current.filter((value) => value !== label),
+                      )
+                    }
+                    onSelect={(event) => event.preventDefault()}
+                  >
+                    {label}
+                  </DropdownMenuCheckboxItem>
+                ))}
+                {personaFilter.length > 0 ? (
+                  <DropdownMenuItem
+                    className="cursor-pointer"
+                    onSelect={() => setPersonaFilter([])}
+                  >
+                    Clear persona filter
+                  </DropdownMenuItem>
+                ) : null}
+              </>
+            ) : null}
+
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="cursor-pointer"
+              onSelect={() => {
+                setPendingGroupChatId(null);
+                setNewGroupName("");
+                setShowNewGroup(true);
+              }}
+            >
+              <PlusIcon size={14} />
+              <span>New group</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </>
+    );
+
   return (
     <>
       <SidebarGroup>
         <SidebarGroupContent>
-          <div
-            className={cn(
-              "sticky top-0 z-10 pb-2",
-              variant === "panel" ? "bg-background" : "bg-sidebar",
-            )}
-          >
-            <div className="flex items-center gap-1">
-              {variant === "panel" ? (
-                <div className="relative min-w-0 flex-1">
-                  <Search className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                  <SidebarInput
-                    aria-label="Search chats and personas"
-                    className="h-8 border-border/50 bg-muted/40 pl-7 text-sm shadow-none focus-visible:border-border focus-visible:ring-0 md:h-8 md:px-2.5 md:pl-7"
-                    data-testid="sidebar-history-search"
-                    onChange={(event) => setQuery(event.target.value)}
-                    placeholder="Search chats and personas"
-                    value={query}
-                  />
-                </div>
-              ) : (
-                <>
-                  {/* The field took a whole row to duplicate the search the
-                      Chats panel already has, so the sidebar keeps the icon
-                      and sends you there. */}
-                  <button
-                    className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                    onClick={() => openPortal("chats")}
-                    title="Search chats"
-                    type="button"
-                  >
-                    <Search className="size-4" />
-                    <span className="sr-only">Search chats</span>
-                  </button>
-                  <div className="min-w-0 flex-1" />
-                </>
-              )}
-
-              <DropdownMenu modal={false}>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    className={cn(
-                      "flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-                      personaFilter.length > 0 && "text-sidebar-foreground",
-                    )}
-                    title="Filter, sort and group"
-                    type="button"
-                  >
-                    <SlidersIcon size={15} />
-                    <span className="sr-only">Filter, sort and group</span>
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-52" side="bottom">
-                  <DropdownMenuLabel>Sort</DropdownMenuLabel>
-                  <DropdownMenuRadioGroup
-                    onValueChange={(value) => setSort(value as SortKey)}
-                    value={sort}
-                  >
-                    <DropdownMenuRadioItem
-                      className="cursor-pointer"
-                      value="activity"
-                    >
-                      Activity
-                    </DropdownMenuRadioItem>
-                    <DropdownMenuRadioItem
-                      className="cursor-pointer"
-                      value="title"
-                    >
-                      Title
-                    </DropdownMenuRadioItem>
-                  </DropdownMenuRadioGroup>
-
-                  {personaOptions.length > 0 ? (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuLabel>Persona</DropdownMenuLabel>
-                      {personaOptions.map((label) => (
-                        <DropdownMenuCheckboxItem
-                          checked={personaFilter.includes(label)}
-                          className="cursor-pointer"
-                          key={label}
-                          onCheckedChange={(checked) =>
-                            setPersonaFilter((current) =>
-                              checked
-                                ? [...current, label]
-                                : current.filter((value) => value !== label),
-                            )
-                          }
-                          onSelect={(event) => event.preventDefault()}
-                        >
-                          {label}
-                        </DropdownMenuCheckboxItem>
-                      ))}
-                      {personaFilter.length > 0 ? (
-                        <DropdownMenuItem
-                          className="cursor-pointer"
-                          onSelect={() => setPersonaFilter([])}
-                        >
-                          Clear persona filter
-                        </DropdownMenuItem>
-                      ) : null}
-                    </>
-                  ) : null}
-
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    className="cursor-pointer"
-                    onSelect={() => {
-                      setPendingGroupChatId(null);
-                      setNewGroupName("");
-                      setShowNewGroup(true);
-                    }}
-                  >
-                    <PlusIcon size={14} />
-                    <span>New group</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+          {variant === "panel" ? (
+            <div className="sticky top-0 z-10 bg-background pb-2">
+              <div className="relative min-w-0 flex-1">
+                <Search className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                <SidebarInput
+                  aria-label="Search chats and personas"
+                  className="h-8 border-border/50 bg-muted/40 pl-7 text-sm shadow-none focus-visible:border-border focus-visible:ring-0 md:h-8 md:px-2.5 md:pl-7"
+                  data-testid="sidebar-history-search"
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search chats and personas"
+                  value={query}
+                />
+              </div>
             </div>
-          </div>
+          ) : null}
 
           <SidebarMenu>
             {visibleChats.length === 0 && groups.length === 0 ? (
@@ -975,8 +977,9 @@ export function SidebarHistory({
                       void moveToGroup(chatId, groupId);
                     }}
                     onNewChatInGroup={(groupId) =>
-                      router.push(`/?group=${groupId}`)
+                      router.push(groupId ? `/?group=${groupId}` : "/")
                     }
+                    tools={index === 0 ? listTools : undefined}
                     onNewGroupWith={(chatId) => {
                       setPendingGroupChatId(chatId);
                       setNewGroupName("");
@@ -1034,8 +1037,9 @@ export function SidebarHistory({
                     void moveToGroup(chatId, groupId);
                   }}
                   onNewChatInGroup={(groupId) =>
-                    router.push(`/?group=${groupId}`)
+                    router.push(groupId ? `/?group=${groupId}` : "/")
                   }
+                  tools={groups.length === 0 ? listTools : undefined}
                   onNewGroupWith={(chatId) => {
                     setPendingGroupChatId(chatId);
                     setNewGroupName("");

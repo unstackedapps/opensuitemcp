@@ -209,14 +209,15 @@ const PureChatItem = ({
           <DropdownMenuTrigger asChild>
             <SidebarMenuAction
               className={cn(
-                "static top-auto right-auto size-4 translate-y-0 rounded bg-transparent p-0 opacity-70 hover:bg-black/10 hover:opacity-100",
+                "static top-auto right-auto size-5 translate-y-0 rounded-md bg-transparent p-0 opacity-70 hover:bg-black/10 hover:opacity-100",
+                "[&>svg]:size-3.5!",
                 "pointer-events-none group-hover/menu-item:pointer-events-auto",
                 "group-focus-within/menu-item:pointer-events-auto data-[state=open]:pointer-events-auto",
                 "max-sm:pointer-events-auto",
               )}
               type="button"
             >
-              <MoreVerticalIcon size={13} />
+              <MoreVerticalIcon size={14} />
               <span className="sr-only">More</span>
             </SidebarMenuAction>
           </DropdownMenuTrigger>
