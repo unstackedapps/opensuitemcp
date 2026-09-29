@@ -1365,6 +1365,39 @@ export const SearchIcon = ({ size = 16 }: { size?: number }) => (
   </svg>
 );
 
+export const SlidersIcon = ({ size = 16 }: { size?: number }) => (
+  <svg
+    fill="none"
+    height={size}
+    stroke="currentColor"
+    strokeLinecap="round"
+    strokeWidth="1.5"
+    viewBox="0 0 16 16"
+    width={size}
+  >
+    <title>Sliders</title>
+    <path d="M2 4h5M11 4h3M2 12h3M9 12h5" />
+    <circle cx="9" cy="4" r="1.6" />
+    <circle cx="7" cy="12" r="1.6" />
+  </svg>
+);
+
+export const FolderIcon = ({ size = 16 }: { size?: number }) => (
+  <svg
+    fill="none"
+    height={size}
+    stroke="currentColor"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    strokeWidth="1.5"
+    viewBox="0 0 16 16"
+    width={size}
+  >
+    <title>Folder</title>
+    <path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h2.3l1.4 1.6h5.3A1.5 1.5 0 0 1 14 6.1v5.4A1.5 1.5 0 0 1 12.5 13h-9A1.5 1.5 0 0 1 2 11.5z" />
+  </svg>
+);
+
 export const ExternalLinkIcon = ({ size = 16 }: { size?: number }) => (
   <svg
     data-testid="geist-icon"

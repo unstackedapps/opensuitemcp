@@ -1,11 +1,10 @@
 "use client";
 
-import { isToday, isYesterday, subMonths, subWeeks } from "date-fns";
 import { motion } from "framer-motion";
 import { Search } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import type { User } from "next-auth";
-import { type CSSProperties, useMemo, useState } from "react";
+import { type CSSProperties, useCallback, useMemo, useState } from "react";
 import useSWR from "swr";
 import useSWRInfinite from "swr/infinite";
 import {
@@ -18,6 +17,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -28,35 +28,54 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { clientPersonaShortNameWithCustoms } from "@/lib/ai/personas/ids";
 import type { ChatWithActivity } from "@/lib/chat-status";
+import type { ChatGroup } from "@/lib/db/schema";
 import { cn, fetcher } from "@/lib/utils";
-import { LoaderIcon } from "./icons";
+import {
+  ChevronDownIcon,
+  LoaderIcon,
+  MoreVerticalIcon,
+  PencilEditIcon,
+  PlusIcon,
+  SlidersIcon,
+  TrashIcon,
+} from "./icons";
 import { ChatItem } from "./sidebar-history-item";
 import { toast } from "./toast";
-
-type GroupedChats = {
-  today: ChatWithActivity[];
-  yesterday: ChatWithActivity[];
-  lastWeek: ChatWithActivity[];
-  lastMonth: ChatWithActivity[];
-  older: ChatWithActivity[];
-};
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
 
 export type ChatHistory = {
   chats: ChatWithActivity[];
   hasMore: boolean;
 };
 
+type ChatGroupsPayload = { groups?: ChatGroup[] };
+
+type SortKey = "activity" | "title";
+
 const PAGE_SIZE = 20;
 const HISTORY_SKELETON_WIDTHS = [44, 32, 28, 64, 52] as const;
+const GROUPS_KEY = "/api/chat-groups";
 
 type PersonasPayload = {
   personas?: Array<{ id: string; name?: string; shortName?: string }>;
 };
 
+type PersonaRef = { id: string; shortName?: string; name?: string };
+
 function chatMatchesQuery(
   chat: ChatWithActivity,
   query: string,
-  customs: Array<{ id: string; shortName?: string; name?: string }>,
+  customs: PersonaRef[],
 ): boolean {
   const q = query.trim().toLowerCase();
   if (!q) {
@@ -70,78 +89,149 @@ function chatMatchesQuery(
   );
 }
 
-const groupChatsByDate = (chats: ChatWithActivity[]): GroupedChats => {
-  const now = new Date();
-  const oneWeekAgo = subWeeks(now, 1);
-  const oneMonthAgo = subMonths(now, 1);
+function sortChats(
+  chats: ChatWithActivity[],
+  sort: SortKey,
+): ChatWithActivity[] {
+  if (sort === "title") {
+    return [...chats].sort((a, b) => a.title.localeCompare(b.title));
+  }
+  // The server already returns them newest-activity first.
+  return chats;
+}
 
-  return chats.reduce(
-    (groups, chat) => {
-      const chatDate = new Date(chat.updatedAt);
-
-      if (isToday(chatDate)) {
-        groups.today.push(chat);
-      } else if (isYesterday(chatDate)) {
-        groups.yesterday.push(chat);
-      } else if (chatDate > oneWeekAgo) {
-        groups.lastWeek.push(chat);
-      } else if (chatDate > oneMonthAgo) {
-        groups.lastMonth.push(chat);
-      } else {
-        groups.older.push(chat);
-      }
-
-      return groups;
-    },
-    {
-      today: [],
-      yesterday: [],
-      lastWeek: [],
-      lastMonth: [],
-      older: [],
-    } as GroupedChats,
-  );
-};
-
-function ChatDayGroup({
-  label,
-  chats,
+function ChatGroupSection({
   activeChatId,
+  chats,
+  group,
+  groups,
   onDelete,
+  onDeleteGroup,
+  onMoveToGroup,
+  onNewChatInGroup,
+  onNewGroupWith,
+  onRename,
+  onRenameGroup,
+  onToggleCollapsed,
   personaCustoms,
   setOpenMobile,
-  tone = "sidebar",
+  showHeader,
+  tone,
 }: {
-  label: string;
-  chats: ChatWithActivity[];
   activeChatId: string | undefined;
+  chats: ChatWithActivity[];
+  group: ChatGroup | null;
+  groups: ChatGroup[];
   onDelete: (chatId: string) => void;
-  personaCustoms: Array<{ id: string; shortName?: string; name?: string }>;
+  onDeleteGroup: (group: ChatGroup) => void;
+  onMoveToGroup: (chatId: string, groupId: string | null) => void;
+  onNewChatInGroup: (groupId: string) => void;
+  onNewGroupWith: (chatId: string) => void;
+  onRename: (chatId: string) => void;
+  onRenameGroup: (group: ChatGroup) => void;
+  onToggleCollapsed: (group: ChatGroup) => void;
+  personaCustoms: PersonaRef[];
   setOpenMobile: (open: boolean) => void;
-  tone?: "sidebar" | "panel";
+  showHeader: boolean;
+  tone: "sidebar" | "panel";
 }) {
-  if (chats.length === 0) {
+  const collapsed = group?.collapsed ?? false;
+
+  if (chats.length === 0 && group === null) {
     return null;
   }
 
   return (
     <div>
-      <div className="px-2 py-1 text-sidebar-foreground/50 text-xs">
-        {label}
-      </div>
-      <div className="flex flex-col gap-1">
-        {chats.map((chat) => (
-          <ChatItem
-            chat={chat}
-            isActive={chat.id === activeChatId}
-            key={chat.id}
-            onDelete={onDelete}
-            personaCustoms={personaCustoms}
-            setOpenMobile={setOpenMobile}
-            tone={tone}
-          />
-        ))}
-      </div>
+      {showHeader ? (
+        <div className="group/group-header flex h-6 items-center gap-1 pr-1 pl-2">
+          {group ? (
+            <button
+              aria-expanded={!collapsed}
+              className="-ml-1 flex size-4 shrink-0 items-center justify-center rounded text-sidebar-foreground/50 hover:text-sidebar-foreground"
+              onClick={() => onToggleCollapsed(group)}
+              type="button"
+            >
+              <span
+                className={cn(
+                  "transition-transform",
+                  collapsed && "-rotate-90",
+                )}
+              >
+                <ChevronDownIcon size={12} />
+              </span>
+              <span className="sr-only">
+                {collapsed ? "Expand" : "Collapse"} {group.name}
+              </span>
+            </button>
+          ) : null}
+
+          <span className="min-w-0 flex-1 truncate text-[11px] text-sidebar-foreground/50">
+            {group ? group.name : "Ungrouped"}
+          </span>
+
+          {group ? (
+            <>
+              <button
+                className="flex size-5 shrink-0 items-center justify-center rounded text-sidebar-foreground/50 opacity-0 hover:bg-black/10 hover:text-sidebar-foreground focus-visible:opacity-100 group-hover/group-header:opacity-100"
+                onClick={() => onNewChatInGroup(group.id)}
+                title={`New chat in ${group.name}`}
+                type="button"
+              >
+                <PlusIcon size={13} />
+                <span className="sr-only">New chat in {group.name}</span>
+              </button>
+              <DropdownMenu modal={false}>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    className="flex size-5 shrink-0 items-center justify-center rounded text-sidebar-foreground/50 opacity-0 hover:bg-black/10 hover:text-sidebar-foreground focus-visible:opacity-100 data-[state=open]:opacity-100 group-hover/group-header:opacity-100"
+                    type="button"
+                  >
+                    <MoreVerticalIcon size={13} />
+                    <span className="sr-only">{group.name} options</span>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" side="bottom">
+                  <DropdownMenuItem
+                    className="cursor-pointer"
+                    onSelect={() => onRenameGroup(group)}
+                  >
+                    <PencilEditIcon size={14} />
+                    <span>Rename group</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="cursor-pointer text-destructive focus:bg-destructive/15 focus:text-destructive dark:text-red-500"
+                    onSelect={() => onDeleteGroup(group)}
+                  >
+                    <TrashIcon size={14} />
+                    <span>Delete group</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
+          ) : null}
+        </div>
+      ) : null}
+
+      {collapsed ? null : (
+        <div className="flex flex-col gap-0.5">
+          {chats.map((chat) => (
+            <ChatItem
+              chat={chat}
+              groups={groups}
+              isActive={chat.id === activeChatId}
+              key={chat.id}
+              onDelete={onDelete}
+              onMoveToGroup={onMoveToGroup}
+              onNewGroupWith={onNewGroupWith}
+              onRename={onRename}
+              personaCustoms={personaCustoms}
+              setOpenMobile={setOpenMobile}
+              tone={tone}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -230,10 +320,29 @@ export function SidebarHistory({
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<SortKey>("activity");
+  const [personaFilter, setPersonaFilter] = useState<string[]>([]);
+  const [renameTarget, setRenameTarget] = useState<{
+    kind: "chat" | "group";
+    id: string;
+    value: string;
+  } | null>(null);
+  const [groupToDelete, setGroupToDelete] = useState<ChatGroup | null>(null);
+  const [pendingGroupChatId, setPendingGroupChatId] = useState<string | null>(
+    null,
+  );
+  const [newGroupName, setNewGroupName] = useState("");
+  const [showNewGroup, setShowNewGroup] = useState(false);
+
   const { data: personasPayload } = useSWR<PersonasPayload>(
     user ? "/api/personas" : null,
     fetcher,
   );
+  const { data: groupsPayload, mutate: mutateGroups } =
+    useSWR<ChatGroupsPayload>(user ? GROUPS_KEY : null, fetcher);
+
+  const groups = useMemo(() => groupsPayload?.groups ?? [], [groupsPayload]);
+
   const personaCustoms = useMemo(
     () =>
       (personasPayload?.personas ?? []).map((persona) => ({
@@ -244,6 +353,10 @@ export function SidebarHistory({
     [personasPayload],
   );
 
+  const refresh = useCallback(() => {
+    void mutate();
+  }, [mutate]);
+
   const hasReachedEnd = paginatedChatHistories
     ? paginatedChatHistories.some((page) => page.hasMore === false)
     : false;
@@ -251,6 +364,32 @@ export function SidebarHistory({
   const hasEmptyChatHistory = paginatedChatHistories
     ? paginatedChatHistories.every((page) => page.chats.length === 0)
     : false;
+
+  const allChats = useMemo(
+    () =>
+      (paginatedChatHistories ?? []).flatMap(
+        (paginatedChatHistory) => paginatedChatHistory.chats,
+      ),
+    [paginatedChatHistories],
+  );
+
+  // Only personas that actually appear in the loaded chats are offered, so the
+  // filter never lists something that would return nothing.
+  const personaOptions = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const chat of allChats) {
+      const key = chat.personaId ?? "";
+      if (!seen.has(key)) {
+        seen.set(
+          key,
+          clientPersonaShortNameWithCustoms(chat.personaId, personaCustoms),
+        );
+      }
+    }
+    return [...seen.entries()]
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [allChats, personaCustoms]);
 
   const requestDeleteChat = (chatId: string) => {
     setDeleteId(chatId);
@@ -286,6 +425,109 @@ export function SidebarHistory({
     }
   };
 
+  const moveToGroup = useCallback(
+    async (chatId: string, groupId: string | null) => {
+      await fetch(`/api/chat/${chatId}/group`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ groupId }),
+      });
+      refresh();
+    },
+    [refresh],
+  );
+
+  const toggleCollapsed = useCallback(
+    async (group: ChatGroup) => {
+      // Applied locally first: the chevron has to move on click, not after a
+      // round trip. The PATCH only has to make it survive a reload.
+      await mutateGroups(
+        {
+          groups: groups.map((candidate) =>
+            candidate.id === group.id
+              ? { ...candidate, collapsed: !group.collapsed }
+              : candidate,
+          ),
+        },
+        { revalidate: false },
+      );
+
+      await fetch(`${GROUPS_KEY}/${group.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ collapsed: !group.collapsed }),
+      });
+    },
+    [groups, mutateGroups],
+  );
+
+  const createGroup = useCallback(
+    async (name: string, withChatId: string | null) => {
+      const response = await fetch(GROUPS_KEY, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        toast({
+          type: "error",
+          description: body?.error ?? "Failed to create group",
+        });
+        return;
+      }
+
+      const { group } = (await response.json()) as { group: ChatGroup };
+      await mutateGroups();
+
+      if (withChatId) {
+        await moveToGroup(withChatId, group.id);
+      }
+    },
+    [moveToGroup, mutateGroups],
+  );
+
+  const submitRename = useCallback(async () => {
+    if (!renameTarget || renameTarget.value.trim().length === 0) {
+      return;
+    }
+
+    const { kind, id: targetId, value } = renameTarget;
+    setRenameTarget(null);
+
+    if (kind === "chat") {
+      await fetch(`/api/chat/${targetId}/title`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: value.trim() }),
+      });
+      refresh();
+      return;
+    }
+
+    await fetch(`${GROUPS_KEY}/${targetId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: value.trim() }),
+    });
+    await mutateGroups();
+  }, [mutateGroups, refresh, renameTarget]);
+
+  const confirmDeleteGroup = useCallback(async () => {
+    if (!groupToDelete) {
+      return;
+    }
+    const target = groupToDelete;
+    setGroupToDelete(null);
+
+    await fetch(`${GROUPS_KEY}/${target.id}`, { method: "DELETE" });
+    await mutateGroups();
+    refresh();
+  }, [groupToDelete, mutateGroups, refresh]);
+
   if (!revealText) {
     return <SidebarHistorySkeleton />;
   }
@@ -306,7 +548,7 @@ export function SidebarHistory({
     return <SidebarHistorySkeleton />;
   }
 
-  if (hasEmptyChatHistory) {
+  if (hasEmptyChatHistory && groups.length === 0) {
     return (
       <SidebarGroup>
         <SidebarGroupContent>
@@ -318,6 +560,20 @@ export function SidebarHistory({
     );
   }
 
+  const visibleChats = allChats
+    .filter((chat) => chatMatchesQuery(chat, query, personaCustoms))
+    .filter(
+      (chat) =>
+        personaFilter.length === 0 ||
+        personaFilter.includes(chat.personaId ?? ""),
+    );
+
+  const activeChatId = typeof id === "string" ? id : undefined;
+  const ungrouped = sortChats(
+    visibleChats.filter((chat) => chat.groupId === null),
+    sort,
+  );
+
   return (
     <>
       <SidebarGroup>
@@ -328,92 +584,210 @@ export function SidebarHistory({
               variant === "panel" ? "bg-background" : "bg-sidebar",
             )}
           >
-            <div className="relative">
-              <Search className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-              <SidebarInput
-                aria-label="Search chats and personas"
-                className={cn(
-                  "h-8 pl-7 text-sm focus-visible:ring-0 md:h-8 md:px-2.5 md:pl-7",
-                  variant === "panel" &&
-                    "border-border/50 bg-muted/40 shadow-none focus-visible:border-border",
-                )}
-                data-testid="sidebar-history-search"
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search chats and personas"
-                value={query}
-              />
+            <div className="flex items-center gap-1">
+              <div className="relative min-w-0 flex-1">
+                <Search className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                <SidebarInput
+                  aria-label="Search chats and personas"
+                  className={cn(
+                    "h-8 pl-7 text-sm focus-visible:ring-0 md:h-8 md:px-2.5 md:pl-7",
+                    variant === "panel" &&
+                      "border-border/50 bg-muted/40 shadow-none focus-visible:border-border",
+                  )}
+                  data-testid="sidebar-history-search"
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search chats and personas"
+                  value={query}
+                />
+              </div>
+
+              <DropdownMenu modal={false}>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    className={cn(
+                      "flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                      personaFilter.length > 0 && "text-sidebar-foreground",
+                    )}
+                    title="Filter, sort and group"
+                    type="button"
+                  >
+                    <SlidersIcon size={15} />
+                    <span className="sr-only">Filter, sort and group</span>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-52" side="bottom">
+                  <DropdownMenuLabel>Sort</DropdownMenuLabel>
+                  <DropdownMenuRadioGroup
+                    onValueChange={(value) => setSort(value as SortKey)}
+                    value={sort}
+                  >
+                    <DropdownMenuRadioItem
+                      className="cursor-pointer"
+                      value="activity"
+                    >
+                      Activity
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem
+                      className="cursor-pointer"
+                      value="title"
+                    >
+                      Title
+                    </DropdownMenuRadioItem>
+                  </DropdownMenuRadioGroup>
+
+                  {personaOptions.length > 0 ? (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuLabel>Persona</DropdownMenuLabel>
+                      {personaOptions.map((option) => (
+                        <DropdownMenuCheckboxItem
+                          checked={personaFilter.includes(option.value)}
+                          className="cursor-pointer"
+                          key={option.value}
+                          onCheckedChange={(checked) =>
+                            setPersonaFilter((current) =>
+                              checked
+                                ? [...current, option.value]
+                                : current.filter(
+                                    (value) => value !== option.value,
+                                  ),
+                            )
+                          }
+                          onSelect={(event) => event.preventDefault()}
+                        >
+                          {option.label}
+                        </DropdownMenuCheckboxItem>
+                      ))}
+                      {personaFilter.length > 0 ? (
+                        <DropdownMenuItem
+                          className="cursor-pointer"
+                          onSelect={() => setPersonaFilter([])}
+                        >
+                          Clear persona filter
+                        </DropdownMenuItem>
+                      ) : null}
+                    </>
+                  ) : null}
+
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="cursor-pointer"
+                    onSelect={() => {
+                      setPendingGroupChatId(null);
+                      setNewGroupName("");
+                      setShowNewGroup(true);
+                    }}
+                  >
+                    <PlusIcon size={14} />
+                    <span>New group</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
+
           <SidebarMenu>
-            {paginatedChatHistories &&
-              (() => {
-                const chatsFromHistory = paginatedChatHistories
-                  .flatMap((paginatedChatHistory) => paginatedChatHistory.chats)
-                  .filter((chat) =>
-                    chatMatchesQuery(chat, query, personaCustoms),
-                  );
+            {visibleChats.length === 0 && groups.length === 0 ? (
+              <div className="px-2 py-6 text-center text-sm text-zinc-500">
+                No chats or personas match.
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {groups.map((group) => (
+                  <ChatGroupSection
+                    activeChatId={activeChatId}
+                    chats={sortChats(
+                      visibleChats.filter((chat) => chat.groupId === group.id),
+                      sort,
+                    )}
+                    group={group}
+                    groups={groups}
+                    key={group.id}
+                    onDelete={requestDeleteChat}
+                    onDeleteGroup={setGroupToDelete}
+                    onMoveToGroup={(chatId, groupId) => {
+                      void moveToGroup(chatId, groupId);
+                    }}
+                    onNewChatInGroup={(groupId) =>
+                      router.push(`/?group=${groupId}`)
+                    }
+                    onNewGroupWith={(chatId) => {
+                      setPendingGroupChatId(chatId);
+                      setNewGroupName("");
+                      setShowNewGroup(true);
+                    }}
+                    onRename={(chatId) => {
+                      const target = allChats.find(
+                        (candidate) => candidate.id === chatId,
+                      );
+                      setRenameTarget({
+                        kind: "chat",
+                        id: chatId,
+                        value: target?.title ?? "",
+                      });
+                    }}
+                    onRenameGroup={(target) =>
+                      setRenameTarget({
+                        kind: "group",
+                        id: target.id,
+                        value: target.name,
+                      })
+                    }
+                    onToggleCollapsed={(target) => {
+                      void toggleCollapsed(target);
+                    }}
+                    personaCustoms={personaCustoms}
+                    setOpenMobile={setOpenMobile}
+                    showHeader
+                    tone={variant}
+                  />
+                ))}
 
-                if (chatsFromHistory.length === 0) {
-                  return (
-                    <div className="px-2 py-6 text-center text-sm text-zinc-500">
-                      No chats or personas match.
-                    </div>
-                  );
-                }
-
-                const groupedChats = groupChatsByDate(chatsFromHistory);
-                const activeChatId = typeof id === "string" ? id : undefined;
-
-                return (
-                  <div className="flex flex-col gap-6">
-                    <ChatDayGroup
-                      activeChatId={activeChatId}
-                      chats={groupedChats.today}
-                      label="Today"
-                      onDelete={requestDeleteChat}
-                      personaCustoms={personaCustoms}
-                      setOpenMobile={setOpenMobile}
-                      tone={variant}
-                    />
-                    <ChatDayGroup
-                      activeChatId={activeChatId}
-                      chats={groupedChats.yesterday}
-                      label="Yesterday"
-                      onDelete={requestDeleteChat}
-                      personaCustoms={personaCustoms}
-                      setOpenMobile={setOpenMobile}
-                      tone={variant}
-                    />
-                    <ChatDayGroup
-                      activeChatId={activeChatId}
-                      chats={groupedChats.lastWeek}
-                      label="Last 7 days"
-                      onDelete={requestDeleteChat}
-                      personaCustoms={personaCustoms}
-                      setOpenMobile={setOpenMobile}
-                      tone={variant}
-                    />
-                    <ChatDayGroup
-                      activeChatId={activeChatId}
-                      chats={groupedChats.lastMonth}
-                      label="Last 30 days"
-                      onDelete={requestDeleteChat}
-                      personaCustoms={personaCustoms}
-                      setOpenMobile={setOpenMobile}
-                      tone={variant}
-                    />
-                    <ChatDayGroup
-                      activeChatId={activeChatId}
-                      chats={groupedChats.older}
-                      label="Older than last month"
-                      onDelete={requestDeleteChat}
-                      personaCustoms={personaCustoms}
-                      setOpenMobile={setOpenMobile}
-                      tone={variant}
-                    />
-                  </div>
-                );
-              })()}
+                <ChatGroupSection
+                  activeChatId={activeChatId}
+                  chats={ungrouped}
+                  group={null}
+                  groups={groups}
+                  onDelete={requestDeleteChat}
+                  onDeleteGroup={setGroupToDelete}
+                  onMoveToGroup={(chatId, groupId) => {
+                    void moveToGroup(chatId, groupId);
+                  }}
+                  onNewChatInGroup={(groupId) =>
+                    router.push(`/?group=${groupId}`)
+                  }
+                  onNewGroupWith={(chatId) => {
+                    setPendingGroupChatId(chatId);
+                    setNewGroupName("");
+                    setShowNewGroup(true);
+                  }}
+                  onRename={(chatId) => {
+                    const target = allChats.find(
+                      (candidate) => candidate.id === chatId,
+                    );
+                    setRenameTarget({
+                      kind: "chat",
+                      id: chatId,
+                      value: target?.title ?? "",
+                    });
+                  }}
+                  onRenameGroup={(target) =>
+                    setRenameTarget({
+                      kind: "group",
+                      id: target.id,
+                      value: target.name,
+                    })
+                  }
+                  onToggleCollapsed={(target) => {
+                    void toggleCollapsed(target);
+                  }}
+                  personaCustoms={personaCustoms}
+                  setOpenMobile={setOpenMobile}
+                  showHeader={groups.length > 0}
+                  tone={variant}
+                />
+              </div>
+            )}
           </SidebarMenu>
 
           <motion.div
@@ -448,6 +822,118 @@ export function SidebarHistory({
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete}>
               Continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        onOpenChange={(open) => {
+          if (!open) {
+            setGroupToDelete(null);
+          }
+        }}
+        open={groupToDelete !== null}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete “{groupToDelete?.name}”?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Its chats move to Ungrouped.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                void confirmDeleteGroup();
+              }}
+            >
+              Delete group
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        onOpenChange={(open) => {
+          if (!open) {
+            setRenameTarget(null);
+          }
+        }}
+        open={renameTarget !== null}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Rename {renameTarget?.kind === "group" ? "group" : "chat"}
+            </AlertDialogTitle>
+          </AlertDialogHeader>
+          <Input
+            autoFocus
+            onChange={(event) =>
+              setRenameTarget((current) =>
+                current ? { ...current, value: event.target.value } : current,
+              )
+            }
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                void submitRename();
+              }
+            }}
+            value={renameTarget?.value ?? ""}
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                void submitRename();
+              }}
+            >
+              Rename
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowNewGroup(false);
+          }
+        }}
+        open={showNewGroup}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>New group</AlertDialogTitle>
+          </AlertDialogHeader>
+          <Input
+            autoFocus
+            onChange={(event) => setNewGroupName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && newGroupName.trim().length > 0) {
+                event.preventDefault();
+                setShowNewGroup(false);
+                void createGroup(newGroupName, pendingGroupChatId);
+              }
+            }}
+            placeholder="Group name"
+            value={newGroupName}
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (newGroupName.trim().length === 0) {
+                  return;
+                }
+                setShowNewGroup(false);
+                void createGroup(newGroupName, pendingGroupChatId);
+              }}
+            >
+              Create
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

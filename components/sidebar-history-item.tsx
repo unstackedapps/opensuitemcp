@@ -9,12 +9,16 @@ import {
   type ChatWithActivity,
   chatStatus,
 } from "@/lib/chat-status";
+import type { ChatGroup } from "@/lib/db/schema";
 import { cn } from "@/lib/utils";
 import {
   CheckCircleFillIcon,
+  ExternalLinkIcon,
+  FolderIcon,
   GlobeIcon,
   LockIcon,
   MoreVerticalIcon,
+  PencilEditIcon,
   ShareIcon,
   TrashIcon,
 } from "./icons";
@@ -23,6 +27,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuPortal,
+  DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
@@ -66,12 +71,12 @@ function StatusDot({ status }: { status: ChatStatus }) {
   return (
     <span
       aria-hidden={label === "" ? "true" : undefined}
-      className="flex size-3.5 shrink-0 items-center justify-center"
+      className="flex size-3 shrink-0 items-center justify-center"
       title={label || undefined}
     >
       <span
         className={cn(
-          "size-[7px] rounded-full",
+          "size-1.5 rounded-full",
           status === "working" && "animate-pulse",
           status === "idle" && "border border-[var(--chat-dot-idle)]",
         )}
@@ -90,17 +95,27 @@ const EMPTY_PERSONA_CUSTOMS: Array<{
   name?: string;
 }> = [];
 
+const EMPTY_GROUPS: ChatGroup[] = [];
+
 const PureChatItem = ({
   chat,
+  groups = EMPTY_GROUPS,
   isActive,
   onDelete,
+  onMoveToGroup,
+  onNewGroupWith,
+  onRename,
   personaCustoms = EMPTY_PERSONA_CUSTOMS,
   setOpenMobile,
   tone = "sidebar",
 }: {
   chat: ChatWithActivity;
+  groups?: ChatGroup[];
   isActive: boolean;
   onDelete: (chatId: string) => void;
+  onMoveToGroup: (chatId: string, groupId: string | null) => void;
+  onNewGroupWith: (chatId: string) => void;
+  onRename: (chatId: string) => void;
   personaCustoms?: Array<{ id: string; shortName?: string; name?: string }>;
   setOpenMobile: (open: boolean) => void;
   tone?: "sidebar" | "panel";
@@ -135,7 +150,7 @@ const PureChatItem = ({
       <SidebarMenuButton
         asChild
         className={cn(
-          "h-8 min-w-0 group-has-data-[sidebar=menu-action]/menu-item:pr-2",
+          "h-7 min-w-0 group-has-data-[sidebar=menu-action]/menu-item:pr-2",
           tone === "panel"
             ? "hover:bg-muted/50! hover:text-foreground group-hover/menu-item:bg-muted/50! group-hover/menu-item:text-foreground data-[active=true]:bg-muted/70! data-[active=true]:font-medium data-[active=true]:text-foreground"
             : "group-hover/menu-item:bg-sidebar-accent group-hover/menu-item:text-sidebar-accent-foreground",
@@ -144,11 +159,11 @@ const PureChatItem = ({
       >
         <Link
           href={`/chat/${chat.id}`}
-          title={`${chat.title}\n${personaLabel}`}
           onClick={() => {
             setOpenMobile(false);
             closePortal();
           }}
+          title={`${chat.title}\n${personaLabel}`}
         >
           <StatusDot status={status} />
           <FadedSidebarText className="text-[13px] leading-[18px]">
@@ -160,7 +175,7 @@ const PureChatItem = ({
       <DropdownMenu modal={false}>
         <div
           className={cn(
-            "pointer-events-none absolute inset-y-0 right-0 z-10 flex w-16 items-center justify-end overflow-hidden rounded-r-md pr-2",
+            "pointer-events-none absolute inset-y-0 right-0 z-10 flex w-16 items-center justify-end overflow-hidden rounded-r-md pr-1.5",
             "mask-[linear-gradient(to_left,black_2rem,transparent)]",
             "opacity-0 transition-opacity duration-150",
             "group-hover/menu-item:opacity-100 group-focus-within/menu-item:opacity-100",
@@ -171,23 +186,76 @@ const PureChatItem = ({
           <DropdownMenuTrigger asChild>
             <SidebarMenuAction
               className={cn(
-                "static top-auto right-auto size-6 translate-y-0 rounded-md bg-transparent p-0 hover:bg-black/10",
+                "static top-auto right-auto size-5 translate-y-0 rounded bg-transparent p-0 hover:bg-black/10",
                 "pointer-events-none group-hover/menu-item:pointer-events-auto",
                 "group-focus-within/menu-item:pointer-events-auto data-[state=open]:pointer-events-auto",
                 "max-sm:pointer-events-auto",
               )}
               type="button"
             >
-              <MoreVerticalIcon />
+              <MoreVerticalIcon size={14} />
               <span className="sr-only">More</span>
             </SidebarMenuAction>
           </DropdownMenuTrigger>
         </div>
 
         <DropdownMenuContent align="end" side="bottom">
+          <DropdownMenuItem
+            className="cursor-pointer"
+            onSelect={() => {
+              window.open(`/chat/${chat.id}`, "_blank", "noopener,noreferrer");
+            }}
+          >
+            <ExternalLinkIcon size={14} />
+            <span>Open in new tab</span>
+          </DropdownMenuItem>
+
+          <DropdownMenuItem
+            className="cursor-pointer"
+            onSelect={() => onRename(chat.id)}
+          >
+            <PencilEditIcon size={14} />
+            <span>Rename</span>
+          </DropdownMenuItem>
+
           <DropdownMenuSub>
             <DropdownMenuSubTrigger className="cursor-pointer">
-              <ShareIcon />
+              <FolderIcon size={14} />
+              <span>Move to group</span>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuPortal>
+              <DropdownMenuSubContent>
+                {groups.map((group) => (
+                  <DropdownMenuItem
+                    className="flex-row justify-between gap-4 cursor-pointer"
+                    key={group.id}
+                    onSelect={() => onMoveToGroup(chat.id, group.id)}
+                  >
+                    <span className="truncate">{group.name}</span>
+                    {chat.groupId === group.id ? <CheckCircleFillIcon /> : null}
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuItem
+                  className="flex-row justify-between gap-4 cursor-pointer"
+                  onSelect={() => onMoveToGroup(chat.id, null)}
+                >
+                  <span>Ungrouped</span>
+                  {chat.groupId === null ? <CheckCircleFillIcon /> : null}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="cursor-pointer"
+                  onSelect={() => onNewGroupWith(chat.id)}
+                >
+                  <span>New group…</span>
+                </DropdownMenuItem>
+              </DropdownMenuSubContent>
+            </DropdownMenuPortal>
+          </DropdownMenuSub>
+
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger className="cursor-pointer">
+              <ShareIcon size={14} />
               <span>Share</span>
             </DropdownMenuSubTrigger>
             <DropdownMenuPortal>
@@ -222,11 +290,13 @@ const PureChatItem = ({
             </DropdownMenuPortal>
           </DropdownMenuSub>
 
+          <DropdownMenuSeparator />
+
           <DropdownMenuItem
             className="cursor-pointer text-destructive focus:bg-destructive/15 focus:text-destructive dark:text-red-500"
             onSelect={() => onDelete(chat.id)}
           >
-            <TrashIcon />
+            <TrashIcon size={14} />
             <span>Delete</span>
           </DropdownMenuItem>
         </DropdownMenuContent>
@@ -251,10 +321,16 @@ export const ChatItem = memo(PureChatItem, (prevProps, nextProps) => {
   if (prevProps.chat.personaId !== nextProps.chat.personaId) {
     return false;
   }
-  if (chatStatus(prevProps.chat) !== chatStatus(nextProps.chat)) {
+  if (prevProps.chat.groupId !== nextProps.chat.groupId) {
+    return false;
+  }
+  if (prevProps.groups !== nextProps.groups) {
     return false;
   }
   if (prevProps.personaCustoms !== nextProps.personaCustoms) {
+    return false;
+  }
+  if (chatStatus(prevProps.chat) !== chatStatus(nextProps.chat)) {
     return false;
   }
   return true;

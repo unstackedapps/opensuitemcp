@@ -17,6 +17,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarRail,
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -177,6 +178,8 @@ export function AppSidebar({ user }: { user: User | undefined }) {
           <SidebarUserNav showAdminLink={showAdminLink} user={user} />
         ) : null}
       </SidebarFooter>
+
+      <SidebarRail />
     </Sidebar>
   );
 }
