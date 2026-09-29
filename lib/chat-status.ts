@@ -39,9 +39,22 @@ export function toIso(value: Date | string): string {
  */
 export type ChatStatus = "working" | "needsUser" | "finished" | "idle";
 
-export function chatStatus(chat: ChatWithActivity): ChatStatus {
+/**
+ * `isViewing` is the chat on screen. Its turn ends, the row reads finished and
+ * unviewed for as long as the viewed mark takes to land, and the dot flashes
+ * blue at someone already reading it. Nobody needs telling about a turn they
+ * just watched.
+ */
+export function chatStatus(
+  chat: ChatWithActivity,
+  isViewing = false,
+): ChatStatus {
   if (chat.isLive) {
     return "working";
+  }
+
+  if (isViewing) {
+    return "idle";
   }
 
   const unviewed =
