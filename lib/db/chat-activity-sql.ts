@@ -11,16 +11,29 @@ import { chat } from "./schema";
 export const STREAM_STALE_MS = 15 * 60 * 1000;
 
 /**
+ * How long after its last append an agent still counts as working. An agent
+ * appends as it goes, so each step renews the stamp; when it stops, the dot
+ * clears within this window rather than hanging on a run that already ended.
+ */
+export const AGENT_ACTIVE_MS = 90 * 1000;
+
+/**
  * Both fragments name `"Chat"."id"` in full rather than interpolating the
  * column. Drizzle renders an interpolated `chat.id` as a bare `"id"`, which
  * inside these subqueries binds to `"Stream"."id"` — the correlation then
  * compares a stream to itself, every row reads false, and nothing errors.
  */
-export const isLiveSql = sql<boolean>`EXISTS (
-  SELECT 1 FROM "Stream" s
-  WHERE s."chatId" = "Chat"."id"
-    AND s."finishedAt" IS NULL
-    AND s."createdAt" > now() - make_interval(secs => ${STREAM_STALE_MS / 1000})
+export const isLiveSql = sql<boolean>`(
+  EXISTS (
+    SELECT 1 FROM "Stream" s
+    WHERE s."chatId" = "Chat"."id"
+      AND s."finishedAt" IS NULL
+      AND s."createdAt" > now() - make_interval(secs => ${STREAM_STALE_MS / 1000})
+  )
+  OR COALESCE(
+    "Chat"."agentActiveAt" > now() - make_interval(secs => ${AGENT_ACTIVE_MS / 1000}),
+    false
+  )
 )`;
 
 export const lastOutcomeSql = sql<StreamOutcome | null>`(

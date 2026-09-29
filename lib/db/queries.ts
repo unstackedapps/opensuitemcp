@@ -431,9 +431,12 @@ export async function appendChatMessage({
       const createdAt = new Date(Math.max(Date.now(), previous + 1));
 
       await tx.insert(message).values({ id, chatId, role, parts, createdAt });
+      // agentActiveAt is what makes the working dot true for a thread an agent
+      // is driving: this path writes no Stream row, so without the stamp the
+      // sidebar only ever sees the output, never the work.
       await tx
         .update(chat)
-        .set({ updatedAt: createdAt })
+        .set({ updatedAt: createdAt, agentActiveAt: createdAt })
         .where(eq(chat.id, chatId));
 
       return { createdAt, chatTitle: owner.title };

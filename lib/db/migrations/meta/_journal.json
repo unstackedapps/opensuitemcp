@@ -288,6 +288,13 @@
       "when": 1790229920197,
       "tag": "0040_chat_groups",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1790233520197,
+      "tag": "0041_chat_agent_active",
+      "breakpoints": true
     }
   ]
 }

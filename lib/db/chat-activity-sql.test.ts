@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { chatActivityQuery, STREAM_STALE_MS } from "./chat-activity-sql";
+import {
+  AGENT_ACTIVE_MS,
+  chatActivityQuery,
+  STREAM_STALE_MS,
+} from "./chat-activity-sql";
 
 describe("chat activity subqueries", () => {
   it("correlate against the Chat table by name, not a bare column", () => {
@@ -15,6 +19,20 @@ describe("chat activity subqueries", () => {
     const { sql: text, params } = chatActivityQuery().toSQL();
     assert.match(text, /make_interval\(secs => \$1\)/);
     assert.equal(params[0], STREAM_STALE_MS / 1000);
+  });
+
+  it("never yields null when a chat has no agent stamp", () => {
+    // agentActiveAt is nullable, and NULL > timestamp is NULL, so without a
+    // coalesce isLive came back null for every chat an agent never touched.
+    const { sql: text } = chatActivityQuery().toSQL();
+    assert.match(text, /COALESCE\(\s*"Chat"\."agentActiveAt" >/);
+    assert.match(text, /false\s*\)/);
+  });
+
+  it("counts a recent agent append as live", () => {
+    const { sql: text, params } = chatActivityQuery().toSQL();
+    assert.match(text, /"Chat"\."agentActiveAt" > now\(\)/);
+    assert.ok(params.includes(AGENT_ACTIVE_MS / 1000));
   });
 
   it("reads the newest stream for the outcome", () => {
