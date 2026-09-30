@@ -149,8 +149,8 @@ const PureChatItem = ({
           "peer-data-[active=true]/menu-button:bg-muted/70",
         )
       : cn(
-          "bg-sidebar group-hover/menu-item:bg-sidebar-accent",
-          "group-focus-within/menu-item:bg-sidebar-accent",
+          "bg-sidebar group-hover/menu-item:bg-sidebar-accent/50",
+          "group-focus-within/menu-item:bg-sidebar-accent/50",
           "has-data-[state=open]:bg-sidebar-accent",
           "peer-data-[active=true]/menu-button:bg-sidebar-accent",
         );
@@ -176,7 +176,7 @@ const PureChatItem = ({
           "h-7 min-w-0 pl-2.5 group-has-data-[sidebar=menu-action]/menu-item:pr-2!",
           tone === "panel"
             ? "hover:bg-muted/50! hover:text-foreground group-hover/menu-item:bg-muted/50! group-hover/menu-item:text-foreground data-[active=true]:bg-muted/70! data-[active=true]:font-medium data-[active=true]:text-foreground"
-            : "group-hover/menu-item:bg-sidebar-accent group-hover/menu-item:text-sidebar-accent-foreground",
+            : "group-hover/menu-item:bg-sidebar-accent/50 group-hover/menu-item:text-sidebar-accent-foreground",
         )}
         isActive={isActive}
       >

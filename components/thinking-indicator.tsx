@@ -172,11 +172,11 @@ export function ThinkingIndicator({
         <div className="flex min-w-0 flex-wrap items-center gap-1">
           {visible.map((skill) => (
             <span
-              className="inline-flex h-6 max-w-32 min-w-0 items-center truncate rounded-full border bg-muted/60 px-2 text-[10px] text-muted-foreground"
+              className="inline-flex h-5 max-w-56 min-w-0 items-center rounded-full border bg-muted/40 px-2 text-[10px] text-muted-foreground"
               key={skill.id}
               title={skill.name}
             >
-              {skill.name}
+              <span className="min-w-0 truncate">{skill.name}</span>
             </span>
           ))}
           {extra > 0 ? (
