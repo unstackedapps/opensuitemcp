@@ -5,6 +5,14 @@ All notable changes to OpenSuiteMCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.7.1] - 2026-09-30
+
+### 🐛 Fixed
+
+- **A sidebar with no groups showed no toolbar, and could hide every chat you had.** The Ungrouped heading was held back until a group existed, on the reasoning that a lone "Ungrouped" label above every chat says nothing. The heading is also what carries the plus, the search and the sort — so on an install with no groups none of them were reachable, and the menu that makes the first group sat inside the thing that only appears once a group exists. Worse, collapsing Ungrouped is remembered: collapse it, then end up with no groups, and the whole list is gone with no control left to open it. The heading always renders now. It still cannot strand itself above nothing, because a section with no chats is not drawn at all
+- **A search could not see into a collapsed group.** Matches inside one were absent from the results, and the list looked complete — so a chat you were searching for appeared not to exist. Collapse is a preference, not a filter: it yields while a search or persona filter is on
+- **The chat you are reading is visible where it lives**, even when its section is collapsed. A brand new chat went into a collapsed section and simply did not appear, so starting one looked like nothing had happened. Neither this nor the search case writes the preference back, so a section returns to how it was left
+
 ## [5.7.0] - 2026-09-30
 
 ### ✨ Added
@@ -852,6 +860,7 @@ First stable release of OpenSuiteMCP - an open source, production-ready NetSuite
 
 ---
 
+[5.7.1]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.7.1
 [5.7.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.7.0
 [5.6.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.6.0
 [5.5.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.5.0
