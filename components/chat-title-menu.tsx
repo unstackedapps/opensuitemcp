@@ -88,7 +88,9 @@ export function ChatTitleMenu({
 
   if (isReadonly) {
     return (
-      <span className="min-w-0 truncate text-foreground text-sm">{shown}</span>
+      <span className="min-w-0 max-w-[22rem] truncate text-foreground text-sm">
+        {shown}
+      </span>
     );
   }
 
@@ -137,7 +139,7 @@ export function ChatTitleMenu({
         <DropdownMenuTrigger asChild>
           <button
             className={cn(
-              "group/chat-title flex min-w-0 items-center gap-1 rounded-md px-1 py-0.5",
+              "group/chat-title flex min-w-0 max-w-[22rem] items-center gap-1 rounded-md px-1 py-0.5",
               "text-foreground/80 text-sm transition-colors hover:text-foreground",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
             )}

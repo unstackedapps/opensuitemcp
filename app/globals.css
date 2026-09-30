@@ -214,13 +214,12 @@
     position: relative;
   }
 
+  /* No overflow-x here: it clips fixed children to html's box, and the reserved
+     gutter makes that box narrower than the viewport, so a dialog's dim layer
+     stopped short and left a bright strip down the edge. body clips instead. */
   html {
-    overflow-x: hidden;
     scrollbar-gutter: stable;
   }
-
-  /* The gutter is reserved on html, so a fixed overlay at inset-0 stops short
-     of the viewport edge and leaves an undimmed strip. Overlays span w-screen. */
 
   /* Radix Select/Dialog scroll lock adds margin-right; gutter already reserves space. */
   body[data-scroll-locked] {
