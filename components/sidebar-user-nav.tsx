@@ -213,7 +213,6 @@ export function SidebarUserNav({
                 </Link>
               </DropdownMenuItem>
             ) : null}
-            <DropdownMenuSeparator />
             <DropdownMenuItem
               className="cursor-pointer"
               data-testid="user-nav-item-auth"
