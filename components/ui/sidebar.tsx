@@ -52,6 +52,10 @@ const SIDEBAR_WIDTH_STORAGE_KEY = "sidebar:width";
 const PEEK_CLOSE_DELAY_MS = 100;
 /** Persistent expand width animation (`duration-200`). Peek uses the same duration with ease-out. */
 const SIDEBAR_EXPAND_MS = 200;
+/** The gap and the panel have to travel on one curve. Apart, the panel's edge
+ *  runs ahead of the canvas it is supposed to sit beside, and the sidebar is
+ *  seen over the top of it until the slower of the two catches up. */
+const SIDEBAR_WIDTH_EASE = "duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]";
 
 function isSidebarPeekUi(target: EventTarget | null) {
   const element =
@@ -475,12 +479,11 @@ const Sidebar = forwardRef<
           className={cn(
             "relative bg-transparent transition-[width]",
             state === "collapsed" && collapsible === "offcanvas"
-              ? "w-0 duration-0"
+              ? "w-0"
               : state === "collapsed"
-                ? "w-(--sidebar-width-icon) duration-0"
-                : isResizing
-                  ? "w-(--sidebar-width) duration-0"
-                  : "w-(--sidebar-width) duration-200 ease-linear",
+                ? "w-(--sidebar-width-icon)"
+                : "w-(--sidebar-width)",
+            isResizing ? "transition-none" : SIDEBAR_WIDTH_EASE,
             "group-data-[side=right]:rotate-180"
           )}
         />
@@ -489,7 +492,7 @@ const Sidebar = forwardRef<
             "fixed inset-y-0 z-10 hidden h-svh overflow-hidden md:flex",
             isResizing
               ? "transition-none"
-              : "transition-[width,box-shadow] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]",
+              : cn("transition-[width,box-shadow]", SIDEBAR_WIDTH_EASE),
             visuallyExpanded
               ? "w-(--sidebar-width)"
               : "w-(--sidebar-width-icon)",
