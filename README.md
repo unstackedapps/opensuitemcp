@@ -8,59 +8,21 @@ Source-available **NetSuite MCP client** — chat UI for NetSuite’s AI Connect
 
 Bring your own LLM keys (**Google Gemini**, **Anthropic Claude**, **OpenAI**, or an **OpenAI-compatible** endpoint). Self-host for internal use. Commercial rights reserved by [Unstacked Apps, LLC](https://www.unstackedapps.com/).
 
-**Current release:** [v5.6.0](https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.6.0) · [Changelog](CHANGELOG.md)
+**Current release:** [v5.7.0](https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.7.0) · [Changelog](CHANGELOG.md)
 
 <img src="./docs/screenshot-chat.png" alt="OpenSuiteMCP chat UI" width="100%" />
 
 _Main chat UI._
 
-## What’s in 5.6
+## What’s in 5.7
 
-- **An agent writes skills** — a connected AI researches in your NetSuite account, then saves what it established with `osmcp_create_skill`, revises it with `osmcp_update_skill`, and removes it with `osmcp_delete_skill`
-- **A persona carries its skills** — pair any skill to any persona, built-in ones included, on the **Skills** tab of the persona editor. They apply whenever that persona is the one working
-- **Clone anything you can read** — a built-in persona, someone else's skill, an organization's skill, copied into one you own and can edit
-- **Skills say which agent wrote them** — the Skills panel shows the app's name and the product it connected from; an agent may revise or delete only agent-authored skills
-- **Deleting names what it releases** — removing a skill lists the personas that carried it
-- **Markdown renders** — the eye toggle previews a persona or skill as it reads
-- **A skill can be a folder** — `SKILL.md` plus the reference files it points at. Import and download one as a `.zip`; an agent reads a reference only when the instructions call for it
-- **Skills carry a description** — shown in the Skills panel, and what an agent reads when choosing between them
-- **The server publishes prompts, not only tools** — `prompts/list` and `prompts/get`, carrying four OpenSuiteMCP workflows plus every prompt your NetSuite Companion library publishes
+- **A chat says what it is doing** — a dot on every thread: pulsing while the assistant works, blue when a turn finished while you were reading something else, empty once you have seen it. Work an agent does over MCP pulses the same way
+- **Chats file into groups** — create, rename, reorder and collapse them, and drag a chat from one to another. A group's **+** opens a chat already in that group
+- **The list has a toolbar** — filter by persona, sort by activity or title, and search without leaving the panel
+- **The thread title heads the conversation** — rename, share and delete live in its menu, so sharing is in one place instead of two
+- **The side panel carries the product name**, and can be resized, collapsed to a rail, or peeked at from its edge
 
-## What’s in 5.5
-
-- **Agent apps sign in over OAuth 2.1** — every install is its own authorization server. Press **New app** under **App Portal → Agent apps**, paste the Server URL into Claude, Cursor, Gemini or ChatGPT, and approve it on a consent screen here
-- **One dialog holds an app** — name, the product it connects from, persona, pinned NetSuite account, note and credential, created and rotated in the same place
-- **A credential can be read again** — a bearer token or an OAuth 2.1 client secret is stored encrypted and revealed on demand; a secret rotates in place while the client id stays
-- **[Connect an agent](docs/connect-an-agent.md)** — steps for Claude, Cursor, Gemini and ChatGPT
-
-## What’s in 5.4
-
-- **An agent writes personas and chooses which one it is** — `osmcp_create_persona`, `osmcp_update_persona`, `osmcp_delete_persona` and `osmcp_set_agent_persona`; `osmcp_whoami` reports the assignment to a fresh connection
-- **NetSuite's prompt library reaches an agent** — `osmcp_list_prompts` and `osmcp_get_prompt` read the Companion SuiteApp's prompts live from the account
-- **An agent's work appears as a thread** — `osmcp_create_chat` and `osmcp_append_chat` write into its owner's sidebar, with reasoning and tool calls rendered as this app renders its own
-- **A long result opens beside the conversation** — NetSuite output and generated scripts take a resizable pane with copy and download (desktop)
-
-## What’s in 5.3
-
-- **Agent access** — OpenSuiteMCP acts as an MCP server, so an external AI works inside a user's NetSuite workspace as that user
-- **Per-user agent keys** — **App Portal → Agent access** mints keys, shown once and stored as a SHA-256 digest, each pinnable to one NetSuite account
-- **NetSuite tool passthrough** — every allowed NetSuite MCP Standard Tool re-exposed with its JSON Schema forwarded verbatim, plus the `osmcp_*` workspace tools
-- **Org control** — **Admin → Agent access** turns it on for an organization and can narrow it to named members
-
-## What’s in 5.2
-
-- **Skill invocation modes** — Auto, Slash command, or Off for Oracle, Community, Connected, and Custom skills
-- **Richer chat turns** — thinking chips, per-turn usage, and prettier MCP tool output (including SuiteQL)
-
-## What’s in 5.0
-
-- **Organization admin** — Org vs solo install modes, `/setup` bootstrap, centralized LLM providers, NetSuite MCP/OIDC policies, skills, search, personas, and user management
-- **Post-install onboarding** — Step-by-step wizard for solo and org users (LLM, MCP, OIDC, search, skills) with optional steps and skip support
-- **NetSuite OIDC login** — Separate app-login OAuth from MCP connect; per-account test connection, redirect URI copy fields, and setup guide
-- **Per-account MCP UX** — DCR probing, integration setup, and OAuth connect per connection (settings, onboarding, and admin)
-- **Cross-platform bootstrap** — Node-based local orchestrator (`bootstrap:local`, `reset:backend`) replaces bash-only setup scripts
-- **Personas, skills, and providers** — Persona interview builder; Oracle, Community, Connected, and custom skills; multiple named AI providers per chat
-- **BYOLLM** — Your API keys; no shared multi-tenant model account in this app
+Earlier releases are in the [changelog](CHANGELOG.md).
 
 ## Personas
 
