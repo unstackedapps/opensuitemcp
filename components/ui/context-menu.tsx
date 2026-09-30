@@ -35,7 +35,7 @@ const ContextMenuItem = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <ContextMenuPrimitive.Item
     className={cn(
-      "relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+      "relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-[13px] font-normal outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-3.5 [&_svg]:shrink-0",
       className,
     )}
     ref={ref}
