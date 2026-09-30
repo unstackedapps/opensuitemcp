@@ -214,14 +214,17 @@
     position: relative;
   }
 
-  /* No overflow-x here: it clips fixed children to html's box, and the reserved
-     gutter makes that box narrower than the viewport, so a dialog's dim layer
-     stopped short and left a bright strip down the edge. body clips instead. */
+  /* No gutter: the browser paints the reserved strip itself, so no element
+     reaches it, and a dialog's dim layer left it bright down the edge. The app
+     is h-dvh and the document does not scroll, so there is nothing to reserve
+     for; body[data-scroll-locked] below already refuses the scroll lock's
+     compensation. No overflow-x either — it clips fixed children to html's box. */
   html {
-    scrollbar-gutter: stable;
+    scrollbar-gutter: auto;
   }
 
-  /* Radix Select/Dialog scroll lock adds margin-right; gutter already reserves space. */
+  /* Radix Select/Dialog scroll lock adds margin-right; the document does not
+     scroll, so there is nothing to compensate for. */
   body[data-scroll-locked] {
     margin-right: 0 !important;
     padding-right: 0 !important;
