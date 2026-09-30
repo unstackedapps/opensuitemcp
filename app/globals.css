@@ -104,7 +104,7 @@
   /* Geist is variable, so the scale can sit between the usual stops. Every
      font-medium and font-semibold in the app reads from here: at 500 and 600
      a chip or a card title came out heavier than the text it labels. */
-  --font-weight-medium: 450;
+  --font-weight-medium: 425;
   --font-weight-semibold: 550;
   --font-weight-bold: 650;
 
