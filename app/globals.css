@@ -101,10 +101,11 @@
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 
-  /* Geist is variable, so the scale can sit between the usual stops. Every
-     font-medium and font-semibold in the app reads from here: at 500 and 600
-     a chip or a card title came out heavier than the text it labels. */
-  --font-weight-medium: 425;
+  /* Geist is variable (Geist-Variable.woff2, 100 900), so the scale can sit
+     between the usual stops. Every font-medium and font-semibold in the app
+     reads from here. font-medium carries no extra weight at all: a chip or a
+     card title is marked out by its colour and its box, not by its stroke. */
+  --font-weight-medium: 400;
   --font-weight-semibold: 550;
   --font-weight-bold: 650;
 
