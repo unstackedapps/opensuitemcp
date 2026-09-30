@@ -163,7 +163,9 @@ export function SidebarUserNav({
           </DropdownMenuTrigger>
           <DropdownMenuContent
             align="start"
-            className="min-w-56 w-(--radix-popper-anchor-width)"
+            // Not the anchor width: a narrow panel then gave a narrower menu,
+            // and the address inside it had nowhere to go.
+            className="w-64"
             data-testid="user-nav-menu"
             side="top"
           >

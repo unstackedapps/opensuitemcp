@@ -239,10 +239,10 @@ function ChatGroupSection({
         </span>
         <span
           className={cn(
-            "shrink-0 text-sidebar-foreground/45 transition group-hover/title:text-sidebar-foreground",
-            collapsed
-              ? "-rotate-90 opacity-100"
-              : "opacity-0 group-hover/group-header:opacity-100",
+            "shrink-0 text-sidebar-foreground/30 transition",
+            "group-hover/group-section:text-sidebar-foreground/70",
+            "group-hover/title:text-sidebar-foreground",
+            collapsed && "-rotate-90",
           )}
         >
           <ChevronDownIcon size={12} />
@@ -273,7 +273,7 @@ function ChatGroupSection({
     // biome-ignore lint/a11y/noNoninteractiveElementInteractions: drop zone; the row menu's Move to group is the keyboard path
     <div
       className={cn(
-        "rounded-md",
+        "group/group-section rounded-md",
         dropActive && "bg-sidebar-accent/60 ring-1 ring-sidebar-border",
       )}
       onDragLeave={(event) => {

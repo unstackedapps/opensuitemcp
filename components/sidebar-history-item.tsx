@@ -190,7 +190,7 @@ const PureChatItem = ({
           title={`${chat.title}\n${personaLabel}`}
         >
           <StatusDot status={status} />
-          <FadedSidebarText className="text-sm leading-5">
+          <FadedSidebarText className="font-[350] text-sm leading-5 first-letter:uppercase">
             {chat.title}
           </FadedSidebarText>
         </Link>
