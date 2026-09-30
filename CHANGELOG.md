@@ -852,6 +852,7 @@ First stable release of OpenSuiteMCP - an open source, production-ready NetSuite
 
 ---
 
+[5.7.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.7.0
 [5.6.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.6.0
 [5.5.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.5.0
 [5.4.2]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.4.2
