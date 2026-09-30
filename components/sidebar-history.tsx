@@ -234,7 +234,7 @@ function ChatGroupSection({
         onClick={onToggle}
         type="button"
       >
-        <span className="min-w-0 truncate text-[12px] text-sidebar-foreground/45 transition-colors group-hover/title:text-sidebar-foreground">
+        <span className="min-w-0 truncate text-[12px] text-sidebar-foreground/60 transition-colors group-hover/title:text-sidebar-foreground">
           {group ? group.name : "Ungrouped"}
         </span>
         <span
