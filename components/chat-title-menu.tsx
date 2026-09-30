@@ -88,7 +88,7 @@ export function ChatTitleMenu({
 
   if (isReadonly) {
     return (
-      <span className="min-w-0 max-w-[22rem] truncate text-foreground text-sm">
+      <span className="min-w-0 max-w-[22rem] truncate text-foreground text-sm first-letter:uppercase">
         {shown}
       </span>
     );
@@ -146,7 +146,9 @@ export function ChatTitleMenu({
             title={shown}
             type="button"
           >
-            <span className="min-w-0 truncate">{shown}</span>
+            <span className="min-w-0 truncate first-letter:uppercase">
+              {shown}
+            </span>
             <span className="shrink-0 text-foreground/40 transition-colors group-hover/chat-title:text-foreground">
               <ChevronDownIcon size={14} />
             </span>
