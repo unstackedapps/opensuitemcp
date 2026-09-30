@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import { Search } from "lucide-react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, usePathname, useRouter } from "next/navigation";
 import type { User } from "next-auth";
 import {
   type CSSProperties,
@@ -434,7 +434,20 @@ export function SidebarHistory({
 }) {
   const { setOpenMobile, revealText } = useSidebar();
   const { openPortal } = useAppPortal();
-  const { id } = useParams();
+  const params = useParams();
+  const pathname = usePathname();
+  // The chat page rewrites the URL with history.replaceState, which leaves the
+  // route params on the id they had. Read the address as well, or a chat you
+  // just started is neither highlighted nor recognised as the one you are on.
+  const id = useMemo(() => {
+    const fromParams = typeof params.id === "string" ? params.id : undefined;
+    if (fromParams) {
+      return fromParams;
+    }
+    return pathname?.startsWith("/chat/")
+      ? pathname.slice("/chat/".length)
+      : undefined;
+  }, [params.id, pathname]);
 
   const {
     data: paginatedChatHistories,
@@ -594,8 +607,12 @@ export function SidebarHistory({
         { revalidate: false },
       );
 
-      if (target === id) {
-        router.push("/");
+      if (window.location.pathname === `/chat/${target}`) {
+        // See the New Chat control: the router still believes it is on "/",
+        // so a push there does nothing. Put the address back and re-render,
+        // which mints a fresh chat.
+        window.history.replaceState({}, "", "/");
+        router.refresh();
       }
     };
 

@@ -296,12 +296,12 @@ const PurePreviewMessage = ({
 
                     return (
                       <Card
-                        className="w-full rounded-tl-3xl rounded-tr rounded-br-3xl rounded-bl-3xl bg-muted text-foreground shadow-none"
+                        className="w-full rounded-tl-2xl rounded-tr rounded-br-2xl rounded-bl-2xl bg-muted text-foreground shadow-none"
                         key={key}
                       >
-                        <CardContent className="px-2 py-1">
+                        <CardContent className="p-0">
                           <MessageContent
-                            className="wrap-break-word text-left"
+                            className="wrap-break-word px-3.5 py-2 text-left"
                             data-testid="message-content"
                           >
                             <UserMessageTextWithSkillBadges

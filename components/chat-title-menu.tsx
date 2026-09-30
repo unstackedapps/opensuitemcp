@@ -126,7 +126,9 @@ export function ChatTitleMenu({
     }
 
     await mutate(unstable_serialize(getChatHistoryPaginationKey));
-    router.push("/");
+    // The router may still believe it is on "/", where a push does nothing.
+    window.history.replaceState({}, "", "/");
+    router.refresh();
   };
 
   return (
