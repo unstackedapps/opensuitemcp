@@ -173,7 +173,8 @@ const PureChatItem = ({
       <SidebarMenuButton
         asChild
         className={cn(
-          "h-7 min-w-0 pl-2.5 group-has-data-[sidebar=menu-action]/menu-item:pr-2!",
+          "h-8 min-w-0 pl-2.5 text-foreground/80 group-has-data-[sidebar=menu-action]/menu-item:pr-2!",
+          "data-[active=true]:text-foreground",
           tone === "panel"
             ? "hover:bg-muted/50! hover:text-foreground group-hover/menu-item:bg-muted/50! group-hover/menu-item:text-foreground data-[active=true]:bg-muted/70! data-[active=true]:font-medium data-[active=true]:text-foreground"
             : "group-hover/menu-item:bg-sidebar-accent/50 group-hover/menu-item:text-sidebar-accent-foreground",
@@ -189,7 +190,7 @@ const PureChatItem = ({
           title={`${chat.title}\n${personaLabel}`}
         >
           <StatusDot status={status} />
-          <FadedSidebarText className="text-[13px] leading-[18px]">
+          <FadedSidebarText className="text-sm leading-5">
             {chat.title}
           </FadedSidebarText>
         </Link>
