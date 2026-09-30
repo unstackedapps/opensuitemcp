@@ -1091,7 +1091,9 @@ export function SidebarHistory({
                   onToggle={toggleUngrouped}
                   personaCustoms={personaCustoms}
                   setOpenMobile={setOpenMobile}
-                  showHeader={groups.length > 0}
+                  // Always: the heading carries the toolbar, and hiding it
+                  // when no group exists left no way to make the first one.
+                  showHeader
                   tone={variant}
                 />
               </div>
