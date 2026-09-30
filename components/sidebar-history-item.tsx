@@ -78,7 +78,7 @@ function StatusDot({ status }: { status: ChatStatus }) {
         className={cn(
           "size-1.5 rounded-full",
           status === "working" && "animate-pulse",
-          status === "idle" && "border border-[var(--chat-dot-idle)]",
+          status === "idle" && "border border-(--chat-dot-idle)",
         )}
         style={
           status === "idle" ? undefined : { backgroundColor: DOT_COLOR[status] }
