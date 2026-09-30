@@ -845,6 +845,23 @@ export function SidebarHistory({
     );
 
   const filtering = query.trim().length > 0 || personaFilter.length > 0;
+
+  // Collapse is a preference, not a filter. A search has to reach into a
+  // collapsed section or its matches are simply missing, and the chat you are
+  // reading — a new one included — has to be visible where it lives. Neither
+  // writes the preference back, so the section returns to how it was left.
+  const sectionCollapsed = (
+    collapsedFlag: boolean,
+    sectionChats: ChatWithActivity[],
+  ) => {
+    if (!collapsedFlag) {
+      return false;
+    }
+    if (filtering) {
+      return false;
+    }
+    return !sectionChats.some((chat) => chat.id === activeChatId);
+  };
   const activeChatId = typeof id === "string" ? id : undefined;
   const ungrouped = sortChats(
     visibleChats.filter((chat) => chat.groupId === null),
@@ -973,76 +990,79 @@ export function SidebarHistory({
               </div>
             ) : (
               <div className="flex flex-col gap-3">
-                {groups.map((group, index) => (
-                  <ChatGroupSection
-                    activeChatId={activeChatId}
-                    chats={sortChats(
-                      visibleChats.filter((chat) => chat.groupId === group.id),
-                      sort,
-                    )}
-                    filtering={filtering}
-                    collapsed={group.collapsed}
-                    dropActive={dropTarget === group.id}
-                    draggingChatId={draggingChatId}
-                    onDragChatEnd={() => setDraggingChatId(null)}
-                    onDragChatStart={setDraggingChatId}
-                    onDropChat={dropChatInGroup}
-                    canNudgeDown={index < groups.length - 1}
-                    canNudgeUp={index > 0}
-                    onDropGroupBefore={dropGroupBefore}
-                    onNudgeGroup={nudgeGroup}
-                    onGroupDragEnd={() => setDraggingGroupId(null)}
-                    onGroupDragStart={setDraggingGroupId}
-                    onHoverTarget={setDropTarget}
-                    group={group}
-                    groups={groups}
-                    key={group.id}
-                    onDelete={requestDeleteChat}
-                    onDeleteGroup={setGroupToDelete}
-                    onMoveToGroup={(chatId, groupId) => {
-                      void moveToGroup(chatId, groupId);
-                    }}
-                    onNewChatInGroup={(groupId) =>
-                      router.push(groupId ? `/?group=${groupId}` : "/")
-                    }
-                    tools={index === 0 ? listTools : undefined}
-                    onNewGroupWith={(chatId) => {
-                      setPendingGroupChatId(chatId);
-                      setNewGroupName("");
-                      setShowNewGroup(true);
-                    }}
-                    onRename={(chatId) => {
-                      const target = allChats.find(
-                        (candidate) => candidate.id === chatId,
-                      );
-                      setRenameTarget({
-                        kind: "chat",
-                        id: chatId,
-                        value: target?.title ?? "",
-                      });
-                    }}
-                    onRenameGroup={(target) =>
-                      setRenameTarget({
-                        kind: "group",
-                        id: target.id,
-                        value: target.name,
-                      })
-                    }
-                    onToggle={() => {
-                      void toggleCollapsed(group);
-                    }}
-                    personaCustoms={personaCustoms}
-                    setOpenMobile={setOpenMobile}
-                    showHeader
-                    tone={variant}
-                  />
-                ))}
+                {groups.map((group, index) => {
+                  const groupChats = sortChats(
+                    visibleChats.filter((chat) => chat.groupId === group.id),
+                    sort,
+                  );
+                  return (
+                    <ChatGroupSection
+                      activeChatId={activeChatId}
+                      chats={groupChats}
+                      filtering={filtering}
+                      collapsed={sectionCollapsed(group.collapsed, groupChats)}
+                      dropActive={dropTarget === group.id}
+                      draggingChatId={draggingChatId}
+                      onDragChatEnd={() => setDraggingChatId(null)}
+                      onDragChatStart={setDraggingChatId}
+                      onDropChat={dropChatInGroup}
+                      canNudgeDown={index < groups.length - 1}
+                      canNudgeUp={index > 0}
+                      onDropGroupBefore={dropGroupBefore}
+                      onNudgeGroup={nudgeGroup}
+                      onGroupDragEnd={() => setDraggingGroupId(null)}
+                      onGroupDragStart={setDraggingGroupId}
+                      onHoverTarget={setDropTarget}
+                      group={group}
+                      groups={groups}
+                      key={group.id}
+                      onDelete={requestDeleteChat}
+                      onDeleteGroup={setGroupToDelete}
+                      onMoveToGroup={(chatId, groupId) => {
+                        void moveToGroup(chatId, groupId);
+                      }}
+                      onNewChatInGroup={(groupId) =>
+                        router.push(groupId ? `/?group=${groupId}` : "/")
+                      }
+                      tools={index === 0 ? listTools : undefined}
+                      onNewGroupWith={(chatId) => {
+                        setPendingGroupChatId(chatId);
+                        setNewGroupName("");
+                        setShowNewGroup(true);
+                      }}
+                      onRename={(chatId) => {
+                        const target = allChats.find(
+                          (candidate) => candidate.id === chatId,
+                        );
+                        setRenameTarget({
+                          kind: "chat",
+                          id: chatId,
+                          value: target?.title ?? "",
+                        });
+                      }}
+                      onRenameGroup={(target) =>
+                        setRenameTarget({
+                          kind: "group",
+                          id: target.id,
+                          value: target.name,
+                        })
+                      }
+                      onToggle={() => {
+                        void toggleCollapsed(group);
+                      }}
+                      personaCustoms={personaCustoms}
+                      setOpenMobile={setOpenMobile}
+                      showHeader
+                      tone={variant}
+                    />
+                  );
+                })}
 
                 <ChatGroupSection
                   activeChatId={activeChatId}
                   chats={ungrouped}
                   filtering={filtering}
-                  collapsed={ungroupedCollapsed}
+                  collapsed={sectionCollapsed(ungroupedCollapsed, ungrouped)}
                   dropActive={dropTarget === "ungrouped"}
                   draggingChatId={draggingChatId}
                   onDragChatEnd={() => setDraggingChatId(null)}
