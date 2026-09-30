@@ -219,6 +219,9 @@
     scrollbar-gutter: stable;
   }
 
+  /* The gutter is reserved on html, so a fixed overlay at inset-0 stops short
+     of the viewport edge and leaves an undimmed strip. Overlays span w-screen. */
+
   /* Radix Select/Dialog scroll lock adds margin-right; gutter already reserves space. */
   body[data-scroll-locked] {
     margin-right: 0 !important;
