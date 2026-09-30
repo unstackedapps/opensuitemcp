@@ -5,6 +5,40 @@ All notable changes to OpenSuiteMCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.7.0] - 2026-09-30
+
+### ✨ Added
+
+- **A chat says what it is doing, so the sidebar is worth looking at.** A thread that finished while you were reading another one looked exactly like a thread you had already dealt with, so the only way to find out was to open each in turn. Every row carries a dot: pulsing while the assistant is working, blue once a turn has finished that you have not seen, empty when you have. A thread you are reading never turns blue at you, and one that hit its iteration limit or errored is marked apart from one that simply finished. Work an agent does over MCP pulses the same way, so a thread an agent is writing into looks busy while it is busy
+- **Chats file into groups.** Create, rename, reorder and collapse them, drag a chat from one group into another, and drag a group itself into place. A group's **+** opens a chat that is already in that group — filed as the chat is created, so a turn that errors or that you navigate away from is still filed. Deleting a group returns its chats to Ungrouped rather than taking them with it
+- **The list has a toolbar.** Filter by persona, sort by activity or by title, and search the list from the panel
+- **The thread title heads the conversation**, with rename, sharing and delete in its menu
+
+### 📝 Changed
+
+- **Sharing is in one place.** It was in the header and again on every sidebar row. The header's control is gone and the thread title's menu carries it
+- **The product name moved into the side panel**, above **New Chat**, which leaves the header to the thread you are actually reading
+- **The persona chip joined the connection and source controls** on the right of the header, with no fill
+- **The sidebar reads as a hierarchy.** A row and the heading above it drew from one colour a shade apart, so the panel read flat. A row takes the primary text colour at 14px and a heading the muted one at 12px
+- **Type weight is lighter throughout.** `font-medium` and `font-semibold` are set once in the theme, so 153 places that mark a chip or a card title stopped setting it heavier than the text beside them
+- **Pointing at a row no longer looks like being in it.** Hover and the open row used the same fill; hover is translucent now
+- **A message bubble is 38px tall rather than 54px** for a single line, which was two paddings stacking
+
+### 🐛 Fixed
+
+- **Deleting the chat you are reading leaves it.** The sidebar read the open chat from the route params, which `history.replaceState` leaves behind, so on a chat you had just started nothing was highlighted and deleting it left you sitting on a chat that no longer existed
+- **A chat deleted while the request failed no longer disappears and comes back.** The success branch ran on a `403` as readily as on a `200`
+- **A dialog dims to the edge of the window.** The page reserved a scrollbar gutter that the browser paints itself, leaving a bright strip down the right that no overlay could cover. Nothing scrolls the document, so nothing is reserved
+- **A skill chip shows its name.** `truncate` sat on a flex box, where the name is not a block and clips with no ellipsis
+- **The collapse control collapses.** Clicking it replaced it with the expand control under the cursor, which opened the panel again 17ms later
+- **The panel stops appearing over the canvas while it opens.** The gap and the panel ran on different curves, so the panel's edge arrived where the canvas was not
+
+### 🗄️ Database
+
+- `0039_chat_activity_state` — `Stream.finishedAt`, `Stream.outcome`, `Chat.updatedAt`, `Chat.lastViewedAt`, backfilled so history opens quiet rather than claiming every thread is unread
+- `0040_chat_groups` — `ChatGroup`, and `Chat.groupId` with `ON DELETE SET NULL`
+- `0041_chat_agent_active` — `Chat.agentActiveAt`, stamped by MCP appends
+
 ## [5.6.0] - 2026-09-28
 
 ### ✨ Added
