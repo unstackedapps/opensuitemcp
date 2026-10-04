@@ -5,7 +5,7 @@ import {
   countMcpToolOutcomes,
   formatTurnDuration,
   formatTurnTokenCount,
-  formatUsedSkillsAndTools,
+  formatTurnUsageLabel,
   getMessageTurnDurationMs,
   getMessageTurnUsage,
 } from "./message-turn-meta";
@@ -69,50 +69,62 @@ describe("message turn meta", () => {
   });
 
   it("formats a combined skills and tools summary", () => {
-    assert.equal(formatUsedSkillsAndTools(1, 0), "Used 1 skill");
-    assert.equal(formatUsedSkillsAndTools(2, 0), "Used 2 skills");
-    assert.equal(formatUsedSkillsAndTools(0, 1), "Used 1 MCP tool");
-    assert.equal(formatUsedSkillsAndTools(0, 3), "Used 3 MCP tools");
-    assert.equal(formatUsedSkillsAndTools(1, 1), "Used 1 skill and 1 MCP tool");
+    assert.equal(formatTurnUsageLabel(1, 0), "Used 1 skill");
+    assert.equal(formatTurnUsageLabel(2, 0), "Used 2 skills");
+    assert.equal(formatTurnUsageLabel(0, 1), "Used 1 MCP tool");
+    assert.equal(formatTurnUsageLabel(0, 3), "Used 3 MCP tools");
+    assert.equal(formatTurnUsageLabel(1, 1), "Used 1 skill and 1 MCP tool");
+    assert.equal(formatTurnUsageLabel(2, 3), "Used 2 skills and 3 MCP tools");
+    assert.equal(formatTurnUsageLabel(0, 0), null);
     assert.equal(
-      formatUsedSkillsAndTools(2, 3),
-      "Used 2 skills and 3 MCP tools",
-    );
-    assert.equal(formatUsedSkillsAndTools(0, 0), null);
-    assert.equal(
-      formatUsedSkillsAndTools(3, 6, 3, 3),
+      formatTurnUsageLabel(3, 6, 3, 3),
       "Used 3 skills and 6 MCP tools (3 succeeded, 3 failed)",
     );
     assert.equal(
-      formatUsedSkillsAndTools(0, 6, 3, 3),
+      formatTurnUsageLabel(0, 6, 3, 3),
       "Used 6 MCP tools (3 succeeded, 3 failed)",
     );
+  });
+
+  it("counts the memories a turn was given", () => {
+    assert.equal(formatTurnUsageLabel(0, 0, 0, 0, 0, 1), "Used 1 memory");
+    assert.equal(formatTurnUsageLabel(0, 0, 0, 0, 0, 3), "Used 3 memories");
     assert.equal(
-      formatUsedSkillsAndTools(2, 3, 3, 0),
+      formatTurnUsageLabel(0, 2, 0, 2, 0, 3),
+      "Used 2 MCP tools and 3 memories",
+    );
+    // Three categories are a list, not another "and".
+    assert.equal(
+      formatTurnUsageLabel(7, 4, 0, 4, 0, 3),
+      "Used 7 skills, 4 MCP tools and 3 memories",
+    );
+    assert.equal(
+      formatTurnUsageLabel(1, 6, 3, 3, 0, 2),
+      "Used 1 skill, 6 MCP tools (3 succeeded, 3 failed) and 2 memories",
+    );
+    assert.equal(
+      formatTurnUsageLabel(2, 3, 3, 0),
       "Used 2 skills and 3 failed MCP tools",
     );
+    assert.equal(formatTurnUsageLabel(0, 1, 1, 0), "Used 1 failed MCP tool");
     assert.equal(
-      formatUsedSkillsAndTools(0, 1, 1, 0),
-      "Used 1 failed MCP tool",
-    );
-    assert.equal(
-      formatUsedSkillsAndTools(0, 2, 0, 0, 2),
+      formatTurnUsageLabel(0, 2, 0, 0, 2),
       "Used 2 MCP tools with no results",
     );
     assert.equal(
-      formatUsedSkillsAndTools(0, 1, 0, 0, 1),
+      formatTurnUsageLabel(0, 1, 0, 0, 1),
       "Used 1 MCP tool with no results",
     );
     assert.equal(
-      formatUsedSkillsAndTools(1, 4, 1, 2, 1),
+      formatTurnUsageLabel(1, 4, 1, 2, 1),
       "Used 1 skill and 4 MCP tools (2 succeeded, 1 failed, 1 empty)",
     );
     assert.equal(
-      formatUsedSkillsAndTools(0, 3, 0, 2, 1),
+      formatTurnUsageLabel(0, 3, 0, 2, 1),
       "Used 3 MCP tools (2 succeeded, 1 empty)",
     );
     assert.equal(
-      formatUsedSkillsAndTools(0, 2, 1, 0, 1),
+      formatTurnUsageLabel(0, 2, 1, 0, 1),
       "Used 2 MCP tools (1 failed, 1 empty)",
     );
   });

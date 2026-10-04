@@ -202,6 +202,14 @@ export const userSettings = pgTable("UserSettings", {
     .notNull()
     .default(sql`'{}'::jsonb`),
   timezone: varchar("timezone", { length: 64 }).default("UTC"),
+  /**
+   * Whether memories are read into a turn and the memory tools offered.
+   *
+   * On by default, because nothing is written unless a person asks for it.
+   * Off stops the reading too, so an existing memory stops acting without
+   * being deleted.
+   */
+  memoryEnabled: boolean("memoryEnabled").notNull().default(true),
   searchDomainIds: jsonb("searchDomainIds")
     .$type<string[]>()
     .notNull()
@@ -315,6 +323,76 @@ export type OrgLlmProviderModeConfig = {
   reasoningModelId?: string;
   maxIterations?: string;
 };
+
+/**
+ * A markdown document an agent writes and a person reads.
+ *
+ * Two nouns, one shape. An **artifact** is output someone opens beside the
+ * conversation — a script, a reconciliation, a draft. A **memory** is a fact
+ * worth recalling in a later session. They differ in who reads them and when,
+ * not in how they are stored, and a second table would duplicate every query
+ * and drift from the first.
+ *
+ * Addressed by `path`, the same as `UserSkillFile`, so a directory of markdown
+ * is a real directory of markdown rather than a metaphor.
+ *
+ * Owned by a user, the same as the `Chat` an artifact is produced in. Sharing a
+ * document with an org is a separate table when it is asked for, the way
+ * `OrgCustomSkill` sits beside `UserSkillFile` rather than adding a column
+ * here.
+ */
+export const documentKinds = ["artifact", "memory"] as const;
+
+export type DocumentKind = (typeof documentKinds)[number];
+
+export const document = pgTable(
+  "Document",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    userId: uuid("userId")
+      .notNull()
+      .references(() => user.id),
+    kind: varchar("kind", { enum: documentKinds }).notNull(),
+    /** Relative, e.g. `vendors/acme.md`. Unique per user and kind. */
+    path: varchar("path", { length: 256 }).notNull(),
+    /** What a person sees in a list. Null falls back to the path. */
+    title: varchar("title", { length: 200 }),
+    content: text("content").notNull(),
+    /**
+     * Where an artifact was produced. Set null on delete: a chat going away
+     * must not take the document someone kept with it.
+     */
+    chatId: uuid("chatId").references(() => chat.id, { onDelete: "set null" }),
+    /**
+     * The NetSuite account a memory was learned in, so a sandbox fact is never
+     * asserted about production. Null is true of the workspace itself.
+     */
+    netsuiteAccountId: varchar("netsuiteAccountId", { length: 128 }),
+    /**
+     * Writes so far, not history. It makes a stale overwrite detectable and
+     * lets a list say how often something changed; it does not let anything be
+     * read back. Keeping history means a second table, and nothing asks yet.
+     */
+    version: integer("version").notNull().default(1),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  },
+  (table) => ({
+    documentPathUnique: uniqueIndex("Document_user_kind_path_unique").on(
+      table.userId,
+      table.kind,
+      table.path,
+    ),
+    documentRecentIdx: index("Document_user_kind_updated_idx").on(
+      table.userId,
+      table.kind,
+      table.updatedAt,
+    ),
+    documentChatIdx: index("Document_chatId_idx").on(table.chatId),
+  }),
+);
+
+export type Document = InferSelectModel<typeof document>;
 
 export const org = pgTable("Org", {
   id: uuid("id").primaryKey().notNull().defaultRandom(),

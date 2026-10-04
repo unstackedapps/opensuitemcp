@@ -46,6 +46,56 @@ shows yours, with a copy button.
 
 ⚠️ On Team or Enterprise, only an Owner can add a connector.
 
+## Claude Code
+
+### OAuth 2.1
+
+**Add it with the CLI**
+
+`Terminal`
+
+```bash
+claude mcp add --transport http opensuitemcp https://your-install.example.com/api/mcp
+```
+
+*In OpenSuiteMCP*
+
+1. App Portal → Agent apps → New app. Choose OAuth 2.1 and save. It waits there until you finish below.
+
+*In Claude Code*
+
+2. Run the command above. The CLI writes the entry and opens the browser.
+
+*In OpenSuiteMCP*
+
+3. Authorize the app on the consent screen.
+
+*In Claude Code*
+
+4. Return to the terminal and run /mcp to confirm the server is connected.
+
+⚠️ Editing ~/.claude.json by hand needs `"type": "http"` on the entry. Without it the CLI skips the server and reports it in /doctor.
+
+### Bearer auth
+
+**Add it with the CLI and a header**
+
+`Terminal`
+
+```bash
+claude mcp add --transport http opensuitemcp https://your-install.example.com/api/mcp --header "Authorization: Bearer osmcp_…"
+```
+
+*In OpenSuiteMCP*
+
+1. App Portal → Agent apps → New app. Choose Bearer auth and save, then open the app and copy its token.
+
+*In Claude Code*
+
+2. Run the command above. Nothing to authorize.
+
+⚠️ Editing ~/.claude.json by hand needs `"type": "http"` on the entry.
+
 ## Cursor
 
 ### OAuth 2.1

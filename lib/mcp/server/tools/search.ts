@@ -21,7 +21,7 @@ const searchNetSuiteDocs: McpToolDefinition = {
   name: "osmcp_search_netsuite_docs",
   title: "Search NetSuite documentation",
   description:
-    "Search the official Oracle NetSuite Help Center. Use it for standard UI navigation, permission setup, SuiteScript and SuiteQL references, record and field semantics, and security guidance — the foundational truth behind a NetSuite question. Prefer it over recalling NetSuite behaviour from memory, especially before writing a query or changing a record.",
+    "Search the official Oracle NetSuite Help Center. Use it for standard UI navigation, permission setup, SuiteScript and SuiteQL references, record and field semantics, and security guidance — the foundational truth behind a NetSuite question. Prefer it over recalling NetSuite behavior from memory, especially before writing a query or changing a record.",
   inputSchema: {
     type: "object",
     properties: {

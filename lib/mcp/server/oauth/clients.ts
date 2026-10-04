@@ -379,7 +379,7 @@ async function upsertCimdClient(params: {
 /**
  * RFC 7591 dynamic registration.
  *
- * Deprecated by MCP revision 2026-07-28 in favour of metadata documents, and
+ * Deprecated by MCP revision 2026-07-28 in favor of metadata documents, and
  * kept because several shipping clients still do only this.
  */
 export async function registerDcrClient(

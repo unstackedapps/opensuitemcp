@@ -43,7 +43,28 @@ describe("netsuiteToolIsReadOnly", () => {
     assert.equal(netsuiteToolIsReadOnly("ns_searchAndDeleteStale"), false);
   });
 
-  it("fails closed for unrecognised names", () => {
+  it("reads a report rather than warning about it", () => {
+    // Announced as destructive, so a read-only key could not run one.
+    assert.equal(netsuiteToolIsReadOnly("ns_runReport"), true);
+    assert.equal(netsuiteToolIsReadOnly("ns_report_filters_app"), true);
+    assert.equal(netsuiteToolRequiredScope("ns_runReport"), "read");
+  });
+
+  it("reads an MCP App launcher", () => {
+    // A launcher opens a surface; what a person does in it arrives as its own
+    // tool call and is classified on its own name.
+    assert.equal(netsuiteToolIsReadOnly("ns_prompt_library_app"), true);
+    assert.equal(netsuiteToolIsReadOnly("ns_selector_app"), true);
+  });
+
+  it("keeps a write verb ahead of either new hint", () => {
+    assert.equal(netsuiteToolIsReadOnly("ns_deleteReport"), false);
+    assert.equal(netsuiteToolIsReadOnly("ns_saveReport"), false);
+    assert.equal(netsuiteToolIsReadOnly("ns_installApp"), false);
+    assert.equal(netsuiteToolIsReadOnly("ns_uploadApp"), false);
+  });
+
+  it("fails closed for unrecognized names", () => {
     assert.equal(netsuiteToolIsReadOnly("ns_mystery"), false);
     assert.equal(netsuiteToolIsReadOnly(""), false);
     assert.equal(netsuiteToolIsReadOnly("___"), false);

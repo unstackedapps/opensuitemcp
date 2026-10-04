@@ -19,6 +19,12 @@ import { getNetSuiteToken } from "@/lib/netsuite/tokens";
 import { resolveEffectiveNetsuiteMcpToolSettings } from "@/lib/org/mcp-tool-policy";
 import type { McpPrincipal } from "../authenticate";
 import {
+  BUILTIN_BRIEFINGS,
+  NETSUITE_PROMPT_PREFIX,
+  publishedPromptNames,
+  resolvePromptMessages,
+} from "../prompt-surface";
+import {
   type McpToolDefinition,
   type McpToolResult,
   toolError,
@@ -266,7 +272,102 @@ const getPrompt: McpToolDefinition = {
   },
 };
 
-export const promptTools: McpToolDefinition[] = [listPrompts, getPrompt];
+/**
+ * The briefings, for a client that cannot render MCP prompts.
+ *
+ * A briefing is what this server tells a connecting agent to do before it
+ * touches NetSuite: confirm the identity, adopt the persona, read its skills,
+ * open a thread, save what was established. MCP publishes them through
+ * `prompts/list` and `prompts/get`, which most clients ignore, so without this
+ * tool nothing reaches them and an agent does none of it — nothing in a tool
+ * name says to.
+ *
+ * Distinct from the NetSuite Companion prompts in osmcp_list_prompts, which are
+ * text a person drops into their own chat.
+ */
+const runBriefing: McpToolDefinition = {
+  name: "osmcp_run_briefing",
+  title: "Run a briefing",
+  description:
+    "Fetch a briefing — this server's own instructions for how to work in it — and follow what it returns. The four are `osmcp_start_task` (confirm identity, adopt the persona, read its skills, open a thread, then work), `osmcp_choose_persona` (pick the specialist before starting), `osmcp_record_session` (write this session into a thread) and `osmcp_capture_skill` (turn what was established into a skill). Call `osmcp_start_task` before any NetSuite work. A `netsuite_*` name from this account's Companion prompt library also resolves here; osmcp_list_prompts browses that library by category, role and industry.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      name: {
+        type: "string",
+        description:
+          "A briefing name, or a `netsuite_*` name this server publishes.",
+      },
+      arguments: {
+        type: "object",
+        description:
+          'Values for the briefing\'s arguments, keyed by argument name, e.g. {"task": "Reconcile August bank statements"}.',
+        additionalProperties: { type: "string" },
+      },
+    },
+    required: ["name"],
+    additionalProperties: false,
+  },
+  annotations: { title: "Run a briefing", ...READ_ONLY },
+  execute: async (args, principal) => {
+    const name = readString(args, "name");
+    if (!name) {
+      return toolError(
+        `Pass a \`name\`. The briefings are ${BUILTIN_BRIEFINGS.map(
+          (briefing) => `\`${briefing.name}\``,
+        ).join(", ")}.`,
+      );
+    }
+
+    const rawArguments = args.arguments;
+    const promptArguments =
+      rawArguments &&
+      typeof rawArguments === "object" &&
+      !Array.isArray(rawArguments)
+        ? (rawArguments as Record<string, unknown>)
+        : undefined;
+
+    // Only loaded when the name could be one: a built-in must not wait on
+    // NetSuite, and must still work when no account is connected.
+    const netsuitePrompts = name.startsWith(NETSUITE_PROMPT_PREFIX)
+      ? await loadNetSuitePromptsOrNone(principal)
+      : [];
+
+    const resolved = resolvePromptMessages(
+      name,
+      promptArguments,
+      netsuitePrompts,
+    );
+    if (!resolved) {
+      return toolError(
+        `No briefing or prompt \`${name}\`. This server publishes ${publishedPromptNames(
+          netsuitePrompts,
+        )
+          .map((entry) => `\`${entry}\``)
+          .join(", ")}.`,
+      );
+    }
+
+    const text = resolved.messages
+      .map((message) => message.content.text)
+      .join("\n\n");
+
+    return toolResult(
+      {
+        name,
+        description: resolved.description,
+        messages: resolved.messages,
+      },
+      text,
+    );
+  },
+};
+
+export const promptTools: McpToolDefinition[] = [
+  listPrompts,
+  getPrompt,
+  runBriefing,
+];
 
 /**
  * The account's prompt library, for `prompts/list`.

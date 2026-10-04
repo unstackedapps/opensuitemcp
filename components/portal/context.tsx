@@ -1,6 +1,22 @@
 "use client";
 
 import {
+  Blocks,
+  BookOpen,
+  Brain,
+  Cloud,
+  FileText,
+  Globe,
+  KeyRound,
+  type LucideIcon,
+  MessageSquare,
+  SlidersHorizontal,
+  Sparkles,
+  User,
+  Users,
+} from "lucide-react";
+
+import {
   createContext,
   type ReactNode,
   useCallback,
@@ -12,33 +28,58 @@ import {
 
 export type PortalSectionId =
   | "chats"
+  | "artifacts"
   | "skills"
+  | "memory"
   | "personas"
   | "prompts"
   | "provider"
   | "netsuite"
   | "agent-access"
   | "search"
-  | "timezone"
+  | "general"
   | "account";
 
 export type PortalNavItem = {
   id: PortalSectionId;
   label: string;
-  group: "Workspace" | "Customize" | "Settings" | "Preferences";
+  /** The same glyph the panel's own header uses, so the two agree. */
+  icon: LucideIcon;
+  group: "Workspace" | "Assistant" | "Connections" | "Preferences";
 };
 
 export const PORTAL_NAV: PortalNavItem[] = [
-  { id: "chats", label: "Chats", group: "Workspace" },
-  { id: "personas", label: "Personas", group: "Customize" },
-  { id: "skills", label: "Skills", group: "Customize" },
-  { id: "prompts", label: "Prompts", group: "Customize" },
-  { id: "provider", label: "AI Provider", group: "Settings" },
-  { id: "netsuite", label: "NetSuite", group: "Settings" },
-  { id: "agent-access", label: "Agent apps", group: "Settings" },
-  { id: "search", label: "Web Search", group: "Settings" },
-  { id: "timezone", label: "Timezone", group: "Preferences" },
-  { id: "account", label: "Account", group: "Preferences" },
+  // What this workspace holds: produced by work, reviewed rather than authored.
+  { id: "chats", label: "Chats", icon: MessageSquare, group: "Workspace" },
+  { id: "artifacts", label: "Artifacts", icon: FileText, group: "Workspace" },
+  { id: "memory", label: "Memory", icon: Brain, group: "Workspace" },
+  // What shapes how it behaves. All three answer the same question.
+  { id: "personas", label: "Personas", icon: Users, group: "Assistant" },
+  { id: "skills", label: "Skills", icon: Blocks, group: "Assistant" },
+  { id: "prompts", label: "Prompts", icon: BookOpen, group: "Assistant" },
+  // An outside system each: an account, a provider, a key, a search source.
+  { id: "netsuite", label: "NetSuite", icon: Cloud, group: "Connections" },
+  {
+    id: "provider",
+    label: "AI Provider",
+    icon: Sparkles,
+    group: "Connections",
+  },
+  {
+    id: "agent-access",
+    label: "Agent apps",
+    icon: KeyRound,
+    group: "Connections",
+  },
+  { id: "search", label: "Web Search", icon: Globe, group: "Connections" },
+  // About you.
+  { id: "account", label: "Account", icon: User, group: "Preferences" },
+  {
+    id: "general",
+    label: "General",
+    icon: SlidersHorizontal,
+    group: "Preferences",
+  },
 ];
 
 type PromptSelectHandler = (promptText: string, promptName: string) => void;

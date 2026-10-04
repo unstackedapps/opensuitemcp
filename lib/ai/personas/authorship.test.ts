@@ -52,7 +52,7 @@ describe("persona authorship survives a settings save", () => {
     assert.equal(normalized.authoredBy, undefined);
   });
 
-  it("rejects an authorship value it does not recognise", () => {
+  it("rejects an authorship value it does not recognize", () => {
     assert.throws(() =>
       customPersonaSchema.parse({ ...agentWritten, authoredBy: "somebody" }),
     );

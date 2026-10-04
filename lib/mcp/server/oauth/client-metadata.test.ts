@@ -169,7 +169,7 @@ describe("registration requests", () => {
 });
 
 describe("client id metadata documents", () => {
-  it("recognises an https URL with a path", () => {
+  it("recognizes an https URL with a path", () => {
     assert.equal(isClientIdMetadataDocumentUrl(CLAUDE_CODE_CIMD_URL), true);
   });
 
@@ -321,7 +321,7 @@ describe("an auth method this server cannot do", () => {
   });
 });
 
-describe("a client that registers one redirect URI we cannot honour", () => {
+describe("a client that registers one redirect URI we cannot honor", () => {
   it("keeps the rest instead of refusing the client", () => {
     const result = parseClientMetadata({
       client_name: "Mixed",

@@ -172,34 +172,36 @@ function formatToolSummary(
   return `${tools} (${formatOutcomeBreakdown(succeeded, failed, empty)})`;
 }
 
-export function formatUsedSkillsAndTools(
+/** "a", "a and b", "a, b and c" — the list grows, the sentence holds. */
+function joinWithAnd(segments: string[]): string {
+  if (segments.length <= 1) {
+    return segments.join("");
+  }
+  return `${segments.slice(0, -1).join(", ")} and ${segments.at(-1)}`;
+}
+
+export function formatTurnUsageLabel(
   skillCount: number,
   toolCount: number,
   failedToolCount = 0,
   succeededToolCount?: number,
   emptyToolCount = 0,
+  memoryCount = 0,
 ): string | null {
   const succeeded =
     succeededToolCount === undefined
       ? Math.max(0, toolCount - failedToolCount - emptyToolCount)
       : succeededToolCount;
-  const skills = formatLabeledCount(skillCount, "skill", "skills");
-  const tools = formatToolSummary(
-    toolCount,
-    succeeded,
-    failedToolCount,
-    emptyToolCount,
-  );
-  if (skills && tools) {
-    return `Used ${skills} and ${tools}`;
+  const segments = [
+    formatLabeledCount(skillCount, "skill", "skills"),
+    formatToolSummary(toolCount, succeeded, failedToolCount, emptyToolCount),
+    formatLabeledCount(memoryCount, "memory", "memories"),
+  ].filter((segment): segment is string => segment !== null);
+
+  if (segments.length === 0) {
+    return null;
   }
-  if (skills) {
-    return `Used ${skills}`;
-  }
-  if (tools) {
-    return `Used ${tools}`;
-  }
-  return null;
+  return `Used ${joinWithAnd(segments)}`;
 }
 
 export function formatTurnDuration(ms: number | undefined): string | null {

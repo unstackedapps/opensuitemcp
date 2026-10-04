@@ -52,6 +52,11 @@ export type CustomUIDataTypes = {
     id: string;
     name: string;
   }>;
+  /** The memories read into this turn, after the account filter. */
+  turnMemories: Array<{
+    path: string;
+    accountId: string | null;
+  }>;
 };
 
 export type ChatMessage = UIMessage<

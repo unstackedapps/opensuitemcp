@@ -16,13 +16,15 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PANEL_ROW } from "@/components/ui/panel-list";
+import { SettingRow } from "@/components/ui/setting-row";
 import {
   assertSearchResourceList,
   isSeededSearchResource,
   MAX_SEARCH_RESOURCES,
   type SearchResourceEntry,
 } from "@/lib/ai/search-resources";
-import { generateUUID } from "@/lib/utils";
+import { cn, generateUUID } from "@/lib/utils";
 
 const compactInputClass = "h-8 px-2.5 text-sm";
 
@@ -164,32 +166,33 @@ export function WebSearchSettings({
 
   const panelContent = (
     <section className="flex flex-col gap-3">
-      {!embedded ? (
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-          <div className="min-w-0 space-y-1">
-            <h3 className="font-medium text-sm">Search resources</h3>
-            <p className="text-muted-foreground text-xs leading-relaxed">
-              {managedByOrg
-                ? "Your organization provides these resources. You can disable them for your chats."
-                : "Add sites the assistant can search in chat."}
-            </p>
-          </div>
-          {addButton}
-        </div>
-      ) : null}
+      {embedded ? null : (
+        <SettingRow
+          control={addButton}
+          description={
+            managedByOrg
+              ? "Your organization provides these resources. You can disable them for your chats."
+              : "Sites the assistant may search while you chat. It reads only what you list here."
+          }
+          title="Configured resources"
+        />
+      )}
 
       {resources.length === 0 ? (
         <p className="rounded-md border border-dashed p-3 text-center text-muted-foreground text-xs">
           No search resources yet.
         </p>
       ) : (
-        <ul className="flex flex-col gap-2">
+        <ul className="divide-y divide-border/60">
           {resources.map((resource) => {
             const busy = pendingId === resource.id;
             const seeded = isSeededSearchResource(resource);
             return (
               <li
-                className="flex flex-col gap-3 rounded-md border border-border/60 p-3 sm:flex-row sm:items-center"
+                className={cn(
+                  PANEL_ROW,
+                  "flex flex-col gap-3 sm:flex-row sm:items-center",
+                )}
                 key={resource.id}
               >
                 <div className="min-w-0 flex-1">
@@ -304,7 +307,7 @@ export function WebSearchSettings({
               />
             </div>
           </div>
-          <DialogFooter className="shrink-0 border-t px-4 py-3">
+          <DialogFooter className="shrink-0 px-4 py-3">
             <Button
               onClick={() => setEditorOpen(false)}
               size="sm"

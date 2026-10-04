@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { isMenuTypeaheadKey } from "@/lib/ui/menu-typeahead";
 
 function getTimezoneDisplay(tz: string): {
   code: string;
@@ -113,9 +114,13 @@ export function TimezoneSettings({
     );
   });
 
+  // Auto-focus search input when dropdown opens
   useEffect(() => {
     if (open && searchInputRef.current) {
-      searchInputRef.current.focus();
+      // Small delay to ensure the dropdown content is rendered
+      setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 100);
     }
   }, [open]);
 
@@ -165,6 +170,10 @@ export function TimezoneSettings({
               if (event.key === "Escape" && search) {
                 setSearch("");
                 event.preventDefault();
+                event.stopPropagation();
+                return;
+              }
+              if (isMenuTypeaheadKey(event.key)) {
                 event.stopPropagation();
               }
             }}

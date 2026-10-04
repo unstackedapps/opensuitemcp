@@ -7,9 +7,7 @@ import {
   Loader2,
   Pencil,
   Plus,
-  Search,
   Trash2,
-  UserRound,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import {
@@ -38,6 +36,10 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PanelBody, PanelHeader } from "@/components/ui/panel-header";
+import { PANEL_ROW } from "@/components/ui/panel-list";
+import { SearchInput } from "@/components/ui/search-input";
+import { SettingRow } from "@/components/ui/setting-row";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -490,58 +492,49 @@ export function PersonasPanel({
       className="flex h-full min-h-0 min-w-0 flex-1 flex-col"
       data-testid="personas-panel"
     >
-      <div className="flex shrink-0 flex-col gap-3 border-border/60 border-b px-4 py-3 sm:px-5">
-        {!embedded ? (
-          <div className="min-w-0 space-y-1">
-            <p className="flex items-center gap-1.5 font-medium text-sm">
-              <UserRound className="size-3.5 text-muted-foreground" />
-              Personas
-            </p>
-            <p className="text-muted-foreground text-xs leading-relaxed">
-              Specialists shape how the assistant approaches NetSuite work. Each
-              chat uses one persona. Click a card to set your default.
-            </p>
-            {isGuest ? (
-              <p className="text-muted-foreground text-xs">
-                As a guest, defaults are limited to built-in personas and stored
-                in this browser.
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-        <div className="flex items-center justify-between gap-3">
-          <Label
-            className="cursor-pointer font-normal text-sm"
-            htmlFor="show-persona-picker"
-          >
-            Show persona picker on new chats
-          </Label>
-          <Switch
-            checked={!hidePicker}
-            disabled={saving}
-            id="show-persona-picker"
-            onCheckedChange={(show) => {
-              const previous = hidePicker;
-              const nextHide = !show;
-              setHidePicker(nextHide);
-              const payload: {
-                hidePersonaPicker: boolean;
-                defaultPersonaId?: string | null;
-              } = { hidePersonaPicker: nextHide };
-              if (nextHide) {
-                payload.defaultPersonaId =
-                  defaultId === AVA_PERSONA_ID ? null : defaultId;
-              }
-              void runPersist(payload, () => {
-                setHidePicker(previous);
-              });
-            }}
-          />
-        </div>
+      {embedded ? null : (
+        <PanelHeader
+          subtitle={
+            isGuest
+              ? "Specialists shape how the assistant approaches NetSuite work. Each chat uses one persona. Click a card to set your default. As a guest, defaults are limited to built-in personas and stored in this browser."
+              : "Specialists shape how the assistant approaches NetSuite work. Each chat uses one persona. Click a card to set your default."
+          }
+          title="Personas"
+        />
+      )}
+
+      <div className="shrink-0 px-4 pb-3 sm:px-5">
+        <SettingRow
+          className="py-0"
+          control={
+            <Switch
+              checked={!hidePicker}
+              disabled={saving}
+              id="show-persona-picker"
+              onCheckedChange={(show) => {
+                const previous = hidePicker;
+                const nextHide = !show;
+                setHidePicker(nextHide);
+                const payload: {
+                  hidePersonaPicker: boolean;
+                  defaultPersonaId?: string | null;
+                } = { hidePersonaPicker: nextHide };
+                if (nextHide) {
+                  payload.defaultPersonaId =
+                    defaultId === AVA_PERSONA_ID ? null : defaultId;
+                }
+                void runPersist(payload, () => {
+                  setHidePicker(previous);
+                });
+              }}
+            />
+          }
+          title="Show persona picker on new chats"
+        />
       </div>
 
       {embedded ? (
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 sm:px-5">
+        <PanelBody className="pt-3">
           <div
             aria-label="Built-in personas"
             className={personaGridClass}
@@ -559,21 +552,21 @@ export function PersonasPanel({
               />
             ))}
           </div>
-        </div>
+        </PanelBody>
       ) : (
         <Tabs
           className="flex min-h-0 flex-1 flex-col"
           onValueChange={setTab}
           value={tab}
         >
-          <div className="shrink-0 border-border/60 border-b px-4 py-3 sm:px-5">
+          <div className="shrink-0 px-4 pb-3 sm:px-5">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="builtin">Built-In</TabsTrigger>
               <TabsTrigger value="custom">Custom</TabsTrigger>
             </TabsList>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3 sm:px-5">
+          <PanelBody className="pt-3">
             <TabsContent className="mt-0" value="builtin">
               <div
                 aria-label="Built-in personas"
@@ -738,7 +731,7 @@ export function PersonasPanel({
                 </div>
               )}
             </TabsContent>
-          </div>
+          </PanelBody>
         </Tabs>
       )}
       <PersonaEditorDialog
@@ -886,7 +879,7 @@ export function PersonasPanel({
         variant="default"
       />
       {!embedded && portal ? (
-        <DialogFooter className="flex-col gap-2 border-t border-border/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <DialogFooter className="flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
           {tab === "custom" && !isGuest ? (
             <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">
               <Button
@@ -1059,7 +1052,7 @@ function PersonaEditorDialog({
             </TabsList>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+          <PanelBody className="pt-4">
             <TabsContent
               className="mt-0 flex min-h-0 flex-col gap-4"
               value="details"
@@ -1141,24 +1134,21 @@ function PersonaEditorDialog({
                 </p>
               ) : (
                 <>
-                  <div className="relative">
-                    <Search className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-3 size-4 text-muted-foreground" />
-                    <Input
-                      className="h-9 pl-10 md:pl-10"
-                      id={searchId}
-                      onChange={(event) => {
-                        setQuery(event.target.value);
-                      }}
-                      placeholder="Search skills"
-                      value={query}
-                    />
-                  </div>
+                  <SearchInput
+                    className="h-9"
+                    id={searchId}
+                    onChange={(event) => {
+                      setQuery(event.target.value);
+                    }}
+                    placeholder="Search skills"
+                    value={query}
+                  />
 
                   <p className="text-muted-foreground text-xs">
                     {paired.length} of {MAX_PAIRED_SKILLS} paired
                   </p>
 
-                  <div className="flex flex-col gap-1">
+                  <div className="divide-y divide-border/60">
                     {matches.map((skill) => {
                       const checked = paired.includes(skill.id);
                       const atCap =
@@ -1166,7 +1156,8 @@ function PersonaEditorDialog({
                       return (
                         <label
                           className={cn(
-                            "flex items-center gap-3 rounded-md border border-border/60 px-3 py-2 text-sm",
+                            PANEL_ROW,
+                            "flex items-center gap-3 px-1 text-sm",
                             atCap
                               ? "opacity-50"
                               : "cursor-pointer hover:bg-muted/50",
@@ -1209,10 +1200,10 @@ function PersonaEditorDialog({
                 </>
               )}
             </TabsContent>
-          </div>
+          </PanelBody>
         </Tabs>
 
-        <DialogFooter className="shrink-0 gap-2 border-border/60 border-t px-4 py-3 sm:justify-end sm:px-5">
+        <DialogFooter className="shrink-0 gap-2 px-4 py-3 sm:justify-end sm:px-5">
           <Button onClick={onCancel} type="button" variant="outline">
             Cancel
           </Button>

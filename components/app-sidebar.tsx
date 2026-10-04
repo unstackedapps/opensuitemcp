@@ -1,11 +1,12 @@
 "use client";
 
-import { PanelLeft, Plus } from "lucide-react";
+import { FileTextIcon, PanelLeft, Plus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { User } from "next-auth";
 import { type FocusEvent, useRef } from "react";
 import { AppWordmark } from "@/components/app-wordmark";
+import { useAppPortal } from "@/components/portal/context";
 import { SidebarHistory } from "@/components/sidebar-history";
 import { SidebarUserNav } from "@/components/sidebar-user-nav";
 import {
@@ -55,6 +56,7 @@ function SidebarCollapseButton({
 
 export function AppSidebar({ user }: { user: User | undefined }) {
   const router = useRouter();
+  const { openPortal } = useAppPortal();
   const {
     setOpenMobile,
     isMobile,
@@ -114,9 +116,9 @@ export function AppSidebar({ user }: { user: User | undefined }) {
         setPeek(true);
       }}
     >
-      {/* pt-1.5 matches the header's py-1.5: both rows then centre on the same
+      {/* pt-1.5 matches the header's py-1.5: both rows then center on the same
           line, which p-2 put 2px out. */}
-      <SidebarHeader className="pt-1.5">
+      <SidebarHeader className="pt-1.5 pb-4">
         {/* The product name sits here, so the main header can carry the thread
             title. The collapse control leads the row, which is where the expand
             control stands when the panel is shut, so it does not move. */}
@@ -153,7 +155,7 @@ export function AppSidebar({ user }: { user: User | undefined }) {
           {showExpandedChrome ? (
             <SidebarMenu className="min-w-0 flex-1">
               <SidebarMenuItem>
-                <SidebarMenuButton asChild className="pl-1">
+                <SidebarMenuButton asChild>
                   <Link
                     href="/"
                     onClick={(event) => {
@@ -178,8 +180,8 @@ export function AppSidebar({ user }: { user: User | undefined }) {
                       router.refresh();
                     }}
                   >
-                    <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-sidebar-accent">
-                      <Plus className="size-3.5" />
+                    <span className="flex size-4 shrink-0 items-center justify-center rounded-full border border-current">
+                      <Plus className="size-2.5" />
                     </span>
                     {revealText ? (
                       <span>New Chat</span>
@@ -193,6 +195,27 @@ export function AppSidebar({ user }: { user: User | undefined }) {
                       </>
                     )}
                   </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={() => {
+                    setOpenMobile(false);
+                    openPortal("artifacts");
+                  }}
+                >
+                  <FileTextIcon />
+                  {revealText ? (
+                    <span>Artifacts</span>
+                  ) : (
+                    <>
+                      <span className="sr-only">Artifacts</span>
+                      <Skeleton
+                        aria-hidden
+                        className="h-3 w-12 bg-sidebar-accent-foreground/10"
+                      />
+                    </>
+                  )}
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>

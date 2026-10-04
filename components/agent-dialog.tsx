@@ -174,7 +174,7 @@ export function AgentDialog({
 
   const creating = mode === "create";
   // Set once. A saved app belongs to the product it was made for; one made
-  // before this field existed can still be labelled.
+  // before this field existed can still be labeled.
   const lockedClient = Boolean(app?.connectsFrom);
   const trimmed = draft.name.trim();
   const needsCallback =

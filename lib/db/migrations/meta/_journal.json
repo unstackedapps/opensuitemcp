@@ -295,6 +295,20 @@
       "when": 1790233520197,
       "tag": "0041_chat_agent_active",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1790237120197,
+      "tag": "0042_documents",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1790240720197,
+      "tag": "0043_memory_enabled",
+      "breakpoints": true
     }
   ]
 }

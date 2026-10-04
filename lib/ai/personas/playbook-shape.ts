@@ -19,7 +19,7 @@ export const PERSONA_PLAYBOOK_SECTIONS = [
   },
   {
     heading: "Operating Principles",
-    detail: "how this specialist decides and what they prioritise",
+    detail: "how this specialist decides and what they prioritize",
   },
   {
     heading: "Preferred Tools / Approaches",

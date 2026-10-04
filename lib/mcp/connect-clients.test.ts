@@ -13,7 +13,7 @@ describe("connect guide", () => {
   it("covers every client the docs promise", () => {
     assert.deepEqual(
       clients.map((client) => client.id),
-      ["claude", "cursor", "gemini", "chatgpt", "other"],
+      ["claude", "claude-code", "cursor", "gemini", "chatgpt", "other"],
     );
   });
 
@@ -97,7 +97,7 @@ describe("connect guide", () => {
 describe("which app a registering client means", () => {
   it("maps the names the clients we support actually report", () => {
     assert.equal(matchConnectsFrom("Claude"), "claude");
-    assert.equal(matchConnectsFrom("Claude Code"), "claude");
+    assert.equal(matchConnectsFrom("Claude Code"), "claude-code");
     assert.equal(matchConnectsFrom("Cursor"), "cursor");
     assert.equal(matchConnectsFrom("Google"), "gemini");
     assert.equal(matchConnectsFrom("ChatGPT"), "chatgpt");

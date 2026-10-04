@@ -5,6 +5,35 @@ All notable changes to OpenSuiteMCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.8.0] - 2026-10-04
+
+### ✨ Added
+
+- **Talk your prompts into the composer.** A microphone sits beside send. It uses the browser's own speech recognition, so it works whichever LLM provider you brought — on-device where the browser offers it, the cloud engine otherwise. Dictation settings carry a language picker covering 64 tags and a switch for spoken punctuation, which Chrome adds without being asked
+- **Artifacts.** A long result or a script a session produced can be kept, and it lands in an **Artifacts** panel as tiles. Save sits in the block header in the chat as well as in the canvas, so keeping something costs one press. An agent writes one over MCP with `osmcp_write_artifact`
+- **Memory.** Tell a chat to remember something and it is there at the start of the next one. Facts are written only when asked for — never inferred from a tool result or from what seemed useful. Each is kept against the NetSuite account that was connected, so a fact learned in sandbox is never read against production. The **Memory** panel lists them with search and an account filter, and carries edit, delete, **Forget all**, and a switch that stops memory being read or written without deleting anything. An agent reaches the same store with `osmcp_remember`, `osmcp_recall` and `osmcp_forget`
+- **A turn says which memories it was given.** The usage line under an answer counts them beside the skills and tools, and names each one with the account it came from. A memory is injected before the model runs and leaves no trace in the answer, so this is the only place it is visible
+- **Briefings reach any client.** The four instruction sets this server publishes — start a task, choose a persona, record the session, capture a skill — are reachable with `osmcp_run_briefing` as well as from a client's `/` menu. Whether that menu exists is decided per surface, not per vendor: on 2026-10-04 the same server showed all four in Cursor and the Claude Code CLI, and none in the Claude Code desktop app or Claude Desktop
+- **The connect guide covers the Claude Code CLI.** A hand-written entry needs `"type": "http"`, and the CLI skips the server silently without it
+
+### 📝 Changed
+
+- **Every settings panel is built from the same four components.** Eleven panels had each assembled their own header, list, row and search field — cards here, line breaks there, a title with an icon on one and without on the next. One `PanelHeader`, `PanelBody`, `PanelList` and `SettingRow` now, with fewer rules and no boxes. Panel headers stay pinned while the content scrolls
+- **The settings navigation regroups** into Workspace, Assistant, Connections and Preferences, each row carrying an icon. Timezone and dictation sit together under General
+- **A search field is one component.** `Input` and `Select` now stand their responsive defaults aside when a caller sets that property, which is why a magnifier used to sit on top of its own placeholder above 768px and a dropdown stood 8px taller than the field beside it
+- **The four built-in instruction sets are called briefings**, not prompts. A prompt in this product is text a person drops into a chat, which is what the NetSuite Companion library publishes
+- **American spelling throughout** — recognize, behavior, color, labeled, center
+
+### 🐛 Fixed
+
+- **A turn no longer renders twice while it streams.** A turn's data parts arrive before its answer starts and can land in an assistant message of their own. That message has nothing to show, but it still drew a usage line and an action row, so every turn appeared twice with the blank copy on top until the page was reloaded. Present since 5.7.0, and visible only live — the stored chat was always correct
+- **Four NetSuite tools stopped announcing that reading would change something.** `ns_runReport` and the three MCP App launchers carry no verb the classifier claims, so they fell through to its fail-closed default: every client drew a destructive warning on them, and a read-only key could not call them at all. A write verb still outranks the new hints, and an unrecognized name is still a write
+
+### 🗄️ Database
+
+- `0042_documents.sql` adds the `Document` table behind artifacts and memory, one row per path per user, scoped by NetSuite account
+- `0043_memory_enabled.sql` adds `UserSettings.memoryEnabled`
+
 ## [5.7.1] - 2026-09-30
 
 ### 🐛 Fixed
@@ -27,7 +56,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Sharing is in one place.** It was in the header and again on every sidebar row. The header's control is gone and the thread title's menu carries it
 - **The product name moved into the side panel**, above **New Chat**, which leaves the header to the thread you are actually reading
 - **The persona chip joined the connection and source controls** on the right of the header, with no fill
-- **The sidebar reads as a hierarchy.** A row and the heading above it drew from one colour a shade apart, so the panel read flat. A row takes the primary text colour at 14px and a heading the muted one at 12px
+- **The sidebar reads as a hierarchy.** A row and the heading above it drew from one color a shade apart, so the panel read flat. A row takes the primary text color at 14px and a heading the muted one at 12px
 - **Type weight is lighter throughout.** `font-medium` and `font-semibold` are set once in the theme, so 153 places that mark a chip or a card title stopped setting it heavier than the text beside them
 - **Pointing at a row no longer looks like being in it.** Hover and the open row used the same fill; hover is translucent now
 - **A message bubble is 38px tall rather than 54px** for a single line, which was two paddings stacking
@@ -116,7 +145,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Claude, ChatGPT and Cursor could not register at all.** Each was refused for something it never needed here: Claude advertises `urn:ietf:params:oauth:grant-type:jwt-bearer` beside the two grants it uses, ChatGPT asks for a `token_endpoint_auth_method` this server does not implement, and Cursor registers `cursor://anysphere.cursor-mcp/oauth/callback`, a private-use scheme RFC 8252 §7.1 allows. A client states what it can do, not what it needs from us: unsupported grants, response types and redirect URIs are dropped, the registration response echoes what was kept, and a client is refused only when nothing usable remains
 - **Replacing a client secret no longer takes the app down.** Rotation returned a different shape from the read it replaced, and the dialog read a field that was not there — inside an effect, so the whole page fell to the error screen
-- **An app keeps the product it was created for.** The value was validated, passed down, and dropped: the insert never listed the column, so every app came back unlabelled however the form was filled
+- **An app keeps the product it was created for.** The value was validated, passed down, and dropped: the insert never listed the column, so every app came back unlabeled however the form was filled
 - **Editing a bearer app saves its note and its pinned account.** Both were parsed by the route and forwarded to nothing, so the dialog reported success and changed neither
 - **A refused registration is recorded.** The client shows its own wording and the install kept no trace of what was actually sent
 - **The protected resource metadata stopped advertising scopes it does not enforce.** It offered `read` and `write`, which stopped existing when per-key scopes were dropped in migration `0026`. One scope, `mcp`
@@ -132,7 +161,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 🐛 Fixed
 
 - **An unreachable Oracle no longer stops the app starting.** The container entrypoint syncs the Oracle skill packs before the server starts, under `set -e`, and the sync exited non-zero when the fetch failed — so a third-party outage, or a firewall rule on the way out, became an app that never came up at all, repeating its boot and re-running migrations every few seconds. Reported now instead, which is the answer the Community sync beside it already gave. Skills stay at the last pack that synced
-- **The main column no longer pushes past the room the sidebar leaves it.** It is a flex item with no minimum width, so `min-width: auto` applied and content wider than the space available pushed the column past it. Nothing showed while every child was centred and clipped; anything sitting flush against the right edge left the viewport by the width of the collapsed sidebar rail
+- **The main column no longer pushes past the room the sidebar leaves it.** It is a flex item with no minimum width, so `min-width: auto` applied and content wider than the space available pushed the column past it. Nothing showed while every child was centered and clipped; anything sitting flush against the right edge left the viewport by the width of the collapsed sidebar rail
 - **A code block given a pane of its own scrolls rather than wraps.** Wrapping is right for a block sharing a chat bubble and wrong for one with room: a script arrived broken mid-token with its indentation lost, less legible than the fence it came from. Wrapping remains the default everywhere else
 
 ---
@@ -168,7 +197,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **`initialize` answers the revision the client asked for.** A conformant client states its revision in the request body; the `MCP-Protocol-Version` header is only defined for the calls that follow. Answering from the header pinned every such client to the oldest accepted revision
 - **A settings save no longer erases who wrote a persona.** The Personas panel sends the whole list back on every save and the settings schema did not name `authoredBy`, so adding one persona in the app unstamped every persona an agent had written — and the guardrail then read them as person-written, leaving an agent unable to revise its own work
-- **`osmcp_list_personas` honours organization persona policy.** An agent acting for a member of an organization that narrows the builtin personas could see all of them
+- **`osmcp_list_personas` honors organization persona policy.** An agent acting for a member of an organization that narrows the builtin personas could see all of them
 - **Saving a persona in Settings keeps its primary role**, a field the editor does not expose and was rebuilding away
 
 ### ♻️ Changed
@@ -860,6 +889,7 @@ First stable release of OpenSuiteMCP - an open source, production-ready NetSuite
 
 ---
 
+[5.8.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.8.0
 [5.7.1]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.7.1
 [5.7.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.7.0
 [5.6.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.6.0

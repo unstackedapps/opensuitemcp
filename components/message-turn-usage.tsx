@@ -7,7 +7,8 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { formatUsedSkillsAndTools } from "@/lib/chat/message-turn-meta";
+import { formatTurnUsageLabel } from "@/lib/chat/message-turn-meta";
+import type { TurnMemory } from "@/lib/chat/turn-memories";
 import { cn } from "@/lib/utils";
 import type { SkillChip } from "./thinking-indicator";
 
@@ -17,6 +18,7 @@ export function MessageTurnUsage({
   succeededToolCount,
   failedToolCount,
   emptyToolCount,
+  memories = [],
   children,
 }: {
   skills: SkillChip[];
@@ -24,15 +26,18 @@ export function MessageTurnUsage({
   succeededToolCount: number;
   failedToolCount: number;
   emptyToolCount: number;
+  /** Read into the turn before the model ran, so nothing else shows them. */
+  memories?: TurnMemory[];
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
-  const label = formatUsedSkillsAndTools(
+  const label = formatTurnUsageLabel(
     skills.length,
     toolCount,
     failedToolCount,
     succeededToolCount,
     emptyToolCount,
+    memories.length,
   );
 
   if (!label) {
@@ -68,6 +73,21 @@ export function MessageTurnUsage({
               </span>
             ))}
           </div>
+        ) : null}
+        {memories.length > 0 ? (
+          <ul className="flex min-w-0 flex-col gap-0.5">
+            {memories.map((memory) => (
+              <li
+                className="flex min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground"
+                key={memory.path}
+              >
+                <span className="truncate">{memory.path}</span>
+                <span className="shrink-0 opacity-70">
+                  {memory.accountId ?? "No account"}
+                </span>
+              </li>
+            ))}
+          </ul>
         ) : null}
         {toolCount > 0 ? (
           <div className="flex flex-col gap-2 *:mb-0">{children}</div>

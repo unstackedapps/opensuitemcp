@@ -541,7 +541,7 @@ function OidcIntegrationDialog({
             </div>
           </div>
 
-          <DialogFooter className="shrink-0 border-t px-4 py-3">
+          <DialogFooter className="shrink-0 px-4 py-3">
             <Button
               className={cn(compactInputClass, "text-xs")}
               onClick={() => onOpenChange(false)}

@@ -162,7 +162,7 @@ describe("agent-authored personas", () => {
     assert.equal(normalized.authoredBy, undefined);
   });
 
-  it("ignores an authoredBy value it does not recognise", () => {
+  it("ignores an authoredBy value it does not recognize", () => {
     const [normalized] = normalizeCustomPersonas([
       { ...agentPersona, authoredBy: "somebody-else" },
     ]);
