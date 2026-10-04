@@ -107,7 +107,7 @@ function readStringArray(value: unknown): string[] | null {
  *
  * `fallbackName` covers a document that omits `client_name`: DCR makes the
  * field optional, and a nameless client on a consent screen is worse than one
- * labelled by its own registration.
+ * labeled by its own registration.
  */
 export function parseClientMetadata(
   body: unknown,
@@ -143,7 +143,7 @@ export function parseClientMetadata(
       `At most ${MAX_REDIRECT_URIS} redirect URIs may be registered.`,
     );
   }
-  // Keep the ones we can honour rather than refusing the client outright.
+  // Keep the ones we can honor rather than refusing the client outright.
   // Cursor registers three addresses and one unsupported scheme among them
   // locked it out of the two that were fine.
   //

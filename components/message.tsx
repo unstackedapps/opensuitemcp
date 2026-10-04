@@ -12,6 +12,7 @@ import {
   groupMessageParts,
 } from "@/lib/chat/group-message-parts";
 import { countMcpToolOutcomes } from "@/lib/chat/message-turn-meta";
+import type { TurnMemory } from "@/lib/chat/turn-memories";
 import type { Vote } from "@/lib/db/schema";
 import { resolveToolCallArguments } from "@/lib/mcp/format-tool-display";
 import { isMcpToolEmptyResult } from "@/lib/mcp/tool-empty";
@@ -82,6 +83,7 @@ const PurePreviewMessage = ({
   turnUsage,
   turnStartedAt,
   turnSkills = [],
+  turnMemories = [],
 }: {
   chatId: string;
   message: ChatMessage;
@@ -96,6 +98,7 @@ const PurePreviewMessage = ({
   turnUsage?: AppUsage;
   turnStartedAt?: string;
   turnSkills?: SkillChip[];
+  turnMemories?: TurnMemory[];
 }) => {
   const [mode, setMode] = useState<"view" | "edit">("view");
   const [mcpAppLaunch, setMcpAppLaunch] = useState<McpAppLaunch | null>(null);
@@ -702,6 +705,7 @@ const PurePreviewMessage = ({
                   <MessageTurnUsage
                     emptyToolCount={toolOutcomes.empty}
                     failedToolCount={toolOutcomes.failed}
+                    memories={turnMemories}
                     skills={turnSkills}
                     succeededToolCount={toolOutcomes.succeeded}
                     toolCount={toolOutcomes.total}

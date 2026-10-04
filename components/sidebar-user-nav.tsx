@@ -79,7 +79,7 @@ export function SidebarUserNav({
       const section =
         settingsParam === "netsuite" ||
         settingsParam === "search" ||
-        settingsParam === "timezone" ||
+        settingsParam === "general" ||
         settingsParam === "account" ||
         settingsParam === "provider"
           ? settingsParam

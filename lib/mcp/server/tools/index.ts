@@ -1,7 +1,9 @@
 import "server-only";
 
 import type { McpPrincipal } from "../authenticate";
+import { artifactTools } from "./artifacts";
 import { chatWriteTools } from "./chats";
+import { memoryTools } from "./memory";
 import { loadNetSuitePassthroughTools } from "./netsuite-passthrough";
 import { personaTools } from "./personas";
 import { promptTools } from "./prompts";
@@ -25,7 +27,9 @@ export async function buildToolSurface(
   const netsuiteTools = await loadNetSuitePassthroughTools(principal);
   const all = [
     ...workspaceTools,
+    ...artifactTools,
     ...chatWriteTools,
+    ...memoryTools,
     ...personaTools,
     ...promptTools,
     ...skillWriteTools,

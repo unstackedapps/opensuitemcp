@@ -27,6 +27,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PANEL_ROW } from "@/components/ui/panel-list";
+import { SettingRow } from "@/components/ui/setting-row";
 import { getDcrProbeForAccount } from "@/hooks/use-netsuite-dcr-probes";
 import {
   formatNetSuiteAccountDisplay,
@@ -204,27 +206,23 @@ export function NetSuiteConnectPanel({
   const panelContent = (
     <div className="space-y-5">
       {!embedded && !hasAccounts ? (
-        <div className="space-y-3">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-            <div className="min-w-0 space-y-1">
-              <p className="font-medium text-sm">
-                Add one or more NetSuite connections
-              </p>
-              <p className="text-muted-foreground text-xs leading-relaxed">
-                {allowFreeAccountAdd
-                  ? "Enter your NetSuite account ID to start this connection."
-                  : "Your organization assigns MCP connections. Add one from the list below or contact an administrator."}
-              </p>
-            </div>
-            {canShowAdd ? (
+        <SettingRow
+          control={
+            canShowAdd ? (
               addButton
             ) : (
               <p className="text-muted-foreground text-xs">
                 No MCP connections are assigned to you yet.
               </p>
-            )}
-          </div>
-        </div>
+            )
+          }
+          description={
+            allowFreeAccountAdd
+              ? "Enter your NetSuite account ID to start this connection."
+              : "Your organization assigns MCP connections. Add one from the list below or contact an administrator."
+          }
+          title="Add one or more NetSuite connections"
+        />
       ) : null}
 
       {embedded && !hasAccounts ? (
@@ -238,19 +236,14 @@ export function NetSuiteConnectPanel({
       {hasAccounts ? (
         <div className="space-y-3">
           {!embedded ? (
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-              <div className="min-w-0 space-y-1">
-                <p className="font-medium text-sm">Configured connections</p>
-                <p className="text-muted-foreground text-xs leading-relaxed">
-                  Choose the active connection for chat. Connect OAuth and
-                  configure MCP tools per connection.
-                </p>
-              </div>
-              {addButton}
-            </div>
+            <SettingRow
+              control={addButton}
+              description="Choose the active connection for chat. Connect OAuth and configure MCP tools per connection."
+              title="Configured connections"
+            />
           ) : null}
 
-          <ul className="space-y-2">
+          <ul className="divide-y divide-border/60">
             {accounts.map((account) => {
               const isActive = account.accountId === selectedAccountId;
               const accountConnected = connectedAccountIds.includes(
@@ -278,7 +271,7 @@ export function NetSuiteConnectPanel({
 
               return (
                 <li
-                  className="flex flex-col gap-3 rounded-md border border-border/60 p-3"
+                  className={cn(PANEL_ROW, "flex flex-col gap-3")}
                   key={account.accountId}
                 >
                   <div className="flex items-center gap-2 sm:gap-2.5">
@@ -549,7 +542,7 @@ export function NetSuiteConnectPanel({
               </ul>
             )}
           </div>
-          <DialogFooter className="shrink-0 gap-2 border-border/60 border-t px-4 py-3 sm:justify-end sm:px-5">
+          <DialogFooter className="shrink-0 gap-2 px-4 py-3 sm:justify-end sm:px-5">
             <Button
               onClick={() => setShowAddForm(false)}
               size="sm"

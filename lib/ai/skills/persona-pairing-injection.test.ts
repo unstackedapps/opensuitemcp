@@ -55,7 +55,7 @@ describe("a persona carries its paired skills into the turn", () => {
     }
   });
 
-  it("still honours a skill its owner switched off", () => {
+  it("still honors a skill its owner switched off", () => {
     const section = buildSkillsPromptSection(settings("off"), {
       invokedConnectedSkillIds: [SKILL_ID],
     });

@@ -8,6 +8,7 @@ import { useMessages } from "@/hooks/use-messages";
 import { usePinToBottomOnLoad } from "@/hooks/use-pin-to-bottom-on-load";
 import { getSkillsForAssistantTurn } from "@/lib/ai/skills/turn-chips";
 import { groupMessageParts } from "@/lib/chat/group-message-parts";
+import { getMemoriesForAssistantTurn } from "@/lib/chat/turn-memories";
 import type { Vote } from "@/lib/db/schema";
 import type { ChatMessage } from "@/lib/types";
 import type { AppUsage } from "@/lib/usage";
@@ -202,10 +203,12 @@ function PureMessages({
             {messages.length === 0 && <Greeting>{inputComponent}</Greeting>}
 
             {messages.map((message, index) => {
+              // A turn's data parts can arrive before the answer starts and
+              // land in an assistant message of their own. It has nothing to
+              // show, but it still drew a usage line and an action row, so the
+              // turn appeared twice with the empty copy on top.
               if (
-                waitingForAssistant &&
                 message.role === "assistant" &&
-                message.id === lastMessage?.id &&
                 !assistantHasVisibleContent(message)
               ) {
                 return null;
@@ -229,6 +232,11 @@ function PureMessages({
                     status === "streaming" &&
                     messages.length - 1 === index &&
                     !assistantHasAnswerText(message)
+                  }
+                  turnMemories={
+                    message.role === "assistant"
+                      ? getMemoriesForAssistantTurn(messages, message.id)
+                      : undefined
                   }
                   turnSkills={
                     message.role === "assistant"

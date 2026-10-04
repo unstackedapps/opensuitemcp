@@ -51,7 +51,7 @@ export type OAuthTokenAuthResult =
  * Mint a fresh pair against a grant.
  *
  * `rotatedFromId` carries the refresh token this pair replaced, so presenting
- * the old one later is recognisable as a replay rather than as a retry.
+ * the old one later is recognizable as a replay rather than as a retry.
  */
 export async function issueTokenPair(params: {
   grantId: string;

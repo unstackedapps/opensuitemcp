@@ -1,17 +1,29 @@
 /**
- * The prompts this server publishes.
+ * What this server publishes on the MCP prompts surface.
  *
- * A tool is something a model decides to call; a prompt is something a person
- * picks. Clients render these in their own `/` menu, which is the only place
- * a capability of this server is visible to the person using it — the
- * instructions sent at initialize reach the model and nobody else.
+ * Two different things share that surface, and only the second is a prompt in
+ * the sense the rest of this product uses the word:
  *
- * Pure: the built-in list and the mapping from a NetSuite Companion prompt
- * both live here so they can be tested without an account.
+ * - **Briefings.** Four, written here, the same for every workspace. They tell
+ *   a connecting agent how to work in OpenSuiteMCP before it touches NetSuite.
+ *   Nobody sees them in the app; they exist only on the wire.
+ * - **NetSuite Companion prompts.** Whatever the connected account publishes —
+ *   text a person picks and drops into a chat, as the Prompts panel shows it.
+ *
+ * MCP carries both through `prompts/list` and `prompts/get`, where a tool is
+ * something a model decides to call and a prompt is something a person picks
+ * from the client's `/` menu. Whether that menu exists is decided per surface,
+ * not per vendor: on 2026-10-04 the same server showed all four briefings in
+ * Cursor and in the Claude Code CLI, and none in the Claude Code desktop app
+ * or in Claude Desktop. A briefing cannot be assumed reachable, which is why
+ * osmcp_run_briefing exists.
+ *
+ * Pure: the briefings and the mapping from a NetSuite Companion prompt both
+ * live here so they can be tested without an account.
  */
 
 import type { NetSuitePrompt } from "@/lib/netsuite/prompt-library";
-import { promptPlaceholders } from "@/lib/netsuite/prompt-library";
+import { fillPrompt, promptPlaceholders } from "@/lib/netsuite/prompt-library";
 
 export type McpPromptArgument = {
   name: string;
@@ -35,13 +47,13 @@ export type McpPromptMessage = {
 export const NETSUITE_PROMPT_PREFIX = "netsuite_";
 
 /**
- * Workflows this server knows and a connecting model does not.
+ * What a connecting agent is told before it starts.
  *
- * Each one is the opening sequence for a kind of work: which identity to
- * confirm, which instructions to read, and where to record what happens. A
- * model will not do these unprompted, because nothing in a tool name says to.
+ * Each briefing is the opening sequence for a kind of work: which identity to
+ * confirm, which instructions to read, and where to record what happens. An
+ * agent will not do these unprompted, because nothing in a tool name says to.
  */
-export const BUILTIN_MCP_PROMPTS: McpPromptDefinition[] = [
+export const BUILTIN_BRIEFINGS: McpPromptDefinition[] = [
   {
     name: "osmcp_start_task",
     title: "Start a NetSuite task",
@@ -103,7 +115,7 @@ function argumentValue(
   return typeof value === "string" ? value.trim() : "";
 }
 
-export function builtinPromptMessages(
+export function briefingMessages(
   name: string,
   args?: Record<string, unknown>,
 ): McpPromptMessage[] | null {
@@ -308,4 +320,78 @@ export function netsuitePromptToMcp(
       ({ placeholder: _placeholder, ...argument }) => argument,
     ),
   };
+}
+
+/**
+ * One prompt, resolved to the messages a client would receive.
+ *
+ * `prompts/get` and `osmcp_run_briefing` are the same answer over two
+ * transports: the MCP prompts surface for a client that renders a `/` menu, and
+ * a tool for every client that does not. Both call this, so neither can drift
+ * from the other, and a briefing or a Companion prompt is addressed by the same
+ * name through either.
+ *
+ * Pure: the caller loads the library and passes it in, so this is testable
+ * without an account.
+ */
+export function resolvePromptMessages(
+  name: string,
+  args: Record<string, unknown> | undefined,
+  netsuitePrompts: readonly NetSuitePrompt[],
+): { description: string; messages: McpPromptMessage[] } | null {
+  const builtin = BUILTIN_BRIEFINGS.find((prompt) => prompt.name === name);
+  if (builtin) {
+    return {
+      description: builtin.description,
+      messages: briefingMessages(name, args) ?? [],
+    };
+  }
+
+  if (!name.startsWith(NETSUITE_PROMPT_PREFIX)) {
+    return null;
+  }
+
+  // Resolved through the same naming pass that built the list, so a
+  // disambiguated name still finds its prompt.
+  const names = netsuitePromptNames(
+    netsuitePrompts,
+    new Set(BUILTIN_BRIEFINGS.map((entry) => entry.name)),
+  );
+  const match = netsuitePrompts.find((prompt) => names.get(prompt.id) === name);
+  if (!match) {
+    return null;
+  }
+
+  // Arguments arrive under their readable names; the filler keys on the
+  // placeholder ids behind them.
+  const filled = fillPrompt(match.prompt, netsuitePromptValues(match, args));
+  const text =
+    filled.unfilled.length > 0
+      ? `${filled.text}\n\nStill to fill: ${filled.unfilled
+          .map((entry) => entry.label)
+          .join(
+            ", ",
+          )}. A value in square brackets is a blank, not text to use as written.`
+      : filled.text;
+
+  return {
+    description: netsuitePromptToMcp(match, name).description,
+    messages: [{ role: "user", content: { type: "text", text } }],
+  };
+}
+
+/** Every briefing and Companion prompt name, for an error that names them. */
+export function publishedPromptNames(
+  netsuitePrompts: readonly NetSuitePrompt[],
+): string[] {
+  const names = netsuitePromptNames(
+    netsuitePrompts,
+    new Set(BUILTIN_BRIEFINGS.map((entry) => entry.name)),
+  );
+  return [
+    ...BUILTIN_BRIEFINGS.map((prompt) => prompt.name),
+    ...netsuitePrompts
+      .map((prompt) => names.get(prompt.id))
+      .filter((name): name is string => typeof name === "string"),
+  ];
 }

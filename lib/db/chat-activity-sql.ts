@@ -6,7 +6,7 @@ import { chat } from "./schema";
 /**
  * How long a stream with no `finishedAt` is still believed to be running. A
  * killed process never reaches onFinish or onError, so without a cutoff its
- * chat would pulse grey forever.
+ * chat would pulse gray forever.
  */
 export const STREAM_STALE_MS = 15 * 60 * 1000;
 

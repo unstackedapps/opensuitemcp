@@ -1,7 +1,7 @@
 "use client";
 
 import type { UseChatHelpers } from "@ai-sdk/react";
-import { Blocks, BookOpen } from "lucide-react";
+import { Blocks, BookOpen, MicIcon } from "lucide-react";
 import {
   type Dispatch,
   memo,
@@ -27,7 +27,9 @@ import {
 } from "@/components/connected-skill-slash-menu";
 import { NetSuiteAccountSwitcher } from "@/components/netsuite-account-switcher";
 import { useAppPortal } from "@/components/portal/context";
+import { useSpeechRecognition } from "@/hooks/use-speech-recognition";
 import { myProvider } from "@/lib/ai/providers";
+import { composeDictatedInput } from "@/lib/speech/dictation";
 import type { ChatMessage } from "@/lib/types";
 import type { AppUsage } from "@/lib/usage";
 import { cn } from "@/lib/utils";
@@ -317,6 +319,29 @@ function PureMultimodalInput({
     setSlashActiveIndex(0);
   };
 
+  // Whatever was typed before the microphone opened. Speech lands after it.
+  const dictationBaseRef = useRef("");
+
+  const {
+    listening: dictating,
+    start: startDictation,
+    stop: stopDictation,
+    supported: dictationSupported,
+  } = useSpeechRecognition({
+    onError: (description) => toast({ type: "error", description }),
+    onSpoken: (spoken) =>
+      setInput(composeDictatedInput(dictationBaseRef.current, spoken)),
+  });
+
+  const toggleDictation = useCallback(() => {
+    if (dictating) {
+      stopDictation();
+      return;
+    }
+    dictationBaseRef.current = input;
+    void startDictation();
+  }, [dictating, input, startDictation, stopDictation]);
+
   const submitForm = useCallback(() => {
     window.history.pushState({}, "", `/chat/${chatId}`);
 
@@ -373,6 +398,7 @@ function PureMultimodalInput({
         : undefined,
     );
 
+    stopDictation();
     resetHeight();
     setInput("");
     setPreferredSkillIdsBySlug({});
@@ -399,6 +425,7 @@ function PureMultimodalInput({
     mounted,
     preferredSkillIdsBySlug,
     connectedSkills,
+    stopDictation,
   ]);
 
   const _modelResolver = useMemo(() => {
@@ -566,6 +593,34 @@ function PureMultimodalInput({
             </PromptInputTools>
 
             <div className="flex items-center justify-end gap-2">
+              {dictationSupported ? (
+                <TooltipProvider delayDuration={300}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        aria-label={dictating ? "Stop dictating" : "Dictate"}
+                        aria-pressed={dictating}
+                        className={cn(
+                          "size-8 px-2 focus-visible:ring-0",
+                          dictating && "text-red-500 hover:text-red-500",
+                        )}
+                        data-testid="composer-dictate-button"
+                        disabled={disabled}
+                        onClick={toggleDictation}
+                        type="button"
+                        variant="ghost"
+                      >
+                        <MicIcon
+                          className={cn("size-4", dictating && "animate-pulse")}
+                        />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {dictating ? "Stop dictating" : "Dictate"}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ) : null}
               {status === "submitted" || status === "streaming" ? (
                 <StopButton setMessages={setMessages} stop={stop} />
               ) : (

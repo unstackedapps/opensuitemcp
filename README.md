@@ -8,19 +8,20 @@ Source-available **NetSuite MCP client** — chat UI for NetSuite’s AI Connect
 
 Bring your own LLM keys (**Google Gemini**, **Anthropic Claude**, **OpenAI**, or an **OpenAI-compatible** endpoint). Self-host for internal use. Commercial rights reserved by [Unstacked Apps, LLC](https://www.unstackedapps.com/).
 
-**Current release:** [v5.7.1](https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.7.1) · [Changelog](CHANGELOG.md)
+**Current release:** [v5.8.0](https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.8.0) · [Changelog](CHANGELOG.md)
 
 <img src="./docs/screenshot-chat.png" alt="OpenSuiteMCP chat UI" width="100%" />
 
 _Main chat UI._
 
-## What’s in 5.7
+## What’s in 5.8
 
-- **A chat says what it is doing** — a dot on every thread: pulsing while the assistant works, blue when a turn finished while you were reading something else, empty once you have seen it. Work an agent does over MCP pulses the same way
-- **Chats file into groups** — create, rename, reorder and collapse them, and drag a chat from one to another. A group's **+** opens a chat already in that group
-- **The list has a toolbar** — filter by persona, sort by activity or title, and search without leaving the panel
-- **The thread title heads the conversation** — rename, share and delete live in its menu, so sharing is in one place instead of two
-- **The side panel carries the product name**, and can be resized, collapsed to a rail, or peeked at from its edge
+- **Talk your prompts into the composer** — a microphone beside send, using the browser's own speech recognition, so it works whichever LLM provider you brought. Pick a language, and switch off the punctuation Chrome adds unasked
+- **Artifacts** — keep a long result or a script a session produced. They land in a panel as tiles, and Save sits in the chat block header as well as the canvas
+- **Memory** — tell a chat to remember something and the next one starts knowing it. Written only when you ask, kept against the NetSuite account that was connected, and listed in a panel with search, an account filter, edit, delete and **Forget all**
+- **A turn says what it used** — skills, MCP tools and memories, each memory named with the account it came from
+- **Briefings reach any client** — the instructions a connecting agent needs are reachable as a tool, not only from a `/` menu half of clients do not render
+- **Every settings panel shares one set of components** — the same header, rows and search field throughout, with headers that stay put while the content scrolls
 
 Earlier releases are in the [changelog](CHANGELOG.md).
 

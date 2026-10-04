@@ -88,7 +88,7 @@ export function mcpAuthChallengeHeader(request?: Request): string {
  *
  * The OAuth prefix is tested first. Both formats begin `osmcp_`, and while
  * `parseMcpApiKey` rejects an access token on its own, ordering the branches
- * means that is a second line of defence rather than the only one.
+ * means that is a second line of defense rather than the only one.
  */
 export async function authenticateMcpRequest(
   request: Request,

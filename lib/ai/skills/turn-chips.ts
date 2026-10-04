@@ -61,9 +61,21 @@ export function getSkillsForAssistantTurn(
     return [];
   }
 
-  const recorded = collectRecordedTurnSkills(messages.at(assistantIndex));
-  if (recorded.length > 0) {
-    return recorded;
+  // A turn can span more than one assistant message when its data parts land
+  // before the answer starts, so the chips may sit on a sibling that is never
+  // rendered.
+  const recorded = new Map<string, SkillChip>();
+  for (let index = assistantIndex; index >= 0; index--) {
+    const candidate = messages.at(index);
+    if (candidate?.role !== "assistant") {
+      break;
+    }
+    for (const chip of collectRecordedTurnSkills(candidate)) {
+      recorded.set(chip.id, chip);
+    }
+  }
+  if (recorded.size > 0) {
+    return [...recorded.values()];
   }
 
   if (assistantIndex === 0) {

@@ -3,7 +3,7 @@
  * so the scope gate is derived from the tool name.
  *
  * The classifier is deliberately fail-closed: anything that looks like a
- * mutation, and anything unrecognised that is not clearly a read, requires the
+ * mutation, and anything unrecognized that is not clearly a read, requires the
  * `write` scope. A read-only key is therefore never the reason a record gets
  * changed, at the cost of occasionally hiding a harmless tool.
  */
@@ -76,6 +76,21 @@ const READ_VERBS = [
  */
 const QUERY_TOOL_HINTS = ["suiteql", "savedsearch"];
 
+/**
+ * A report is a read surface. Running one carries no verb either list claims,
+ * so `ns_runReport` fell through to the fail-closed default and was announced
+ * as destructive — and a read-only key could not run it.
+ */
+const REPORT_TOOL_HINT = "report";
+
+/**
+ * The MCP App launchers — `ns_prompt_library_app`, `ns_report_filters_app`,
+ * `ns_selector_app`. A launcher opens a surface a person then acts in; it
+ * writes nothing itself, and whatever they do next arrives as its own tool
+ * call to be classified on its own name.
+ */
+const APP_LAUNCHER_SUFFIX = "app";
+
 const TOKEN_SPLIT = /[^a-z0-9]+/;
 
 function tokenize(toolName: string): string[] {
@@ -104,7 +119,14 @@ export function netsuiteToolIsReadOnly(toolName: string): boolean {
     }
   }
 
+  if (tokens.at(-1) === APP_LAUNCHER_SUFFIX) {
+    return true;
+  }
+
   const joined = tokens.join("");
+  if (joined.includes(REPORT_TOOL_HINT)) {
+    return true;
+  }
   return QUERY_TOOL_HINTS.some((hint) => joined.includes(hint));
 }
 

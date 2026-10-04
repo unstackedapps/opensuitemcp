@@ -55,7 +55,7 @@ describe("oauth token format", () => {
     assert.equal(parseOAuthToken(""), null);
   });
 
-  it("is recognisable by prefix without a full parse", () => {
+  it("is recognizable by prefix without a full parse", () => {
     assert.equal(isOAuthToken(generateOAuthToken("access").token), true);
     assert.equal(isOAuthToken("osmcp_0123456789abcdef_secret"), false);
   });

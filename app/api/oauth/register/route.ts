@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 /**
  * RFC 7591 dynamic client registration.
  *
- * MCP revision 2026-07-28 deprecates this in favour of Client ID Metadata
+ * MCP revision 2026-07-28 deprecates this in favor of Client ID Metadata
  * Documents, and it is kept because several shipping clients — Cursor and VS
  * Code among them — still register rather than publish. A client that does both
  * prefers the document, and never reaches here.

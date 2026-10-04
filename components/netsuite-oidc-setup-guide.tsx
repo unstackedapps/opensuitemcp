@@ -92,7 +92,7 @@ export function NetSuiteOidcSetupGuide({
             </ol>
           </div>
 
-          <DialogFooter className="shrink-0 border-t px-4 py-3">
+          <DialogFooter className="shrink-0 px-4 py-3">
             <Button
               className="h-8 px-2.5 text-xs"
               onClick={() => setOpen(false)}

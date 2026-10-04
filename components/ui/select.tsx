@@ -4,6 +4,7 @@ import * as React from "react"
 import { Select as SelectPrimitive } from "radix-ui"
 import { Check, ChevronDown } from "lucide-react"
 
+import { controlResponsiveDefaults } from "@/lib/ui/control-defaults"
 import { cn } from "@/lib/utils"
 
 const Select = SelectPrimitive.Root
@@ -19,7 +20,8 @@ const SelectTrigger = React.forwardRef<
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      "flex h-8 w-full items-center justify-between rounded-md border border-input bg-background px-2.5 py-1 text-sm data-placeholder:text-muted-foreground focus:outline-none focus:ring-0 disabled:cursor-not-allowed disabled:opacity-50 md:h-10 md:px-3 md:py-2 [&>span]:line-clamp-1",
+      "flex h-8 w-full items-center justify-between rounded-md border border-input bg-background px-2.5 py-1 text-sm data-placeholder:text-muted-foreground focus:outline-none focus:ring-0 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
+      controlResponsiveDefaults(className),
       className
     )}
     {...props}

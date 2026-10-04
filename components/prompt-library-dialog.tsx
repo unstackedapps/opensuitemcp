@@ -3,16 +3,16 @@
 import {
   ArrowLeft,
   ArrowRight,
-  BookOpen,
   ChevronDown,
   ExternalLink,
   Loader2,
-  Search,
 } from "lucide-react";
 import { useEffect, useId, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PanelBody, PanelHeader } from "@/components/ui/panel-header";
+import { SearchInput } from "@/components/ui/search-input";
 import {
   Select,
   SelectContent,
@@ -306,30 +306,19 @@ export function PromptLibraryPanel({
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <div className="flex shrink-0 items-start justify-between gap-3 border-border/60 border-b px-4 py-3 sm:px-5">
-        <div className="min-w-0 space-y-1">
-          <p className="flex items-center gap-1.5 font-medium text-sm">
-            <BookOpen className="size-3.5 text-muted-foreground" />
-            {step === "fill" && selectedPrompt ? selectedPrompt.name : title}
-          </p>
-          <p className="text-muted-foreground text-xs leading-relaxed">
-            {step === "fill"
-              ? "Fill in the required values, then use the prompt in chat."
-              : "Companion SuiteApp templates. Select one to drop it into chat."}
-          </p>
-        </div>
-        {step === "browse" ? (
-          <a
-            className="hidden shrink-0 items-center gap-1 text-muted-foreground text-xs underline-offset-4 hover:text-foreground hover:underline sm:inline-flex"
-            href={ORACLE_DOC_LINKS.companion}
-            rel="noopener noreferrer"
-            target="_blank"
-          >
-            Companion docs
-            <ExternalLink className="size-3" />
-          </a>
-        ) : null}
-      </div>
+      <PanelHeader
+        links={
+          step === "browse"
+            ? [{ label: "Companion docs", href: ORACLE_DOC_LINKS.companion }]
+            : undefined
+        }
+        subtitle={
+          step === "fill"
+            ? "Fill in the required values, then use the prompt in chat."
+            : "Companion SuiteApp templates. Select one to drop it into chat."
+        }
+        title={step === "fill" && selectedPrompt ? selectedPrompt.name : title}
+      />
 
       {status === "loading" ? (
         <div className="flex flex-1 items-center justify-center gap-2 text-muted-foreground text-sm">
@@ -351,25 +340,16 @@ export function PromptLibraryPanel({
 
       {status === "ready" && step === "browse" && prompts.length > 0 ? (
         <div className="flex min-h-0 flex-1 flex-col">
-          <div className="shrink-0 space-y-2.5 border-border/60 border-b px-4 py-3 sm:px-5">
+          <div className="shrink-0 space-y-2.5 px-4 pt-4 sm:px-5">
             <div className="space-y-2.5">
               <div className="space-y-1">
-                <Label
-                  className="text-xs text-muted-foreground"
-                  htmlFor={searchInputId}
-                >
-                  Search
-                </Label>
-                <div className="relative">
-                  <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    className="h-9 pl-10 md:pl-10"
-                    id={searchInputId}
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                    placeholder="Search title, role, industry, or prompt"
-                    value={searchQuery}
-                  />
-                </div>
+                <SearchInput
+                  className="h-9"
+                  id={searchInputId}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Search title, role, industry, or prompt"
+                  value={searchQuery}
+                />
               </div>
               <Button
                 aria-expanded={filtersOpen}
@@ -398,9 +378,6 @@ export function PromptLibraryPanel({
                 )}
               >
                 <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">
-                    Category
-                  </Label>
                   <Select onValueChange={setCategory} value={category}>
                     <SelectTrigger className="h-9">
                       <SelectValue placeholder="All Categories" />
@@ -416,9 +393,6 @@ export function PromptLibraryPanel({
                   </Select>
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">
-                    Industry
-                  </Label>
                   <Select onValueChange={setIndustry} value={industry}>
                     <SelectTrigger className="h-9">
                       <SelectValue placeholder="All Industries" />
@@ -434,7 +408,6 @@ export function PromptLibraryPanel({
                   </Select>
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Role</Label>
                   <Select onValueChange={setRole} value={role}>
                     <SelectTrigger className="h-9">
                       <SelectValue placeholder="All Roles" />
@@ -461,7 +434,7 @@ export function PromptLibraryPanel({
             </p>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto">
+          <PanelBody className="px-0 pt-0 pb-0 sm:px-0">
             {filtered.length === 0 ? (
               <p className="px-6 py-12 text-center text-muted-foreground text-sm">
                 No prompts match these filters.
@@ -529,7 +502,7 @@ export function PromptLibraryPanel({
                 })}
               </ul>
             )}
-          </div>
+          </PanelBody>
         </div>
       ) : null}
 

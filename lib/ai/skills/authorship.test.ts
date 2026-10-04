@@ -51,7 +51,7 @@ describe("skill authorship survives a settings save", () => {
     assert.equal(saved([personWritten])[0].authoredBy, undefined);
   });
 
-  it("rejects an authorship value it does not recognise", () => {
+  it("rejects an authorship value it does not recognize", () => {
     assert.throws(() =>
       customSkillSchema.parse({ ...agentWritten, authoredBy: "somebody" }),
     );

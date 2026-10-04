@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PanelBody } from "@/components/ui/panel-header";
 import {
   Select,
   SelectContent,
@@ -35,6 +36,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SettingRow } from "@/components/ui/setting-row";
 import { modelsForProvider } from "@/lib/ai/model-registry";
 import {
   type AiProviderConfig,
@@ -377,20 +379,18 @@ export function AiProviderSettings({
   const panelContent = (
     <div className="space-y-3">
       {!embedded ? (
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-          <div className="min-w-0 space-y-1">
-            <p className="font-medium text-sm">Configured providers</p>
-            <p className="text-muted-foreground text-xs leading-relaxed">
-              {orgManaged
-                ? "Your organization administrator manages API keys and model options. Choose the default for new chats."
-                : "Add API keys and model options. The default is for new chats; existing chats keep their last provider."}
-            </p>
-          </div>
-          {addButton}
-        </div>
+        <SettingRow
+          control={addButton}
+          description={
+            orgManaged
+              ? "Your organization administrator manages API keys and model options. Choose the default for new chats."
+              : "Add API keys and model options. The default is for new chats; existing chats keep their last provider."
+          }
+          title="Configured providers"
+        />
       ) : null}
 
-      <ul className="divide-y divide-border/60 rounded-md border border-border/60">
+      <ul className="divide-y divide-border/60">
         {visibleProviders.length === 0 ? (
           <li className="px-2.5 py-4 text-center text-muted-foreground text-xs">
             No providers yet. Add one to get started.
@@ -668,7 +668,7 @@ export function ProviderConfigDialog({
             </DialogDescription>
           ) : null}
         </DialogHeader>
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+        <PanelBody className="pt-4">
           <div className="space-y-4">
             {mode === "add" ? (
               <div className="space-y-2">
@@ -747,8 +747,8 @@ export function ProviderConfigDialog({
               />
             ) : null}
           </div>
-        </div>
-        <DialogFooter className="shrink-0 gap-2 border-border/60 border-t px-4 py-3 sm:justify-end sm:px-5">
+        </PanelBody>
+        <DialogFooter className="shrink-0 gap-2 px-4 py-3 sm:justify-end sm:px-5">
           <Button
             onClick={() => onOpenChange(false)}
             type="button"

@@ -4,12 +4,11 @@ import { APP_VERSION } from "@/lib/app-release";
 import { allowMcpCallBurst } from "@/lib/rate-limit";
 import type { McpPrincipal } from "./authenticate";
 import {
-  BUILTIN_MCP_PROMPTS,
-  builtinPromptMessages,
+  BUILTIN_BRIEFINGS,
   NETSUITE_PROMPT_PREFIX,
   netsuitePromptNames,
   netsuitePromptToMcp,
-  netsuitePromptValues,
+  resolvePromptMessages,
 } from "./prompt-surface";
 import {
   isHandshakeEraVersion,
@@ -28,7 +27,7 @@ import {
 import { buildMcpServerInfo } from "./server-info";
 import { buildToolSurface, findTool, toWireTool } from "./tools";
 import { toolSurfaceDigest } from "./tools/digest";
-import { fillPrompt, loadNetSuitePromptsOrNone } from "./tools/prompts";
+import { loadNetSuitePromptsOrNone } from "./tools/prompts";
 import { type McpToolDefinition, toolError } from "./tools/types";
 import { validateToolArgs } from "./tools/validate-args";
 
@@ -257,7 +256,7 @@ async function listPrompts(principal: McpPrincipal) {
   const netsuitePrompts = await loadNetSuitePromptsOrNone(principal);
   const names = netsuitePromptNames(
     netsuitePrompts,
-    new Set(BUILTIN_MCP_PROMPTS.map((prompt) => prompt.name)),
+    new Set(BUILTIN_BRIEFINGS.map((prompt) => prompt.name)),
   );
   const published = netsuitePrompts
     .filter((prompt) => names.has(prompt.id))
@@ -266,7 +265,7 @@ async function listPrompts(principal: McpPrincipal) {
     );
 
   return {
-    prompts: [...BUILTIN_MCP_PROMPTS, ...published],
+    prompts: [...BUILTIN_BRIEFINGS, ...published],
     resultType: "complete",
     ...PRIVATE_CACHE,
   };
@@ -298,46 +297,15 @@ async function getPrompt(
     };
   }
 
-  const builtin = BUILTIN_MCP_PROMPTS.find((prompt) => prompt.name === name);
-  if (builtin) {
-    return ok(id, {
-      description: builtin.description,
-      messages: builtinPromptMessages(name, args) ?? [],
-    });
-  }
+  // Only loaded when the name could be one: a built-in must not wait on
+  // NetSuite, and must still work when no account is connected.
+  const netsuitePrompts = name.startsWith(NETSUITE_PROMPT_PREFIX)
+    ? await loadNetSuitePromptsOrNone(principal)
+    : [];
 
-  if (name.startsWith(NETSUITE_PROMPT_PREFIX)) {
-    const prompts = await loadNetSuitePromptsOrNone(principal);
-    // Resolved through the same naming pass that built the list, so a
-    // disambiguated name still finds its prompt.
-    const names = netsuitePromptNames(
-      prompts,
-      new Set(BUILTIN_MCP_PROMPTS.map((entry) => entry.name)),
-    );
-    const match = prompts.find((prompt) => names.get(prompt.id) === name);
-    if (match) {
-      // Arguments arrive under their readable names; the filler keys on the
-      // placeholder ids behind them.
-      const filled = fillPrompt(
-        match.prompt,
-        netsuitePromptValues(match, args),
-      );
-      return ok(id, {
-        description: netsuitePromptToMcp(match, name).description,
-        messages: [
-          {
-            role: "user",
-            content: {
-              type: "text",
-              text:
-                filled.unfilled.length > 0
-                  ? `${filled.text}\n\nStill to fill: ${filled.unfilled.map((entry) => entry.label).join(", ")}. A value in square brackets is a blank, not text to use as written.`
-                  : filled.text,
-            },
-          },
-        ],
-      });
-    }
+  const resolved = resolvePromptMessages(name, args, netsuitePrompts);
+  if (resolved) {
+    return ok(id, resolved);
   }
 
   return {

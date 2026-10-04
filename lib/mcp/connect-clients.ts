@@ -140,7 +140,7 @@ export const CONNECTS_FROM_OPTIONS: { id: string; label: string }[] = [
  */
 const CLIENT_NAME_ALIASES: Record<string, string> = {
   claude: "claude",
-  "claude code": "claude",
+  "claude code": "claude-code",
   "claude desktop": "claude",
   anthropic: "claude",
   cursor: "cursor",
@@ -162,7 +162,7 @@ export function connectsFromLabel(value: string | null | undefined): string {
 
 /**
  * The option a registering client most likely means, or null when its name is
- * one we do not recognise. Used only to pre-select on the consent screen — it
+ * one we do not recognize. Used only to pre-select on the consent screen — it
  * never decides anything on its own.
  */
 export function matchConnectsFrom(
@@ -319,6 +319,7 @@ export const SELF_HOST_REQUIREMENTS = [
  */
 export type ConnectClientId =
   | "claude"
+  | "claude-code"
   | "cursor"
   | "gemini"
   | "chatgpt"
@@ -400,6 +401,53 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
       // header field. Claude's request-header auth is an org-gated beta that
       // has not been tried here, so it is not documented.
       agentKey: null,
+    },
+    {
+      id: "claude-code",
+      docHeading: "Claude Code",
+      runsOn: "device",
+      signIn: {
+        heading: "Add it with the CLI",
+        groups: [
+          {
+            app: "Claude Code",
+            steps: [
+              "Run the command above. The CLI writes the entry and opens the browser.",
+            ],
+          },
+          {
+            app: THIS_APP,
+            steps: ["Authorize the app on the consent screen."],
+          },
+          {
+            app: "Claude Code",
+            steps: [
+              "Return to the terminal and run /mcp to confirm the server is connected.",
+            ],
+          },
+        ],
+        snippet: {
+          language: "bash",
+          location: "Terminal",
+          code: `claude mcp add --transport http opensuitemcp ${serverUrl}`,
+        },
+        note: 'Editing ~/.claude.json by hand needs `"type": "http"` on the entry. Without it the CLI skips the server and reports it in /doctor.',
+      },
+      agentKey: {
+        heading: "Add it with the CLI and a header",
+        groups: [
+          {
+            app: "Claude Code",
+            steps: ["Run the command above. Nothing to authorize."],
+          },
+        ],
+        snippet: {
+          language: "bash",
+          location: "Terminal",
+          code: `claude mcp add --transport http opensuitemcp ${serverUrl} --header "Authorization: Bearer ${KEY_PLACEHOLDER}"`,
+        },
+        note: 'Editing ~/.claude.json by hand needs `"type": "http"` on the entry.',
+      },
     },
     {
       id: "cursor",

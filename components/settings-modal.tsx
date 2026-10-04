@@ -1,11 +1,10 @@
 "use client";
 
 import {
-  Clock,
   Cloud,
-  ExternalLink,
   Globe,
   type LucideIcon,
+  SlidersHorizontal,
   Sparkles,
   User,
 } from "lucide-react";
@@ -31,6 +30,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { PanelBody, PanelHeader } from "@/components/ui/panel-header";
+import { SettingRow } from "@/components/ui/setting-row";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WebSearchSettings } from "@/components/web-search-settings";
 import {
@@ -57,58 +58,16 @@ import {
   normalizeNetSuiteAccountId,
 } from "@/lib/netsuite/accounts";
 import { ORACLE_DOC_LINKS } from "@/lib/netsuite/integration-checklist";
+import { isMenuTypeaheadKey } from "@/lib/ui/menu-typeahead";
+import { DictationSettings } from "./dictation-settings";
 import { toast } from "./toast";
 
 export type SettingsPanelSection =
   | "provider"
   | "netsuite"
   | "search"
-  | "timezone"
+  | "general"
   | "account";
-
-type PortalPanelHeaderProps = {
-  icon: LucideIcon;
-  title: string;
-  subtitle: string;
-  docsLinks?: { label: string; href: string }[];
-};
-
-function PortalPanelHeader({
-  icon: Icon,
-  title,
-  subtitle,
-  docsLinks,
-}: PortalPanelHeaderProps) {
-  return (
-    <div className="flex shrink-0 items-start justify-between gap-3 border-border/60 border-b px-4 py-2.5 sm:px-5 sm:py-3">
-      <div className="min-w-0 space-y-1">
-        <p className="flex items-center gap-1.5 font-medium text-sm">
-          <Icon className="size-3.5 text-muted-foreground" />
-          {title}
-        </p>
-        <p className="text-muted-foreground text-xs leading-relaxed">
-          {subtitle}
-        </p>
-      </div>
-      {docsLinks && docsLinks.length > 0 ? (
-        <div className="hidden shrink-0 flex-col gap-1 text-xs sm:flex">
-          {docsLinks.map((link) => (
-            <a
-              className="inline-flex items-center gap-1 text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-              href={link.href}
-              key={link.href}
-              rel="noopener noreferrer"
-              target="_blank"
-            >
-              {link.label}
-              <ExternalLink className="size-3" />
-            </a>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
-}
 
 const PROVIDER_DOCS: Record<
   "google" | "anthropic" | "openai" | "custom",
@@ -144,7 +103,7 @@ const SECTION_META: Record<
   provider: {
     icon: Sparkles,
     title: "AI Provider",
-    subtitle: "Bring your own LLM key and configure providers",
+    subtitle: "Which model answers you, and whose key pays for it.",
     docsLinks: [
       {
         label: "BYOLLM guide",
@@ -155,7 +114,7 @@ const SECTION_META: Record<
   netsuite: {
     icon: Cloud,
     title: "NetSuite",
-    subtitle: "Connect MCP tools to your NetSuite connections.",
+    subtitle: "The NetSuite accounts this workspace can reach.",
     docsLinks: [
       {
         label: "Setup guide",
@@ -170,12 +129,12 @@ const SECTION_META: Record<
   search: {
     icon: Globe,
     title: "Web Search",
-    subtitle: "Add sites the assistant can search in chat.",
+    subtitle: "Where the assistant may look things up.",
   },
-  timezone: {
-    icon: Clock,
-    title: "Timezone",
-    subtitle: "Set your timezone for accurate date and time calculations.",
+  general: {
+    icon: SlidersHorizontal,
+    title: "General",
+    subtitle: "How this workspace reads dates and hears you.",
   },
   account: {
     icon: User,
@@ -989,9 +948,6 @@ export function SettingsPanel({ active, section }: SettingsPanelProps) {
   if (section === "netsuite" && isSoloInstall) {
     panelSubtitle =
       "Configure NetSuite sign-in and connect MCP tools for chat.";
-  } else if (section === "search" && settings?.orgSearchPolicy?.managedByOrg) {
-    panelSubtitle =
-      "Your organization provides these resources. You can disable them for your chats.";
   }
   const defaultProviderType = aiProviders.providers.find(
     (entry) => entry.id === aiProviders.defaultId,
@@ -1083,14 +1039,13 @@ export function SettingsPanel({ active, section }: SettingsPanelProps) {
         e.preventDefault();
       }}
     >
-      <PortalPanelHeader
-        docsLinks={headerDocsLinks}
-        icon={sectionMeta.icon}
+      <PanelHeader
+        links={headerDocsLinks}
         subtitle={panelSubtitle}
         title={sectionMeta.title}
       />
 
-      <div className="min-h-0 flex-1 overflow-y-scroll py-4 pl-4 pr-4 [scrollbar-gutter:stable] sm:pl-5 sm:pr-5">
+      <PanelBody className="overflow-y-scroll pt-4 [scrollbar-gutter:stable]">
         {section === "provider" ? (
           <AiProviderSettings
             aiProviders={aiProviders}
@@ -1169,119 +1124,137 @@ export function SettingsPanel({ active, section }: SettingsPanelProps) {
           )
         ) : null}
 
-        {section === "timezone" ? (
-          <div className="space-y-2">
-            {showSkeletons ? (
-              <OnboardingPanelSkeleton rows={1} />
-            ) : (
-              <DropdownMenu
-                onOpenChange={(isOpen) => {
-                  setTimezoneOpen(isOpen);
-                  if (!isOpen) {
-                    setTimezoneSearch("");
-                  }
-                }}
-                open={timezoneOpen}
-              >
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    className="w-full justify-between"
-                    id={timezoneId}
-                    type="button"
-                    variant="outline"
-                  >
-                    {timezone
-                      ? (() => {
-                          const display = getTimezoneDisplay(timezone);
-                          return display.code
-                            ? `[${display.code}] ${display.name} ${display.full}`
-                            : `${display.name} ${display.full}`;
-                        })()
-                      : "Select timezone"}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="start"
-                  className="flex max-h-[min(300px,var(--radix-dropdown-menu-content-available-height))] w-(--radix-dropdown-menu-trigger-width) flex-col overflow-hidden p-0"
-                >
-                  <div className="shrink-0 border-b p-2">
-                    <Input
-                      className="h-8"
-                      onChange={(e) => setTimezoneSearch(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Escape" && timezoneSearch) {
+        {section === "general" ? (
+          <div className="divide-y divide-border/60">
+            <SettingRow
+              control={
+                <div className="w-80">
+                  {showSkeletons ? (
+                    <OnboardingPanelSkeleton rows={1} />
+                  ) : (
+                    <DropdownMenu
+                      onOpenChange={(isOpen) => {
+                        setTimezoneOpen(isOpen);
+                        if (!isOpen) {
                           setTimezoneSearch("");
-                          e.preventDefault();
-                          e.stopPropagation();
                         }
                       }}
-                      placeholder="Search timezones..."
-                      ref={searchInputRef}
-                      value={timezoneSearch}
-                    />
-                  </div>
-                  <div className="min-h-0 flex-1 overflow-y-auto p-1">
-                    {filteredTimezones.length > 0 ? (
-                      filteredTimezones.map((tz) => {
-                        const display = getTimezoneDisplay(tz);
-                        const displayText = display.code
-                          ? `[${display.code}] ${display.name} ${display.full}`
-                          : `${display.name} ${display.full}`;
-                        return (
-                          <DropdownMenuItem
-                            key={tz}
-                            onSelect={() => {
-                              void handlePersistTimezone(tz);
+                      open={timezoneOpen}
+                    >
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          className="h-8 w-full justify-between gap-2"
+                          id={timezoneId}
+                          type="button"
+                          variant="outline"
+                        >
+                          {/* A zone's full name is longer than any control
+                              that fits beside a label, so it truncates rather
+                              than pushing the button off the panel. */}
+                          <span className="truncate">
+                            {timezone
+                              ? (() => {
+                                  const display = getTimezoneDisplay(timezone);
+                                  return display.code
+                                    ? `[${display.code}] ${display.name} ${display.full}`
+                                    : `${display.name} ${display.full}`;
+                                })()
+                              : "Select timezone"}
+                          </span>
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent
+                        align="start"
+                        className="flex max-h-[min(300px,var(--radix-dropdown-menu-content-available-height))] w-(--radix-dropdown-menu-trigger-width) flex-col overflow-hidden p-0"
+                      >
+                        <div className="shrink-0 border-b p-2">
+                          <Input
+                            className="h-8"
+                            onChange={(e) => setTimezoneSearch(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Escape" && timezoneSearch) {
+                                setTimezoneSearch("");
+                                e.preventDefault();
+                                e.stopPropagation();
+                                return;
+                              }
+                              if (isMenuTypeaheadKey(e.key)) {
+                                e.stopPropagation();
+                              }
                             }}
-                          >
-                            {displayText}
-                          </DropdownMenuItem>
-                        );
-                      })
-                    ) : (
-                      <div className="py-6 text-center text-muted-foreground text-sm">
-                        No timezones found
-                      </div>
-                    )}
-                  </div>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
+                            placeholder="Search timezones..."
+                            ref={searchInputRef}
+                            value={timezoneSearch}
+                          />
+                        </div>
+                        <div className="min-h-0 flex-1 overflow-y-auto p-1">
+                          {filteredTimezones.length > 0 ? (
+                            filteredTimezones.map((tz) => {
+                              const display = getTimezoneDisplay(tz);
+                              const displayText = display.code
+                                ? `[${display.code}] ${display.name} ${display.full}`
+                                : `${display.name} ${display.full}`;
+                              return (
+                                <DropdownMenuItem
+                                  key={tz}
+                                  onSelect={() => {
+                                    void handlePersistTimezone(tz);
+                                  }}
+                                >
+                                  {displayText}
+                                </DropdownMenuItem>
+                              );
+                            })
+                          ) : (
+                            <div className="py-6 text-center text-muted-foreground text-sm">
+                              No timezones found
+                            </div>
+                          )}
+                        </div>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                </div>
+              }
+              description="Dates and times in chat are shown in this zone, and NetSuite periods are resolved against it."
+              title="Timezone"
+            />
+            <DictationSettings />
           </div>
         ) : null}
 
         {section === "account" && session?.user?.id ? (
           <div className="space-y-3">
-            <div className="grid gap-2.5 sm:grid-cols-2">
-              <div className="min-w-0 space-y-0.5">
-                <p className="font-medium text-[11px] text-muted-foreground sm:text-xs">
-                  Email
-                </p>
-                <p className="truncate text-sm">
-                  {userInfo?.email || session.user.email || "—"}
-                </p>
-              </div>
-              <div className="space-y-0.5">
-                <p className="font-medium text-[11px] text-muted-foreground sm:text-xs">
-                  Last login
-                </p>
-                <p className="text-sm">
-                  {userInfo?.lastLoginAt
-                    ? new Date(userInfo.lastLoginAt).toLocaleString(undefined, {
-                        dateStyle: "medium",
-                        timeStyle: "short",
-                      })
-                    : "—"}
-                </p>
-              </div>
-            </div>
-            <div className="min-w-0 space-y-0.5">
-              <p className="font-medium text-[11px] text-muted-foreground sm:text-xs">
-                User ID
-              </p>
-              <p className="break-all font-mono text-[11px] sm:text-xs">
-                {session.user.id}
-              </p>
+            <div className="divide-y divide-border/60">
+              <SettingRow
+                control={
+                  <p className="truncate text-sm">
+                    {userInfo?.email || session.user.email || "—"}
+                  </p>
+                }
+                title="Email"
+              />
+              <SettingRow
+                control={
+                  <p className="text-sm">
+                    {userInfo?.lastLoginAt
+                      ? new Date(userInfo.lastLoginAt).toLocaleString(
+                          undefined,
+                          { dateStyle: "medium", timeStyle: "short" },
+                        )
+                      : "—"}
+                  </p>
+                }
+                title="Last login"
+              />
+              <SettingRow
+                control={
+                  <p className="break-all font-mono text-xs">
+                    {session.user.id}
+                  </p>
+                }
+                title="User ID"
+              />
             </div>
 
             {!isGuest && isUserInfoLoading ? (
@@ -1317,13 +1290,13 @@ export function SettingsPanel({ active, section }: SettingsPanelProps) {
             ) : null}
           </div>
         ) : null}
-      </div>
+      </PanelBody>
 
-      <DialogFooter className="shrink-0 gap-2 border-t border-border/60 px-4 py-3 sm:justify-end sm:px-5">
+      <DialogFooter className="shrink-0 gap-2 px-4 py-3 sm:justify-end sm:px-5">
         {section === "netsuite" ||
         section === "account" ||
         section === "search" ||
-        section === "timezone" ? (
+        section === "general" ? (
           <Button onClick={() => closePortal()} type="button">
             Close
           </Button>

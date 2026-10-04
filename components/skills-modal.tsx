@@ -1,10 +1,8 @@
 "use client";
 
 import {
-  Blocks,
   ChevronDown,
   Download,
-  ExternalLink,
   Eye,
   EyeOff,
   Files,
@@ -29,6 +27,8 @@ import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PanelBody, PanelHeader } from "@/components/ui/panel-header";
+import { PANEL_ROW, PanelList } from "@/components/ui/panel-list";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { MAX_CUSTOM_SKILLS } from "@/lib/ai/skills/authoring";
@@ -236,7 +236,6 @@ type SkillRowProps = {
   files?: string[];
   /** Needed to fetch a reference file's body. */
   skillId?: string;
-  variant?: "list" | "card";
 };
 
 function SkillRow({
@@ -254,7 +253,6 @@ function SkillRow({
   carriedBy,
   files,
   skillId,
-  variant = "list",
 }: SkillRowProps) {
   const [expanded, setExpanded] = useState(false);
   const [content, setContent] = useState<string | null>(
@@ -296,13 +294,7 @@ function SkillRow({
   };
 
   return (
-    <div
-      className={cn(
-        variant === "card"
-          ? "rounded-md border border-border/60 p-3"
-          : "border-b border-border/60 py-3 last:border-b-0",
-      )}
-    >
+    <div className="border-border/60 border-b py-3 last:border-b-0">
       <div className="flex flex-col gap-2 sm:grid sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-3">
         <button
           className={cn(
@@ -761,7 +753,7 @@ function CustomSkillEditor({
           )}
         </div>
       </div>
-      <DialogFooter className="flex-row items-center justify-end gap-2 border-t border-border/60 px-4 py-3 sm:px-5">
+      <DialogFooter className="flex-row items-center justify-end gap-2 px-4 py-3 sm:px-5">
         <Button onClick={onCancel} type="button" variant="outline">
           Cancel
         </Button>
@@ -1463,67 +1455,38 @@ export function SkillsPanel({
       data-testid="skills-panel"
     >
       {!embeddedMode ? (
-        <div className="flex items-start justify-between gap-3 border-border/60 border-b px-4 py-3 sm:px-5">
-          <div className="min-w-0 space-y-1">
-            <p className="flex items-center gap-1.5 font-medium text-sm">
-              <Blocks className="size-3.5 text-muted-foreground" />
-              Skills
-            </p>
-            <p className="text-muted-foreground text-xs leading-relaxed">
-              {orgManaged
-                ? "Your organization provides these skills. You can disable them for your chats. Connected skills are invoked with / in chat."
-                : "Changes apply to new messages. Click a skill to preview. Connected skills are invoked with / in chat."}
-            </p>
-          </div>
-          <div className="hidden shrink-0 flex-col gap-1 text-xs sm:flex">
-            <a
-              className="inline-flex items-center gap-1 text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-              href={`${PUBLIC_DOCS_ORIGIN}/docs/skills`}
-              rel="noopener noreferrer"
-              target="_blank"
-            >
-              OpenSuiteMCP guide
-              <ExternalLink className="size-3" />
-            </a>
-            {activeSection === "oracle" ? (
-              <>
-                <a
-                  className="inline-flex items-center gap-1 text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-                  href={ORACLE_SKILLS_GITHUB_URL}
-                  rel="noopener noreferrer"
-                  target="_blank"
-                >
-                  GitHub
-                  <ExternalLink className="size-3" />
-                </a>
-                <a
-                  className="inline-flex items-center gap-1 text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-                  href={ORACLE_SKILLS_DOCS_URL}
-                  rel="noopener noreferrer"
-                  target="_blank"
-                >
-                  SuiteCloud docs
-                  <ExternalLink className="size-3" />
-                </a>
-              </>
-            ) : null}
-            {activeSection === "community" ? (
-              <a
-                className="inline-flex items-center gap-1 text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-                href={COMMUNITY_SKILLS_GITHUB_URL}
-                rel="noopener noreferrer"
-                target="_blank"
-              >
-                Community GitHub
-                <ExternalLink className="size-3" />
-              </a>
-            ) : null}
-          </div>
-        </div>
+        <PanelHeader
+          links={[
+            {
+              label: "OpenSuiteMCP guide",
+              href: `${PUBLIC_DOCS_ORIGIN}/docs/skills`,
+            },
+            ...(activeSection === "oracle"
+              ? [
+                  { label: "GitHub", href: ORACLE_SKILLS_GITHUB_URL },
+                  { label: "SuiteCloud docs", href: ORACLE_SKILLS_DOCS_URL },
+                ]
+              : []),
+            ...(activeSection === "community"
+              ? [
+                  {
+                    label: "Community GitHub",
+                    href: COMMUNITY_SKILLS_GITHUB_URL,
+                  },
+                ]
+              : []),
+          ]}
+          subtitle={
+            orgManaged
+              ? "Your organization provides these skills. You can disable them for your chats. Connected skills are invoked with / in chat."
+              : "Changes apply to new messages. Click a skill to preview. Connected skills are invoked with / in chat."
+          }
+          title="Skills"
+        />
       ) : null}
 
       {skillsNav.length > 1 ? (
-        <div className="flex gap-1.5 overflow-x-auto border-border/60 border-b px-4 py-3">
+        <div className="flex gap-1.5 overflow-x-auto px-4 pb-3 sm:px-5">
           {skillsNav.map((item) => (
             <button
               className={cn(
@@ -1543,12 +1506,7 @@ export function SkillsPanel({
         </div>
       ) : null}
 
-      <div
-        className={cn(
-          "min-h-0 flex-1 overflow-y-auto px-4 py-3 sm:px-5",
-          embeddedMode && "px-0 sm:px-0",
-        )}
-      >
+      <PanelBody className={cn(embeddedMode && "px-0 sm:px-0")}>
         {showSkeletons ? (
           <SkillsListSkeleton />
         ) : activeSection === "oracle" ? (
@@ -1639,7 +1597,7 @@ export function SkillsPanel({
                 </Button>
               </div>
             ) : null}
-            <div className="flex flex-col gap-2">
+            <PanelList>
               {customSkills.map((skill) => (
                 <SkillRow
                   actions={
@@ -1738,10 +1696,9 @@ export function SkillsPanel({
                   pending={pendingToggles.has(skill.id)}
                   preview={{ kind: "inline", content: skill.content }}
                   updatedAt={skill.updatedAt}
-                  variant="card"
                 />
               ))}
-            </div>
+            </PanelList>
             {customSkills.length === 0 ? (
               <div className="py-8 text-center text-muted-foreground text-sm">
                 No custom skills yet. Add one to tailor Ava for your workflows.
@@ -1751,7 +1708,7 @@ export function SkillsPanel({
         ) : (
           <div className="space-y-6">
             {!orgManaged ? (
-              <div className="space-y-2">
+              <div className="sticky top-0 z-10 space-y-2 bg-background pb-3">
                 <Label htmlFor={connectUrlId}>GitHub skills URL</Label>
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <Input
@@ -1793,192 +1750,196 @@ export function SkillsPanel({
                 No connected skill packs yet.
               </div>
             ) : (
-              connectedSources.map((source) => {
-                const skillsForSource = connectedSkills.filter(
-                  (skill) => skill.sourceId === source.id,
-                );
-                // source.skillCount is restated from disk by the API, so an
-                // empty list here means empty, not unloaded.
-                const skillCount = skillsForSource.length;
-                const expanded = expandedConnectedIds.has(source.id);
-                return (
-                  <div
-                    className="rounded-md border border-border/60"
-                    key={source.id}
-                  >
-                    <div className="flex items-start gap-1 px-2 py-2">
-                      <button
-                        aria-expanded={expanded}
-                        className="min-w-0 flex-1 rounded-md px-1 py-0.5 text-left hover:bg-muted/40"
-                        onClick={() => {
-                          setExpandedConnectedIds((current) => {
-                            const next = new Set(current);
-                            if (next.has(source.id)) {
-                              next.delete(source.id);
-                            } else {
-                              next.add(source.id);
-                            }
-                            return next;
-                          });
-                        }}
-                        type="button"
-                      >
-                        <div className="flex items-center gap-1.5">
-                          <ChevronDown
-                            className={cn(
-                              "size-3.5 shrink-0 text-muted-foreground transition-transform",
-                              expanded && "rotate-180",
-                            )}
-                          />
-                          <p className="truncate font-medium text-sm">
-                            {source.label}
-                          </p>
-                        </div>
-                        <p className="mt-0.5 pl-5 text-muted-foreground text-[11px]">
-                          {skillCount} skill{skillCount === 1 ? "" : "s"}
-                          <span className="mx-1.5 text-border">·</span>
-                          synced {formatSkillDate(source.lastSyncedAt)}
-                        </p>
-                        {source.lastError ? (
-                          <p className="mt-1 pl-5 text-destructive text-xs">
-                            {source.lastError}
-                          </p>
-                        ) : null}
-                      </button>
-                      {orgManaged ? (
-                        <Switch
-                          aria-busy={pendingToggles.has(source.id)}
-                          aria-label={`${source.userEnabled === false ? "Enable" : "Disable"} ${source.label}`}
-                          checked={source.userEnabled !== false}
-                          className={cn(
-                            "shrink-0",
-                            pendingToggles.has(source.id) && "opacity-60",
-                          )}
-                          onCheckedChange={(checked) => {
-                            void handleConnectedPackToggle(source.id, checked);
+              <PanelList>
+                {connectedSources.map((source) => {
+                  const skillsForSource = connectedSkills.filter(
+                    (skill) => skill.sourceId === source.id,
+                  );
+                  // source.skillCount is restated from disk by the API, so an
+                  // empty list here means empty, not unloaded.
+                  const skillCount = skillsForSource.length;
+                  const expanded = expandedConnectedIds.has(source.id);
+                  return (
+                    <div className={cn(PANEL_ROW)} key={source.id}>
+                      <div className="flex items-start gap-1 px-2 py-2">
+                        <button
+                          aria-expanded={expanded}
+                          className="min-w-0 flex-1 rounded-md px-1 py-0.5 text-left hover:bg-muted/40"
+                          onClick={() => {
+                            setExpandedConnectedIds((current) => {
+                              const next = new Set(current);
+                              if (next.has(source.id)) {
+                                next.delete(source.id);
+                              } else {
+                                next.add(source.id);
+                              }
+                              return next;
+                            });
                           }}
-                        />
-                      ) : null}
-                      {!orgManaged ? (
-                        <div className="flex shrink-0 gap-1 pt-0.5">
-                          <Button
-                            aria-label={`Refresh ${source.label}`}
-                            className="size-7"
-                            disabled={
-                              refreshingSourceId === source.id ||
-                              disconnectingSourceId === source.id
-                            }
-                            onClick={() => void handleRefreshSource(source.id)}
-                            size="icon"
-                            type="button"
-                            variant="ghost"
-                          >
-                            {refreshingSourceId === source.id ? (
-                              <Loader2 className="size-3.5 animate-spin" />
-                            ) : (
-                              <RefreshCw className="size-3.5" />
+                          type="button"
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <ChevronDown
+                              className={cn(
+                                "size-3.5 shrink-0 text-muted-foreground transition-transform",
+                                expanded && "rotate-180",
+                              )}
+                            />
+                            <p className="truncate font-medium text-sm">
+                              {source.label}
+                            </p>
+                          </div>
+                          <p className="mt-0.5 pl-5 text-muted-foreground text-[11px]">
+                            {skillCount} skill{skillCount === 1 ? "" : "s"}
+                            <span className="mx-1.5 text-border">·</span>
+                            synced {formatSkillDate(source.lastSyncedAt)}
+                          </p>
+                          {source.lastError ? (
+                            <p className="mt-1 pl-5 text-destructive text-xs">
+                              {source.lastError}
+                            </p>
+                          ) : null}
+                        </button>
+                        {orgManaged ? (
+                          <Switch
+                            aria-busy={pendingToggles.has(source.id)}
+                            aria-label={`${source.userEnabled === false ? "Enable" : "Disable"} ${source.label}`}
+                            checked={source.userEnabled !== false}
+                            className={cn(
+                              "shrink-0",
+                              pendingToggles.has(source.id) && "opacity-60",
                             )}
-                          </Button>
-                          <Button
-                            aria-label={`Disconnect ${source.label}`}
-                            className="size-7 text-muted-foreground hover:text-red-500 dark:hover:text-red-400"
-                            disabled={
-                              refreshingSourceId === source.id ||
-                              disconnectingSourceId === source.id
-                            }
-                            onClick={() => {
-                              setPendingDestructive({
-                                confirmLabel: "Disconnect",
-                                description:
-                                  "This disconnects the pack. Skills from this source will no longer be available.",
-                                onConfirm: () =>
-                                  handleDisconnectSource(source.id),
-                                title: `Disconnect ${source.label}?`,
-                              });
+                            onCheckedChange={(checked) => {
+                              void handleConnectedPackToggle(
+                                source.id,
+                                checked,
+                              );
                             }}
-                            size="icon"
-                            type="button"
-                            variant="ghost"
-                          >
-                            {disconnectingSourceId === source.id ? (
-                              <Loader2 className="size-3.5 animate-spin" />
-                            ) : (
-                              <Unplug className="size-3.5" />
-                            )}
-                          </Button>
+                          />
+                        ) : null}
+                        {!orgManaged ? (
+                          <div className="flex shrink-0 gap-1 pt-0.5">
+                            <Button
+                              aria-label={`Refresh ${source.label}`}
+                              className="size-7"
+                              disabled={
+                                refreshingSourceId === source.id ||
+                                disconnectingSourceId === source.id
+                              }
+                              onClick={() =>
+                                void handleRefreshSource(source.id)
+                              }
+                              size="icon"
+                              type="button"
+                              variant="ghost"
+                            >
+                              {refreshingSourceId === source.id ? (
+                                <Loader2 className="size-3.5 animate-spin" />
+                              ) : (
+                                <RefreshCw className="size-3.5" />
+                              )}
+                            </Button>
+                            <Button
+                              aria-label={`Disconnect ${source.label}`}
+                              className="size-7 text-muted-foreground hover:text-red-500 dark:hover:text-red-400"
+                              disabled={
+                                refreshingSourceId === source.id ||
+                                disconnectingSourceId === source.id
+                              }
+                              onClick={() => {
+                                setPendingDestructive({
+                                  confirmLabel: "Disconnect",
+                                  description:
+                                    "This disconnects the pack. Skills from this source will no longer be available.",
+                                  onConfirm: () =>
+                                    handleDisconnectSource(source.id),
+                                  title: `Disconnect ${source.label}?`,
+                                });
+                              }}
+                              size="icon"
+                              type="button"
+                              variant="ghost"
+                            >
+                              {disconnectingSourceId === source.id ? (
+                                <Loader2 className="size-3.5 animate-spin" />
+                              ) : (
+                                <Unplug className="size-3.5" />
+                              )}
+                            </Button>
+                          </div>
+                        ) : null}
+                      </div>
+                      {expanded ? (
+                        <div className="border-border/60 border-t px-3">
+                          {source.userEnabled === false ? (
+                            <p className="py-3 text-muted-foreground text-xs">
+                              This pack is off for your chats. Turn it on above
+                              to use these skills.
+                            </p>
+                          ) : (
+                            <>
+                              {skillsForSource.map((skill) => (
+                                <SkillRow
+                                  author={source.label}
+                                  carriedBy={personasCarrying(
+                                    skill.id,
+                                    personaSkillIds,
+                                    data?.personas ?? [],
+                                  )}
+                                  description={
+                                    skill.slug
+                                      ? `/${skill.slug} — ${skill.description}`
+                                      : skill.description
+                                  }
+                                  key={skill.id}
+                                  mode={resolveSkillMode({
+                                    skillId: skill.id,
+                                    kind: "connected",
+                                    skillModes,
+                                    enabledSkillIds,
+                                  })}
+                                  name={skill.name}
+                                  onModeChange={(mode) =>
+                                    void handleSkillModeChange(
+                                      skill.id,
+                                      "connected",
+                                      mode,
+                                    )
+                                  }
+                                  pending={pendingToggles.has(skill.id)}
+                                  preview={{
+                                    kind: "remote",
+                                    skillId: skill.id,
+                                  }}
+                                  updatedAt={skill.updatedAt}
+                                />
+                              ))}
+                              {skillsForSource.length === 0 ? (
+                                <p className="py-3 text-muted-foreground text-xs">
+                                  {orgManaged
+                                    ? source.lastError
+                                      ? `Skills could not be loaded: ${source.lastError}`
+                                      : "No skills are cached for this pack yet. Ask your administrator to refresh it in Admin → Skills."
+                                    : "No SKILL.md files cached. Try Refresh."}
+                                </p>
+                              ) : null}
+                            </>
+                          )}
                         </div>
                       ) : null}
                     </div>
-                    {expanded ? (
-                      <div className="border-border/60 border-t px-3">
-                        {source.userEnabled === false ? (
-                          <p className="py-3 text-muted-foreground text-xs">
-                            This pack is off for your chats. Turn it on above to
-                            use these skills.
-                          </p>
-                        ) : (
-                          <>
-                            {skillsForSource.map((skill) => (
-                              <SkillRow
-                                author={source.label}
-                                carriedBy={personasCarrying(
-                                  skill.id,
-                                  personaSkillIds,
-                                  data?.personas ?? [],
-                                )}
-                                description={
-                                  skill.slug
-                                    ? `/${skill.slug} — ${skill.description}`
-                                    : skill.description
-                                }
-                                key={skill.id}
-                                mode={resolveSkillMode({
-                                  skillId: skill.id,
-                                  kind: "connected",
-                                  skillModes,
-                                  enabledSkillIds,
-                                })}
-                                name={skill.name}
-                                onModeChange={(mode) =>
-                                  void handleSkillModeChange(
-                                    skill.id,
-                                    "connected",
-                                    mode,
-                                  )
-                                }
-                                pending={pendingToggles.has(skill.id)}
-                                preview={{
-                                  kind: "remote",
-                                  skillId: skill.id,
-                                }}
-                                updatedAt={skill.updatedAt}
-                              />
-                            ))}
-                            {skillsForSource.length === 0 ? (
-                              <p className="py-3 text-muted-foreground text-xs">
-                                {orgManaged
-                                  ? source.lastError
-                                    ? `Skills could not be loaded: ${source.lastError}`
-                                    : "No skills are cached for this pack yet. Ask your administrator to refresh it in Admin → Skills."
-                                  : "No SKILL.md files cached. Try Refresh."}
-                              </p>
-                            ) : null}
-                          </>
-                        )}
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })
+                  );
+                })}
+              </PanelList>
             )}
           </div>
         )}
-      </div>
+      </PanelBody>
 
       {!embeddedMode && portal ? (
         <DialogFooter
           className={cn(
-            "flex-row items-center justify-between gap-2 border-t border-border/60 px-4 py-3 sm:justify-between sm:px-5",
+            "flex-row items-center justify-between gap-2 px-4 py-3 sm:justify-between sm:px-5",
           )}
         >
           {activeSection === "custom" ? (

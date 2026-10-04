@@ -34,10 +34,10 @@ import {
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { Input } from "@/components/ui/input";
+import { SearchInput } from "@/components/ui/search-input";
 import {
   SidebarGroup,
   SidebarGroupContent,
-  SidebarInput,
   SidebarMenu,
   useSidebar,
 } from "@/components/ui/sidebar";
@@ -438,7 +438,7 @@ export function SidebarHistory({
   const pathname = usePathname();
   // The chat page rewrites the URL with history.replaceState, which leaves the
   // route params on the id they had. Read the address as well, or a chat you
-  // just started is neither highlighted nor recognised as the one you are on.
+  // just started is neither highlighted nor recognized as the one you are on.
   const id = useMemo(() => {
     const fromParams = typeof params.id === "string" ? params.id : undefined;
     if (fromParams) {
@@ -964,22 +964,19 @@ export function SidebarHistory({
 
   return (
     <>
-      <SidebarGroup>
+      <SidebarGroup className={variant === "panel" ? "p-0" : undefined}>
         <SidebarGroupContent>
           {variant === "panel" ? (
-            <div className="sticky top-0 z-10 bg-background pb-2">
-              <div className="relative min-w-0 flex-1">
-                <Search className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                <SidebarInput
-                  aria-label="Search chats and personas"
-                  className="h-8 border-border/50 bg-muted/40 pl-7 text-sm shadow-none focus-visible:border-border focus-visible:ring-0 md:h-8 md:px-2.5 md:pl-7"
-                  data-testid="sidebar-history-search"
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search chats and personas"
-                  ref={searchRef}
-                  value={query}
-                />
-              </div>
+            <div className="sticky top-0 z-10 bg-background pb-3">
+              <SearchInput
+                aria-label="Search chats and personas"
+                className="h-8 text-sm"
+                data-testid="sidebar-history-search"
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search chats and personas"
+                ref={searchRef}
+                value={query}
+              />
             </div>
           ) : null}
 

@@ -66,6 +66,11 @@ import {
 } from "@/lib/ai/skills/catalog";
 import { createGetCurrentConfigTool } from "@/lib/ai/tools/get-current-config";
 import {
+  createForgetTool,
+  createRecallTool,
+  createRememberTool,
+} from "@/lib/ai/tools/memory";
+import {
   createProposeCustomPersonaTool,
   createUpdatePersonaInterviewTool,
 } from "@/lib/ai/tools/persona-interview";
@@ -88,6 +93,8 @@ import {
   updateChatMaxIterationsReached,
 } from "@/lib/db/queries";
 import type { DBMessage } from "@/lib/db/schema";
+import { renderMemoryPrompt } from "@/lib/documents/memory";
+import { recallMemories } from "@/lib/documents/memory-actions";
 import { ChatSDKError } from "@/lib/errors";
 import { normalizeNetSuiteAccountId } from "@/lib/netsuite/accounts";
 import { loadNetSuiteMCPTools } from "@/lib/netsuite/mcp";
@@ -446,10 +453,14 @@ export async function POST(request: Request) {
           let userMaxIterations = 10; // Default to 10
           let enabledSearchResources: SearchResourceEntry[] = [];
           let skillsPromptSection = "";
+          let memoryPromptSection = "";
+          let memoryEnabled = false;
           let enabledSkillNames: string[] = [
             "AI Connector Instructions (always on)",
           ];
           let turnSkillChips: Array<{ id: string; name: string }> = [];
+          let turnMemories: Array<{ path: string; accountId: string | null }> =
+            [];
           let customBaseUrl: string | undefined;
           let customSpeedModelId: string | undefined;
           let customReasoningModelId: string | undefined;
@@ -772,6 +783,29 @@ export async function POST(request: Request) {
           const netsuiteToolNames = isBuilderSession
             ? []
             : netsuiteActiveToolKeys;
+          // Memories are read after the account is resolved: a fact learned in
+          // sandbox must not reach a turn working production.
+          if (!isBuilderSession && sessionSettings?.memoryEnabled !== false) {
+            try {
+              const entries = await recallMemories({
+                userId: session.user.id,
+                netsuiteAccountId,
+              });
+              memoryEnabled = true;
+              const rendered = renderMemoryPrompt(entries, new Date());
+              memoryPromptSection = rendered ? `\n\n${rendered}` : "";
+              // What the turn was given, so the answer can be read back
+              // against the accounts those facts came from.
+              turnMemories = entries.map((entry) => ({
+                path: entry.path,
+                accountId: entry.netsuiteAccountId,
+              }));
+            } catch (error) {
+              // A memory that cannot be read is not a reason to lose the turn.
+              console.error("[Memory] Failed to read memories:", error);
+            }
+          }
+
           const baseToolNames = isBuilderSession
             ? [
                 "updatePersonaInterview",
@@ -787,6 +821,7 @@ export async function POST(request: Request) {
                 // is how a skill's own instructions came to name a tool the
                 // model then reported it did not have.
                 "readSkillFile",
+                ...(memoryEnabled ? ["remember", "recall", "forget"] : []),
               ];
           console.log(
             `[NetSuite] Active NetSuite tools (${netsuiteToolNames.length}):`,
@@ -819,7 +854,7 @@ export async function POST(request: Request) {
             ? buildPersonaBuilderPrompt({
                 refiningPersona: refiningPersona ?? null,
               })
-            : `${promptParts?.text ?? ""}${skillsPromptSection}`;
+            : `${promptParts?.text ?? ""}${skillsPromptSection}${memoryPromptSection}`;
           if (isBuilderSession) {
             contextBreakdownParts = {
               system: "",
@@ -856,6 +891,13 @@ export async function POST(request: Request) {
             });
           }
 
+          if (turnMemories.length > 0) {
+            dataStream.write({
+              type: "data-turnMemories",
+              data: turnMemories,
+            });
+          }
+
           // Both providers use the same model keys (chat-model, chat-model-reasoning, title-model)
           const modelId = selectedChatModel;
 
@@ -867,6 +909,18 @@ export async function POST(request: Request) {
             readSkillFile: createReadSkillFileTool({
               userId: session.user.id,
               orgId: session.user.orgId ?? null,
+            }),
+            remember: createRememberTool({
+              userId: session.user.id,
+              netsuiteAccountId,
+            }),
+            recall: createRecallTool({
+              userId: session.user.id,
+              netsuiteAccountId,
+            }),
+            forget: createForgetTool({
+              userId: session.user.id,
+              netsuiteAccountId,
             }),
             getCurrentConfig: createGetCurrentConfigTool({
               selectedModelId: selectedChatModel,

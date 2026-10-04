@@ -1,6 +1,12 @@
 "use client";
 
-import { CheckIcon, CopyIcon, DownloadIcon, XIcon } from "lucide-react";
+import {
+  CheckIcon,
+  CopyIcon,
+  DownloadIcon,
+  SaveIcon,
+  XIcon,
+} from "lucide-react";
 import {
   type CSSProperties,
   useCallback,
@@ -10,6 +16,8 @@ import {
 } from "react";
 import { CodeBlock } from "@/components/message-elements/code-block";
 import { Button } from "@/components/ui/button";
+import { useSaveArtifact } from "@/hooks/use-save-artifact";
+import { describeFence } from "@/lib/documents/fence-name";
 import { cn } from "@/lib/utils";
 import { useCanvas } from "./context";
 
@@ -51,6 +59,7 @@ export function CanvasPanel() {
   const { content, closeCanvas } = useCanvas();
   const [width, setWidth] = useState(DEFAULT_WIDTH);
   const [copied, setCopied] = useState(false);
+  const { save, saved, saving } = useSaveArtifact();
   const draggingRef = useRef(false);
 
   useEffect(() => setWidth(readStoredWidth()), []);
@@ -134,6 +143,7 @@ export function CanvasPanel() {
   }
 
   const CopyGlyph = copied ? CheckIcon : CopyIcon;
+  const SaveGlyph = saved ? CheckIcon : SaveIcon;
 
   return (
     <div
@@ -191,6 +201,21 @@ export function CanvasPanel() {
         <Button onClick={onCopy} size="sm" variant="ghost" title="Copy">
           <CopyGlyph className="size-4" />
           <span className="sr-only">Copy</span>
+        </Button>
+        <Button
+          disabled={saving}
+          onClick={() =>
+            void save({
+              content: content.code,
+              ...describeFence(content.code, content.language),
+            })
+          }
+          size="sm"
+          title={saved ? "Saved to Artifacts" : "Save to Artifacts"}
+          variant="ghost"
+        >
+          <SaveGlyph className="size-4" />
+          <span className="sr-only">Save to Artifacts</span>
         </Button>
         <Button onClick={onDownload} size="sm" variant="ghost" title="Download">
           <DownloadIcon className="size-4" />

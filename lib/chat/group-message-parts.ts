@@ -8,6 +8,9 @@ export function isAssistantToolPartType(type: string): boolean {
     type === "tool-getCurrentConfig" ||
     type === "tool-proposeCustomPersona" ||
     type === "tool-updatePersonaInterview" ||
+    type === "tool-remember" ||
+    type === "tool-recall" ||
+    type === "tool-forget" ||
     type.startsWith("tool-searchWeb_") ||
     type.startsWith("tool-ns_")
   );

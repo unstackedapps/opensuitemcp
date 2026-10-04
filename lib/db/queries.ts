@@ -1079,6 +1079,7 @@ export async function upsertUserSettings({
   hidePersonaPicker,
   customPersonas,
   personaSkillIds,
+  memoryEnabled,
 }: {
   userId: string;
   googleApiKey?: string | null;
@@ -1096,6 +1097,7 @@ export async function upsertUserSettings({
       }[]
     | null;
   timezone?: string | null;
+  memoryEnabled?: boolean;
   searchDomainIds?: string[] | null;
   searchResources?: SearchResourceEntry[] | null;
   maxIterations?: string | null;
@@ -1154,6 +1156,10 @@ export async function upsertUserSettings({
               ? (netsuiteAccounts ?? [])
               : (existing.netsuiteAccounts ?? []),
           timezone: timezone !== undefined ? timezone : existing.timezone,
+          memoryEnabled:
+            memoryEnabled !== undefined
+              ? memoryEnabled
+              : existing.memoryEnabled,
           searchDomainIds:
             searchDomainIds !== undefined
               ? (searchDomainIds ?? [])

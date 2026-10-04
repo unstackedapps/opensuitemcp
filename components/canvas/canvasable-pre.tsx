@@ -1,10 +1,12 @@
 "use client";
 
-import { Columns2Icon } from "lucide-react";
+import { CheckIcon, Columns2Icon, SaveIcon } from "lucide-react";
 import type { ComponentProps, ReactElement } from "react";
 import { isValidElement, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
+import { useSaveArtifact } from "@/hooks/use-save-artifact";
+import { describeFence } from "@/lib/documents/fence-name";
 import { useCanvas } from "./context";
 
 /**
@@ -102,6 +104,7 @@ function extractText(node: unknown): string {
  */
 export function CanvasablePre({ children, ...props }: ComponentProps<"pre">) {
   const { openCanvas, isOpenFor, available } = useCanvas();
+  const { save, saved, saving } = useSaveArtifact();
   // One id per rendered fence. Identity by message and position needed both to
   // be threaded down, and reasoning renders through here without either — so
   // two fences of equal length inside one turn answered to the same id, and
@@ -112,8 +115,11 @@ export function CanvasablePre({ children, ...props }: ComponentProps<"pre">) {
 
   const fence = readFence(children);
   const lines = fence ? fence.code.split("\n").length : 0;
-  const worthCanvas =
-    available && fence !== null && lines >= CANVAS_WORTH_LINES;
+  // Long enough to be worth keeping. The same threshold canvas uses, so one
+  // toolbar appears rather than two at different lengths.
+  const worthToolbar = fence !== null && lines >= CANVAS_WORTH_LINES;
+  // Canvas needs a second column to split into; Save does not.
+  const worthCanvas = available && worthToolbar;
 
   // The markdown renderer gives a fence its own header, with the language on
   // one side and its copy control on the other. Canvas belongs in that row
@@ -121,16 +127,16 @@ export function CanvasablePre({ children, ...props }: ComponentProps<"pre">) {
   // put it, covering the very buttons it sat next to.
   // biome-ignore lint/correctness/useExhaustiveDependencies: `children` is not read here — it is the signal that the renderer rebuilt the fence, which is when the toolbar node must be found again.
   useEffect(() => {
-    if (!worthCanvas) {
+    if (!worthToolbar) {
       setToolbar(null);
       return;
     }
     const header = preRef.current?.querySelector(":scope > div > div");
     const group = header?.querySelector(":scope > div");
     setToolbar(group instanceof HTMLElement ? group : null);
-  }, [worthCanvas, children]);
+  }, [worthToolbar, children]);
 
-  if (!(worthCanvas && fence)) {
+  if (!(worthToolbar && fence)) {
     return (
       <pre {...props} ref={preRef}>
         {children}
@@ -142,7 +148,9 @@ export function CanvasablePre({ children, ...props }: ComponentProps<"pre">) {
     fence.language === "text" ? "Code" : `${fence.language} · ${lines} lines`;
   const open = isOpenFor(id);
 
-  const button = (
+  const SaveGlyph = saved ? CheckIcon : SaveIcon;
+
+  const canvasButton = (
     <Button
       // A split pane needs a second column to split into. A phone has one, so
       // canvas is a desktop affordance and says nothing at all below md.
@@ -162,12 +170,35 @@ export function CanvasablePre({ children, ...props }: ComponentProps<"pre">) {
     </Button>
   );
 
+  const buttons = (
+    <>
+      <Button
+        className="size-[22px] text-muted-foreground hover:text-foreground"
+        disabled={saving}
+        onClick={() =>
+          void save({
+            content: fence.code,
+            ...describeFence(fence.code, fence.language),
+          })
+        }
+        size="icon"
+        title={saved ? "Saved to Artifacts" : "Save to Artifacts"}
+        type="button"
+        variant="ghost"
+      >
+        <SaveGlyph className="size-3.5" />
+        <span className="sr-only">Save to Artifacts</span>
+      </Button>
+      {worthCanvas ? canvasButton : null}
+    </>
+  );
+
   return (
     <>
       <pre {...props} ref={preRef}>
         {children}
       </pre>
-      {toolbar ? createPortal(button, toolbar) : null}
+      {toolbar ? createPortal(buttons, toolbar) : null}
     </>
   );
 }

@@ -181,7 +181,7 @@ async function exchangeRefreshToken(params: {
   });
   if (!rotated.ok) {
     // `invalid_grant` specifically, never `invalid_request`: a client keys its
-    // "start a new sign-in" behaviour on this exact code.
+    // "start a new sign-in" behavior on this exact code.
     return fail("invalid_grant", rotated.description, 400);
   }
 

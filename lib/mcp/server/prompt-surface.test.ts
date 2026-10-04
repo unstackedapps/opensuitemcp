@@ -2,32 +2,34 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { NetSuitePrompt } from "@/lib/netsuite/prompt-library";
 import {
-  BUILTIN_MCP_PROMPTS,
-  builtinPromptMessages,
+  BUILTIN_BRIEFINGS,
+  briefingMessages,
   NETSUITE_PROMPT_PREFIX,
   netsuitePromptArguments,
   netsuitePromptName,
   netsuitePromptNames,
   netsuitePromptToMcp,
   netsuitePromptValues,
+  publishedPromptNames,
+  resolvePromptMessages,
 } from "./prompt-surface";
 
 describe("the prompts this server publishes", () => {
   it("names every built-in uniquely", () => {
-    const names = BUILTIN_MCP_PROMPTS.map((prompt) => prompt.name);
+    const names = BUILTIN_BRIEFINGS.map((prompt) => prompt.name);
     assert.equal(new Set(names).size, names.length);
   });
 
   it("gives every built-in a title and a description", () => {
-    for (const prompt of BUILTIN_MCP_PROMPTS) {
+    for (const prompt of BUILTIN_BRIEFINGS) {
       assert.ok(prompt.title.length > 0, prompt.name);
       assert.ok(prompt.description.length > 0, prompt.name);
     }
   });
 
   it("builds a message for every built-in it lists", () => {
-    for (const prompt of BUILTIN_MCP_PROMPTS) {
-      const messages = builtinPromptMessages(prompt.name, {});
+    for (const prompt of BUILTIN_BRIEFINGS) {
+      const messages = briefingMessages(prompt.name, {});
       assert.ok(messages, prompt.name);
       assert.equal(messages.length, 1);
       assert.equal(messages[0].role, "user");
@@ -36,11 +38,11 @@ describe("the prompts this server publishes", () => {
   });
 
   it("returns null for a name it does not publish", () => {
-    assert.equal(builtinPromptMessages("osmcp_nope", {}), null);
+    assert.equal(briefingMessages("osmcp_nope", {}), null);
   });
 
   it("carries a supplied argument into the message", () => {
-    const messages = builtinPromptMessages("osmcp_start_task", {
+    const messages = briefingMessages("osmcp_start_task", {
       task: "Reconcile intercompany balances for Q3.",
     });
     assert.ok(messages);
@@ -48,13 +50,13 @@ describe("the prompts this server publishes", () => {
   });
 
   it("asks for the argument when it is missing", () => {
-    const messages = builtinPromptMessages("osmcp_start_task", {});
+    const messages = briefingMessages("osmcp_start_task", {});
     assert.ok(messages);
     assert.match(messages[0].content.text, /Ask me what the task is/);
   });
 
   it("tells the model to open a thread, which is what it forgets", () => {
-    const messages = builtinPromptMessages("osmcp_start_task", { task: "x" });
+    const messages = briefingMessages("osmcp_start_task", { task: "x" });
     assert.ok(messages);
     assert.match(messages[0].content.text, /osmcp_create_chat/);
     assert.match(messages[0].content.text, /osmcp_append_chat/);
@@ -79,7 +81,7 @@ describe("a NetSuite Companion prompt becomes an MCP prompt", () => {
   });
 
   it("never collides with the built-in namespace", () => {
-    const builtins = new Set(BUILTIN_MCP_PROMPTS.map((entry) => entry.name));
+    const builtins = new Set(BUILTIN_BRIEFINGS.map((entry) => entry.name));
     assert.ok(!builtins.has(netsuitePromptName(prompt)));
   });
 
@@ -229,7 +231,7 @@ describe("naming a whole library", () => {
   });
 
   it("never takes a name a built-in already has", () => {
-    const taken = new Set(BUILTIN_MCP_PROMPTS.map((p) => p.name));
+    const taken = new Set(BUILTIN_BRIEFINGS.map((p) => p.name));
     const names = netsuitePromptNames(
       [entry("1", "Start a NetSuite task")],
       taken,
@@ -245,5 +247,78 @@ describe("naming a whole library", () => {
       [...netsuitePromptNames(prompts, new Set()).entries()],
       [...netsuitePromptNames(prompts, new Set()).entries()],
     );
+  });
+});
+
+describe("one prompt, over either transport", () => {
+  const library: NetSuitePrompt[] = [
+    {
+      id: "42",
+      name: "Current Period Financial Overview",
+      prompt: "Summarise [period] for [subsidiary].",
+      category: "Finance",
+      roles: ["Controller"],
+      industries: [],
+    } as NetSuitePrompt,
+  ];
+
+  it("resolves a built-in without touching the library", () => {
+    const resolved = resolvePromptMessages(
+      "osmcp_start_task",
+      { task: "Reconcile August" },
+      [],
+    );
+    assert.ok(resolved);
+    assert.equal(resolved.messages.length, 1);
+    assert.match(resolved.messages[0].content.text, /osmcp_whoami/);
+    assert.match(resolved.messages[0].content.text, /Reconcile August/);
+  });
+
+  it("asks for the task when a built-in is given no argument", () => {
+    const resolved = resolvePromptMessages("osmcp_start_task", undefined, []);
+    assert.ok(resolved);
+    assert.match(resolved.messages[0].content.text, /Ask me what the task is/);
+  });
+
+  it("resolves an account prompt by its published name", () => {
+    const name = netsuitePromptName(library[0]);
+    const resolved = resolvePromptMessages(
+      name,
+      { period: "Q3 2026", subsidiary: "Seven" },
+      library,
+    );
+    assert.ok(resolved);
+    assert.match(resolved.messages[0].content.text, /Q3 2026/);
+    assert.match(resolved.messages[0].content.text, /Seven/);
+  });
+
+  it("names the blanks still open rather than leaving brackets unexplained", () => {
+    const name = netsuitePromptName(library[0]);
+    const resolved = resolvePromptMessages(
+      name,
+      { period: "Q3 2026" },
+      library,
+    );
+    assert.ok(resolved);
+    assert.match(
+      resolved.messages[0].content.text,
+      /Still to fill: Subsidiary/,
+    );
+  });
+
+  it("returns nothing for a name this server does not publish", () => {
+    assert.equal(resolvePromptMessages("nope", undefined, library), null);
+    assert.equal(
+      resolvePromptMessages("netsuite_not_a_prompt", undefined, library),
+      null,
+    );
+  });
+
+  it("lists every published name, built-ins first", () => {
+    const names = publishedPromptNames(library);
+    for (const builtin of BUILTIN_BRIEFINGS) {
+      assert.ok(names.includes(builtin.name), `${builtin.name} is missing`);
+    }
+    assert.ok(names.includes(netsuitePromptName(library[0])));
   });
 });

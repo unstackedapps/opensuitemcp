@@ -22,7 +22,7 @@ const createSchema = z.object({
   personaId: z.string().trim().max(128).optional().nullable(),
   description: z.string().trim().max(256).optional().nullable(),
   // Required at creation and set once after, so an app always says which
-  // product it is for. Existing apps predate it and are labelled by PATCH.
+  // product it is for. Existing apps predate it and are labeled by PATCH.
   connectsFrom: z.string().trim().min(1).max(64),
   /** For a connector that demands an ID and secret rather than registering. */
   issueClientCredentials: z.boolean().optional(),

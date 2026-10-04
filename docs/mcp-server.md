@@ -256,7 +256,7 @@ skills without removing them.
 | --- | --- |
 | Naming | Every NetSuite MCP Standard Tool the user may run, under its own name |
 | Input schema | NetSuite's, forwarded verbatim — enums, formats and nested shapes intact |
-| `readOnlyHint` / `destructiveHint` | Derived from the tool name, because NetSuite does not declare whether a tool mutates. Conservative: an unrecognised name is announced as a write |
+| `readOnlyHint` / `destructiveHint` | Derived from the tool name, because NetSuite does not declare whether a tool mutates. Conservative: an unrecognized name is announced as a write |
 | Effect of the hints | Advisory. A client uses them to decide whether to confirm. Nothing is hidden on that basis — enabling a tool happens in the app |
 
 ### Skill bundles

@@ -1,12 +1,14 @@
 "use client";
 
-import { MessageSquare, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { User } from "next-auth";
 import { useState } from "react";
 import { useSWRConfig } from "swr";
 import { unstable_serialize } from "swr/infinite";
+import { ArtifactsPanel } from "@/components/artifacts-panel";
 import { McpAccessPanel } from "@/components/mcp-access-settings";
+import { MemoryPanel } from "@/components/memory-panel";
 import { PersonasPanel } from "@/components/personas-panel";
 import {
   PORTAL_NAV,
@@ -30,6 +32,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { PanelBody, PanelHeader } from "@/components/ui/panel-header";
 import { cn } from "@/lib/utils";
 import { toast } from "./toast";
 import {
@@ -47,14 +50,14 @@ const SETTINGS_SECTIONS = new Set<PortalSectionId>([
   "provider",
   "netsuite",
   "search",
-  "timezone",
+  "general",
   "account",
 ]);
 
 const NAV_GROUPS = [
   "Workspace",
-  "Customize",
-  "Settings",
+  "Assistant",
+  "Connections",
   "Preferences",
 ] as const;
 
@@ -109,7 +112,7 @@ export function AppPortal({ user }: { user: User | undefined }) {
         open={open}
       >
         <DialogContent
-          className="flex h-[min(82vh,42rem)] w-[calc(100vw-1.5rem)] max-w-[calc(100vw-1.5rem)] flex-col gap-0 overflow-hidden p-0 md:h-[min(90vh,56rem)] md:w-[min(72rem,calc(100vw-2rem))] md:max-w-6xl"
+          className="flex h-[min(88vh,46rem)] w-[calc(100vw-1.5rem)] max-w-[calc(100vw-1.5rem)] flex-col gap-0 overflow-hidden p-0 md:h-[min(94vh,64rem)] md:w-[min(88rem,calc(100vw-3rem))] md:max-w-352"
           data-testid="app-portal"
           onInteractOutside={(event) => {
             event.preventDefault();
@@ -154,6 +157,7 @@ export function AppPortal({ user }: { user: User | undefined }) {
                         onClick={() => setSection(item.id)}
                         type="button"
                       >
+                        <item.icon className="mr-2 size-4 shrink-0" />
                         {item.label}
                       </button>
                     ))}
@@ -163,11 +167,11 @@ export function AppPortal({ user }: { user: User | undefined }) {
             </nav>
 
             <div className="flex min-h-0 min-w-0 flex-1 flex-col max-sm:[&_.text-sm]:text-xs! max-sm:[&_.text-xs]:text-[11px]!">
-              <div className="flex gap-1.5 overflow-x-auto border-border/60 border-b px-3 py-2 sm:hidden">
+              <div className="flex gap-1.5 overflow-x-auto px-3 py-2 sm:hidden">
                 {visibleNav.map((item) => (
                   <button
                     className={cn(
-                      "shrink-0 rounded-md px-2.5 py-1.5 text-xs transition-colors",
+                      "flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs transition-colors",
                       section === item.id
                         ? "bg-accent font-medium text-accent-foreground"
                         : "text-muted-foreground hover:bg-accent/50",
@@ -176,6 +180,7 @@ export function AppPortal({ user }: { user: User | undefined }) {
                     onClick={() => setSection(item.id)}
                     type="button"
                   >
+                    <item.icon className="size-3.5 shrink-0" />
                     {item.label}
                   </button>
                 ))}
@@ -183,37 +188,40 @@ export function AppPortal({ user }: { user: User | undefined }) {
 
               {section === "chats" ? (
                 <div className="flex min-h-0 flex-1 flex-col">
-                  <div className="flex shrink-0 items-start justify-between gap-3 border-border/60 border-b px-4 py-3 sm:px-5">
-                    <div className="min-w-0 space-y-1">
-                      <p className="flex items-center gap-1.5 font-medium text-sm">
-                        <MessageSquare className="size-3.5 text-muted-foreground" />
-                        Chats
-                      </p>
-                      <p className="text-muted-foreground text-xs leading-relaxed">
-                        Open a conversation or clear history.
-                      </p>
-                    </div>
-                    {user ? (
-                      <button
-                        className="inline-flex shrink-0 items-center gap-1 text-muted-foreground text-xs underline-offset-4 hover:text-foreground hover:underline"
-                        onClick={() => setShowDeleteAllDialog(true)}
-                        type="button"
-                      >
-                        <Trash2 className="size-3" />
-                        <span className="sr-only sm:not-sr-only">
-                          Delete all
-                        </span>
-                      </button>
-                    ) : null}
-                  </div>
-                  <div className="min-h-0 flex-1 overflow-y-auto [--color-sidebar:var(--background)] [--color-sidebar-accent:var(--accent)] [--color-sidebar-accent-foreground:var(--accent-foreground)] [--sidebar-accent:var(--accent)] [--sidebar-accent-foreground:var(--accent-foreground)] [--sidebar-background:var(--background)]">
+                  <PanelHeader
+                    actions={
+                      user ? (
+                        <button
+                          className="inline-flex shrink-0 items-center gap-1 text-muted-foreground text-xs underline-offset-4 hover:text-foreground hover:underline"
+                          onClick={() => setShowDeleteAllDialog(true)}
+                          type="button"
+                        >
+                          <Trash2 className="size-3" />
+                          <span className="sr-only sm:not-sr-only">
+                            Delete all
+                          </span>
+                        </button>
+                      ) : null
+                    }
+                    subtitle="Open a conversation or clear history."
+                    title="Chats"
+                  />
+                  <PanelBody className="[--color-sidebar:var(--background)] [--color-sidebar-accent:var(--accent)] [--color-sidebar-accent-foreground:var(--accent-foreground)] [--sidebar-accent:var(--accent)] [--sidebar-accent-foreground:var(--accent-foreground)] [--sidebar-background:var(--background)]">
                     <SidebarHistory user={user} variant="panel" />
-                  </div>
+                  </PanelBody>
                 </div>
+              ) : null}
+
+              {section === "artifacts" ? (
+                <ArtifactsPanel active={open && section === "artifacts"} />
               ) : null}
 
               {section === "skills" ? (
                 <SkillsPanel active={open && section === "skills"} />
+              ) : null}
+
+              {section === "memory" ? (
+                <MemoryPanel active={open && section === "memory"} />
               ) : null}
 
               {section === "personas" ? (

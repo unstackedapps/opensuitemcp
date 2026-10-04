@@ -4,7 +4,6 @@ import {
   AlertTriangle,
   ArrowUpDown,
   Copy,
-  KeyRound,
   Pencil,
   Plus,
   Trash2,
@@ -30,6 +29,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PanelBody, PanelHeader } from "@/components/ui/panel-header";
+import { PANEL_ROW } from "@/components/ui/panel-list";
 import {
   Select,
   SelectContent,
@@ -37,13 +38,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SettingRow } from "@/components/ui/setting-row";
 import { Switch } from "@/components/ui/switch";
 import { AVA_PERSONA_ID } from "@/lib/ai/personas/ids";
 import { CONNECT_AGENT_DOCS_URL } from "@/lib/constants";
 import { connectsFromLabel } from "@/lib/mcp/connect-clients";
 import type { AgentConnectionKind } from "@/lib/mcp/server/oauth/grants";
 import type { ConnectPreflight } from "@/lib/mcp/server/oauth/preflight";
-import { fetcher } from "@/lib/utils";
+import { cn, fetcher } from "@/lib/utils";
 import { toast } from "./toast";
 
 type McpKeySummary = {
@@ -592,28 +594,37 @@ export function McpAccessPanel({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div className="shrink-0 space-y-1 border-border/60 border-b px-4 py-3 sm:px-5">
-        <p className="flex items-center gap-1.5 font-medium text-sm">
-          <KeyRound className="size-3.5 text-muted-foreground" />
-          Agent apps
-        </p>
-        <p className="text-muted-foreground text-xs leading-relaxed">
-          An agent app acts as you over MCP, reaching what you have enabled in
-          OpenSuiteMCP.
-        </p>
-      </div>
+      <PanelHeader
+        subtitle="An agent app acts as you over MCP, reaching what you have enabled in OpenSuiteMCP."
+        title="Agent apps"
+      />
 
-      <div className="shrink-0 space-y-5 p-4 pb-0 sm:p-5 sm:pb-0">
-        <section className="space-y-2">
-          <Label className="text-xs">Server URL</Label>
-          <div className="flex items-center gap-2">
+      <div className="shrink-0 divide-y divide-border/60 px-4 pt-1 sm:px-5">
+        <SettingRow
+          description={
+            <>
+              This install's public address —{" "}
+              <a
+                className="underline underline-offset-2 hover:text-foreground"
+                href={CONNECT_AGENT_DOCS_URL}
+                rel="noreferrer"
+                target="_blank"
+              >
+                how to connect each AI
+              </a>
+              .
+            </>
+          }
+          title="Server URL"
+        >
+          <div className="mt-1.5 flex items-center gap-2">
             <Input
-              className="font-mono text-xs"
+              className="h-8 font-mono text-xs"
               readOnly
               value={data.serverUrl}
             />
             <Button
-              className="size-8 shrink-0 p-0 md:size-10"
+              className="size-8 shrink-0 p-0"
               onClick={() => copy(data.serverUrl, "Server URL")}
               type="button"
               variant="outline"
@@ -622,22 +633,10 @@ export function McpAccessPanel({
               <span className="sr-only">Copy the server URL</span>
             </Button>
           </div>
-          <p className="text-muted-foreground text-xs">
-            This install's public address —{" "}
-            <a
-              className="underline underline-offset-2 hover:text-foreground"
-              href={CONNECT_AGENT_DOCS_URL}
-              rel="noreferrer"
-              target="_blank"
-            >
-              how to connect each AI
-            </a>
-            .
-          </p>
-        </section>
+        </SettingRow>
 
         {blocked ? (
-          <p className="rounded-md border border-border/60 bg-muted/40 p-3 text-muted-foreground text-xs leading-relaxed">
+          <p className="my-3 rounded-md border border-border/60 bg-muted/40 p-3 text-muted-foreground text-xs leading-relaxed">
             {blockedReason(data)}
           </p>
         ) : null}
@@ -648,7 +647,7 @@ export function McpAccessPanel({
           healthy install does not need telling.
         */}
         {data.connect.preflight.status === "ready" ? null : (
-          <p className="flex gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-amber-700 text-xs leading-relaxed dark:text-amber-400">
+          <p className="my-3 flex gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-amber-700 text-xs leading-relaxed dark:text-amber-400">
             <AlertTriangle aria-hidden className="mt-0.5 size-3.5 shrink-0" />
             <span>
               <span className="font-medium">
@@ -659,27 +658,24 @@ export function McpAccessPanel({
           </p>
         )}
 
-        <section className="space-y-2">
+        <section>
           {/* Matches the AI Provider panel: title and button on one line, the
               description under the title, then the list. */}
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-            <div className="min-w-0 space-y-1">
-              <p className="font-medium text-sm">Apps and credentials</p>
-              <p className="text-muted-foreground text-xs leading-relaxed">
-                Each app holds its own credential, persona and NetSuite account.
-              </p>
-            </div>
-            <Button
-              className="shrink-0"
-              disabled={blocked || atLimit}
-              onClick={() => setCreatingOpen(true)}
-              size="sm"
-              type="button"
-            >
-              <Plus className="size-3.5" />
-              New app
-            </Button>
-          </div>
+          <SettingRow
+            control={
+              <Button
+                disabled={blocked || atLimit}
+                onClick={() => setCreatingOpen(true)}
+                size="sm"
+                type="button"
+              >
+                <Plus className="size-3.5" />
+                New app
+              </Button>
+            }
+            description="Each app holds its own credential, persona and NetSuite account."
+            title="Apps and credentials"
+          />
 
           {/* Furniture, so it does not come and go: a toolbar that appears at
               two rows and vanishes at one reads as a broken layout, and the
@@ -734,7 +730,7 @@ export function McpAccessPanel({
         </section>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pt-2 pb-4 sm:px-5 sm:pb-5">
+      <PanelBody className="pt-2">
         <section className="space-y-2">
           {visibleRows.length === 0 ? (
             <p className="text-muted-foreground text-xs">
@@ -743,10 +739,13 @@ export function McpAccessPanel({
                 : "No agent apps to show."}
             </p>
           ) : (
-            <ul className="space-y-2">
+            <ul className="divide-y divide-border/60">
               {visibleRows.map((row) => (
                 <li
-                  className="flex items-start justify-between gap-3 rounded-md border border-border/60 p-3"
+                  className={cn(
+                    PANEL_ROW,
+                    "flex items-start justify-between gap-3",
+                  )}
                   key={`${row.kind}-${row.id}`}
                 >
                   <div className="min-w-0 space-y-1">
@@ -824,7 +823,7 @@ export function McpAccessPanel({
             </ul>
           )}
         </section>
-      </div>
+      </PanelBody>
 
       <ConfirmDestructiveDialog
         confirmLabel="Delete permanently"
