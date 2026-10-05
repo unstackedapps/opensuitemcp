@@ -23,7 +23,7 @@ shows yours, with a copy button.
 
 ---
 
-## Claude
+## Claude Desktop
 
 ### OAuth 2.1
 
@@ -46,16 +46,23 @@ shows yours, with a copy button.
 
 ⚠️ On Team or Enterprise, only an Owner can add a connector.
 
-## Claude Code
+## Claude Code CLI
 
 ### OAuth 2.1
 
-**Add it with the CLI**
+**Add it to ~/.claude.json**
 
-`Terminal`
+`~/.claude.json`
 
-```bash
-claude mcp add --transport http opensuitemcp https://your-install.example.com/api/mcp
+```json
+{
+  "mcpServers": {
+    "opensuitemcp": {
+      "type": "http",
+      "url": "https://your-install.example.com/api/mcp"
+    }
+  }
+}
 ```
 
 *In OpenSuiteMCP*
@@ -64,26 +71,37 @@ claude mcp add --transport http opensuitemcp https://your-install.example.com/ap
 
 *In Claude Code*
 
-2. Run the command above. The CLI writes the entry and opens the browser.
+2. Add the object above to the file, then restart the CLI.
+3. Run /mcp, pick opensuitemcp, and choose Authenticate. The browser opens.
 
 *In OpenSuiteMCP*
 
-3. Authorize the app on the consent screen.
+4. Authorize the app on the consent screen.
 
 *In Claude Code*
 
-4. Return to the terminal and run /mcp to confirm the server is connected.
+5. Return to the terminal and run /mcp to confirm it connected.
 
-⚠️ Editing ~/.claude.json by hand needs `"type": "http"` on the entry. Without it the CLI skips the server and reports it in /doctor.
+⚠️ The entry needs `"type": "http"`. Without it the CLI skips the server and reports it in /doctor.
 
 ### Bearer auth
 
-**Add it with the CLI and a header**
+**Add it to ~/.claude.json**
 
-`Terminal`
+`~/.claude.json`
 
-```bash
-claude mcp add --transport http opensuitemcp https://your-install.example.com/api/mcp --header "Authorization: Bearer osmcp_…"
+```json
+{
+  "mcpServers": {
+    "opensuitemcp": {
+      "type": "http",
+      "url": "https://your-install.example.com/api/mcp",
+      "headers": {
+        "Authorization": "Bearer osmcp_…"
+      }
+    }
+  }
+}
 ```
 
 *In OpenSuiteMCP*
@@ -92,9 +110,9 @@ claude mcp add --transport http opensuitemcp https://your-install.example.com/ap
 
 *In Claude Code*
 
-2. Run the command above. Nothing to authorize.
+2. Add the object above to the file. Nothing to authorize.
 
-⚠️ Editing ~/.claude.json by hand needs `"type": "http"` on the entry.
+⚠️ The entry needs `"type": "http"`. Without it the CLI skips the server and reports it in /doctor.
 
 ## Cursor
 
