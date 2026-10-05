@@ -376,7 +376,7 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
   return [
     {
       id: "claude",
-      docHeading: "Claude",
+      docHeading: "Claude Desktop",
       runsOn: "vendor",
       signIn: {
         heading: "Add it as a custom connector",
@@ -404,15 +404,16 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
     },
     {
       id: "claude-code",
-      docHeading: "Claude Code",
+      docHeading: "Claude Code CLI",
       runsOn: "device",
       signIn: {
-        heading: "Add it with the CLI",
+        heading: "Add it to ~/.claude.json",
         groups: [
           {
             app: "Claude Code",
             steps: [
-              "Run the command above. The CLI writes the entry and opens the browser.",
+              "Add the object above to the file, then restart the CLI.",
+              "Run /mcp, pick opensuitemcp, and choose Authenticate. The browser opens.",
             ],
           },
           {
@@ -422,31 +423,47 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
           {
             app: "Claude Code",
             steps: [
-              "Return to the terminal and run /mcp to confirm the server is connected.",
+              "Return to the terminal and run /mcp to confirm it connected.",
             ],
           },
         ],
         snippet: {
-          language: "bash",
-          location: "Terminal",
-          code: `claude mcp add --transport http opensuitemcp ${serverUrl}`,
+          language: "json",
+          location: "~/.claude.json",
+          code: JSON.stringify(
+            { mcpServers: { opensuitemcp: { type: "http", url: serverUrl } } },
+            null,
+            2,
+          ),
         },
-        note: 'Editing ~/.claude.json by hand needs `"type": "http"` on the entry. Without it the CLI skips the server and reports it in /doctor.',
+        note: 'The entry needs `"type": "http"`. Without it the CLI skips the server and reports it in /doctor.',
       },
       agentKey: {
-        heading: "Add it with the CLI and a header",
+        heading: "Add it to ~/.claude.json",
         groups: [
           {
             app: "Claude Code",
-            steps: ["Run the command above. Nothing to authorize."],
+            steps: ["Add the object above to the file. Nothing to authorize."],
           },
         ],
         snippet: {
-          language: "bash",
-          location: "Terminal",
-          code: `claude mcp add --transport http opensuitemcp ${serverUrl} --header "Authorization: Bearer ${KEY_PLACEHOLDER}"`,
+          language: "json",
+          location: "~/.claude.json",
+          code: JSON.stringify(
+            {
+              mcpServers: {
+                opensuitemcp: {
+                  type: "http",
+                  url: serverUrl,
+                  headers: { Authorization: `Bearer ${KEY_PLACEHOLDER}` },
+                },
+              },
+            },
+            null,
+            2,
+          ),
         },
-        note: 'Editing ~/.claude.json by hand needs `"type": "http"` on the entry.',
+        note: 'The entry needs `"type": "http"`. Without it the CLI skips the server and reports it in /doctor.',
       },
     },
     {
