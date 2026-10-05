@@ -5,6 +5,13 @@ All notable changes to OpenSuiteMCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.8.1] - 2026-10-05
+
+### 📝 Changed
+
+- **The connect page names the two Claude surfaces separately.** The tabs read Claude and Claude Code; they are **Claude Desktop** and **Claude Code CLI** now. "Claude" reads as the company rather than the app, and the two surfaces behave differently enough to be worth telling apart — the CLI renders all four briefings from `prompts/list`, and the desktop app renders none
+- **Both Claude Code CLI routes show the file a person edits.** Each showed a `claude mcp add` command, so `~/.claude.json` never appeared on the page — and that file is where `"type": "http"` is required. Without it the CLI skips the server with no error, and only `/doctor` says why. Each route now shows the entry, the two differing only by the `Authorization` header
+
 ## [5.8.0] - 2026-10-04
 
 ### ✨ Added
@@ -889,6 +896,7 @@ First stable release of OpenSuiteMCP - an open source, production-ready NetSuite
 
 ---
 
+[5.8.1]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.8.1
 [5.8.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.8.0
 [5.7.1]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.7.1
 [5.7.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.7.0
