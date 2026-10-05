@@ -5,6 +5,12 @@ All notable changes to OpenSuiteMCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.8.2] - 2026-10-05
+
+### 📝 Changed
+
+- **The connect page says a file name once.** Four methods carried a heading reading "Add it to `~/.claude.json`" directly above a label reading `~/.claude.json`. One line names the file and the action now, on both Claude Code CLI methods and both Cursor methods
+
 ## [5.8.1] - 2026-10-05
 
 ### 📝 Changed
@@ -896,6 +902,7 @@ First stable release of OpenSuiteMCP - an open source, production-ready NetSuite
 
 ---
 
+[5.8.2]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.8.2
 [5.8.1]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.8.1
 [5.8.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.8.0
 [5.7.1]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.7.1
