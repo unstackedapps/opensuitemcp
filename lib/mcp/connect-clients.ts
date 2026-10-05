@@ -407,7 +407,7 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
       docHeading: "Claude Code CLI",
       runsOn: "device",
       signIn: {
-        heading: "Add it to ~/.claude.json",
+        heading: "Add the server entry in ~/.claude.json",
         groups: [
           {
             app: "Claude Code",
@@ -429,7 +429,6 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
         ],
         snippet: {
           language: "json",
-          location: "~/.claude.json",
           code: JSON.stringify(
             { mcpServers: { opensuitemcp: { type: "http", url: serverUrl } } },
             null,
@@ -439,7 +438,7 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
         note: 'The entry needs `"type": "http"`. Without it the CLI skips the server and reports it in /doctor.',
       },
       agentKey: {
-        heading: "Add it to ~/.claude.json",
+        heading: "Add the server entry in ~/.claude.json, with a header",
         groups: [
           {
             app: "Claude Code",
@@ -448,7 +447,6 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
         ],
         snippet: {
           language: "json",
-          location: "~/.claude.json",
           code: JSON.stringify(
             {
               mcpServers: {
@@ -471,7 +469,7 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
       docHeading: "Cursor",
       runsOn: "device",
       signIn: {
-        heading: "Add it to mcp.json",
+        heading: "Add the server entry in .cursor/mcp.json",
         groups: [
           {
             app: "Cursor",
@@ -492,7 +490,6 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
         ],
         snippet: {
           language: "json",
-          location: ".cursor/mcp.json",
           code: JSON.stringify(
             { mcpServers: { opensuitemcp: { url: serverUrl } } },
             null,
@@ -502,7 +499,7 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
         note: "A new connection sometimes does not appear in the list. Open the command palette and run Developer: Reload Window.",
       },
       agentKey: {
-        heading: "Add it to mcp.json with a header",
+        heading: "Add the server entry in .cursor/mcp.json, with a header",
         groups: [
           {
             app: "Cursor",
@@ -514,7 +511,6 @@ export function buildConnectClients(serverUrl: string): ConnectClient[] {
         ],
         snippet: {
           language: "json",
-          location: ".cursor/mcp.json",
           code: JSON.stringify(
             {
               mcpServers: {

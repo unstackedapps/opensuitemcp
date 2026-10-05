@@ -50,9 +50,7 @@ shows yours, with a copy button.
 
 ### OAuth 2.1
 
-**Add it to ~/.claude.json**
-
-`~/.claude.json`
+**Add the server entry in ~/.claude.json**
 
 ```json
 {
@@ -86,9 +84,7 @@ shows yours, with a copy button.
 
 ### Bearer auth
 
-**Add it to ~/.claude.json**
-
-`~/.claude.json`
+**Add the server entry in ~/.claude.json, with a header**
 
 ```json
 {
@@ -118,9 +114,7 @@ shows yours, with a copy button.
 
 ### OAuth 2.1
 
-**Add it to mcp.json**
-
-`.cursor/mcp.json`
+**Add the server entry in .cursor/mcp.json**
 
 ```json
 {
@@ -154,9 +148,7 @@ shows yours, with a copy button.
 
 ### Bearer auth
 
-**Add it to mcp.json with a header**
-
-`.cursor/mcp.json`
+**Add the server entry in .cursor/mcp.json, with a header**
 
 ```json
 {
