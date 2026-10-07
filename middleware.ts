@@ -39,6 +39,9 @@ function isMcpServerPath(pathname: string): boolean {
   );
 }
 
+/** The instance report; see app/api/instance/report/route.ts. */
+const INSTANCE_REPORT_PATH = "/api/instance/report";
+
 /** Next.js metadata routes must stay public so favicons load on /login and /setup. */
 function isAppMetadataPath(pathname: string): boolean {
   return (
@@ -72,6 +75,11 @@ export async function middleware(request: NextRequest) {
   }
 
   if (isMcpServerPath(pathname)) {
+    return NextResponse.next();
+  }
+
+  // Authenticates with its own bearer token in the route handler.
+  if (pathname === INSTANCE_REPORT_PATH) {
     return NextResponse.next();
   }
 
