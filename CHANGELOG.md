@@ -5,6 +5,13 @@ All notable changes to OpenSuiteMCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.9.0] - 2026-10-08
+
+### ✨ Added
+
+- **An instance reports its health to whoever operates it.** Set `OSMCP_INSTANCE_REPORT_TOKEN` to 32 characters or more, and `GET /api/instance/report` answers a request bearing that token with counts as JSON: version and install mode; users, new and signed in; messages, active users, runs, failed runs and tool errors over seven days; NetSuite accounts with no token, which need connecting again; agent apps; AI providers; and migrations applied. No message text, emails or names. While the token is unset the route answers `404`. Setup and every field are in [docs/instance-report.md](docs/instance-report.md)
+- **The report lists recent server errors.** It keeps the 50 newest, from errors a request threw and from `console.error`, because most routes catch their own errors and only log them. A path drops its query string and a message stops at 300 characters, because either can carry the data that caused the error. The list lives in memory, and a restart empties it
+
 ## [5.8.2] - 2026-10-05
 
 ### 📝 Changed
@@ -902,6 +909,7 @@ First stable release of OpenSuiteMCP - an open source, production-ready NetSuite
 
 ---
 
+[5.9.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.9.0
 [5.8.2]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.8.2
 [5.8.1]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.8.1
 [5.8.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.8.0

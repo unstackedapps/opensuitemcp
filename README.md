@@ -8,20 +8,15 @@ Source-available **NetSuite MCP client** — chat UI for NetSuite’s AI Connect
 
 Bring your own LLM keys (**Google Gemini**, **Anthropic Claude**, **OpenAI**, or an **OpenAI-compatible** endpoint). Self-host for internal use. Commercial rights reserved by [Unstacked Apps, LLC](https://www.unstackedapps.com/).
 
-**Current release:** [v5.8.2](https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.8.2) · [Changelog](CHANGELOG.md)
+**Current release:** [v5.9.0](https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.9.0) · [Changelog](CHANGELOG.md)
 
 <img src="./docs/screenshot-chat.png" alt="OpenSuiteMCP chat UI" width="100%" />
 
 _Main chat UI._
 
-## What’s in 5.8
+## What’s in 5.9
 
-- **Talk your prompts into the composer** — a microphone beside send, using the browser's own speech recognition, so it works whichever LLM provider you brought. Pick a language, and switch off the punctuation Chrome adds unasked
-- **Artifacts** — keep a long result or a script a session produced. They land in a panel as tiles, and Save sits in the chat block header as well as the canvas
-- **Memory** — tell a chat to remember something and the next one starts knowing it. Written only when you ask, kept against the NetSuite account that was connected, and listed in a panel with search, an account filter, edit, delete and **Forget all**
-- **A turn says what it used** — skills, MCP tools and memories, each memory named with the account it came from
-- **Briefings reach any client** — the instructions a connecting agent needs are reachable as a tool, not only from a `/` menu half of clients do not render
-- **Every settings panel shares one set of components** — the same header, rows and search field throughout, with headers that stay put while the content scrolls
+- **An instance reports its health to whoever operates it** — set `OSMCP_INSTANCE_REPORT_TOKEN`, and `GET /api/instance/report` answers that bearer token with the version, usage counts, NetSuite accounts that need connecting again, and the 50 most recent server errors. Counts only: no message text, emails or names. See [Instance report](docs/instance-report.md)
 
 Earlier releases are in the [changelog](CHANGELOG.md).
 
@@ -231,6 +226,7 @@ Written by `pnpm setup:backend` (or set manually for production):
 | `OSMCP_NS_ACCOUNT_ID` | Optional | Optional | NetSuite account for OIDC app login |
 | `OSMCP_NS_OIDC_CLIENT_ID` | Optional | Optional | OIDC integration client ID for app login |
 | `OSMCP_ENABLE_GUEST` | — | — | Set `true` for guest auto-login in demo/e2e |
+| `OSMCP_INSTANCE_REPORT_TOKEN` | Optional | Optional | Bearer token of 32+ characters that turns on `/api/instance/report`; see [Instance report](docs/instance-report.md) |
 
 Upgrading an existing install with users already in the database: see [docs/org-admin-upgrade.md](docs/org-admin-upgrade.md).
 
