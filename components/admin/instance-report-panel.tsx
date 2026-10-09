@@ -63,14 +63,15 @@ function CopyField({ label, value }: { label: string; value: string }) {
  */
 export function InstanceReportPanel({ token }: { token: TokenState }) {
   const router = useRouter();
-  const [reportUrl, setReportUrl] = useState("/api/instance/report");
+  const [address, setAddress] = useState("");
   const [issued, setIssued] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<"replace" | "off" | null>(null);
   const [busy, setBusy] = useState(false);
 
   // The address the admin reached this page on is the one the operator uses.
+  // The operator's admin adds the report's path itself.
   useEffect(() => {
-    setReportUrl(`${window.location.origin}/api/instance/report`);
+    setAddress(window.location.origin);
   }, []);
 
   const generate = async () => {
@@ -143,7 +144,7 @@ export function InstanceReportPanel({ token }: { token: TokenState }) {
       <SettingRow
         control={
           <Button
-            onClick={() => copy(reportUrl, "Report address")}
+            onClick={() => copy(address, "Address")}
             size="sm"
             variant="outline"
           >
@@ -151,8 +152,8 @@ export function InstanceReportPanel({ token }: { token: TokenState }) {
             Copy
           </Button>
         }
-        description={<span className="font-mono">{reportUrl}</span>}
-        title="Report address"
+        description={<span className="font-mono">{address}</span>}
+        title="Address"
       />
       <SettingRow
         control={control}
@@ -170,7 +171,7 @@ export function InstanceReportPanel({ token }: { token: TokenState }) {
             <DialogDescription>The token isn't shown again.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-1">
-            <CopyField label="Report address" value={reportUrl} />
+            <CopyField label="Address" value={address} />
             <CopyField label="Token" value={issued ?? ""} />
           </div>
           <DialogFooter>
