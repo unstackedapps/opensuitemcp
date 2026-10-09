@@ -8,15 +8,17 @@ Source-available **NetSuite MCP client** — chat UI for NetSuite’s AI Connect
 
 Bring your own LLM keys (**Google Gemini**, **Anthropic Claude**, **OpenAI**, or an **OpenAI-compatible** endpoint). Self-host for internal use. Commercial rights reserved by [Unstacked Apps, LLC](https://www.unstackedapps.com/).
 
-**Current release:** [v5.10.0](https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.10.0) · [Changelog](CHANGELOG.md)
+**Current release:** [v5.11.0](https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.11.0) · [Changelog](CHANGELOG.md)
 
 <img src="./docs/screenshot-chat.png" alt="OpenSuiteMCP chat UI" width="100%" />
 
 _Main chat UI._
 
-## What’s in 5.10
+## What’s in 5.11
 
-- **Tool calls from agent apps are counted** — each tool an agent app calls over MCP adds to an hourly total per user, agent app and tool, with failed calls counted as well. The [instance report](docs/instance-report.md) gives the last 7 days' totals
+- **Install on a server with one command** — on your own Linux server or on AWS, over SSH. See [Install on a server](#install-on-a-server)
+- **Update from the app** — **Admin → App updates** on an org install, **Settings → General** on a solo install: update now, or turn on automatic updates. `osmcp update` does the same over SSH, and rolls back a release that doesn't start
+- **Turn on the instance report from the admin** — **Admin → Instance report** generates the token, with no restart
 
 Earlier releases are in the [changelog](CHANGELOG.md).
 
@@ -122,6 +124,19 @@ alongside every prompt your NetSuite Companion library publishes, named
 The exact thing to paste, per client, is in
 [Connect an agent](docs/connect-an-agent.md). Protocol and tool reference:
 [MCP server](docs/mcp-server.md).
+
+## Install on a server
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/unstackedapps/opensuitemcp/main/deploy/install.sh \
+  | sudo bash -s -- --domain osmcp.example.com --mode org --root-email you@example.com
+```
+
+- **Server requirements and the `osmcp` command:** [docs/self-host.md](docs/self-host.md)
+- **Creating the server on AWS:** [docs/deploy-aws.md](docs/deploy-aws.md)
+- **Updates:** [opensuitemcp.com/docs/upgrades](https://opensuitemcp.com/docs/upgrades)
+
+The rest of this README runs OpenSuiteMCP from source, for development.
 
 ## Prerequisites
 
@@ -267,8 +282,6 @@ Third-party libraries and templates are listed in [ATTRIBUTION.md](ATTRIBUTION.m
 ## License & notices
 
 **Free:** your organization may self-host for its own internal use. **Paid:** commercial delivery, paid implementation, or paid support of this product — only via [Unstacked Apps](https://www.unstackedapps.com/) (`support@unstackedapps.com`). Third parties may not charge to implement or commercially support this codebase.
-
-After go-live, update via release tags — see [docs/upgrades](https://opensuitemcp.com/docs/upgrades).
 
 - [LICENSE](LICENSE) — Sustainable Use License
 - [NOTICE.md](NOTICE.md) — Usage notice

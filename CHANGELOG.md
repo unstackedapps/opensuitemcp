@@ -5,6 +5,30 @@ All notable changes to OpenSuiteMCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.11.0] - 2026-10-09
+
+### ✨ Added
+
+- **Install on any server with one command.** `deploy/install.sh` installs Docker if it is missing, writes `/opt/opensuitemcp/.env` with generated secrets, and starts the app, Postgres, Redis, SearXNG and Caddy, which gets a Let's Encrypt certificate. [docs/deploy-aws.md](docs/deploy-aws.md) creates the server on AWS with the CLI, in your own account or a customer's
+- **A published image.** Each release tag builds `ghcr.io/unstackedapps/opensuitemcp:<version>` from the new `Dockerfile`: 483 MB, from Next's standalone output with the migrate and skills-sync scripts bundled
+- **`osmcp` runs and updates a server install.** `osmcp update` backs up the database, pulls the release, takes its deploy files, and restarts the app; if the app doesn't answer within 7 minutes, it restores the backup and the previous version. `rollback`, `backup`, `restore`, `status` and `logs` sit beside it. [docs/self-host.md](docs/self-host.md)
+- **Update from the app.** **Admin → App updates** on an org install, and **Settings → General** on a solo install with the updater: **Update to <version>**, **Automatic updates** at 03:00 UTC (`OSMCP_AUTO_UPDATE_HOUR`), and **Updates from your operator**. An updater container holds the Docker socket and runs `osmcp update`; the app reaches it only through the shared `control/` folder
+- **Turn on the instance report from the admin.** **Admin → Instance report** generates the token and shows it once, with the address to send; the report answers at once, with no restart. **Replace** and **Turn off** follow. `OSMCP_INSTANCE_REPORT_TOKEN` still works, for solo installs, and replaces a generated token
+- **An operator can start an update.** `POST /api/instance/update` with the report token installs the latest release, or a named one, once an admin turns on **Updates from your operator**. The report gains an `updates` section; `reportVersion` stays `1`
+
+### 🐛 Fixed
+
+- **Every page renders at request time.** `/login` was prerendered at build time with the build's install mode and database state, which a shared image would have shown to every install
+- **Sign-in redirects carry a path.** `callbackUrl` held the address Next listens on, `https://0.0.0.0:3000`, behind a proxy
+
+### 📝 Changed
+
+- **The header chip's Update link opens App updates,** and only for someone who can install the update. It linked everyone to GitHub Releases
+
+### 📦 Database
+
+- Migration `0045_instance_report_token` — `InstanceReportToken`, one row holding the SHA-256 of a token generated in the admin
+
 ## [5.10.0] - 2026-10-09
 
 ### ✨ Added
@@ -927,6 +951,7 @@ First stable release of OpenSuiteMCP - an open source, production-ready NetSuite
 
 ---
 
+[5.11.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.11.0
 [5.10.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.10.0
 [5.9.1]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.9.1
 [5.9.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.9.0
