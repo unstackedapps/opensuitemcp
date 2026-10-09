@@ -1,0 +1,97 @@
+# OpenSuiteMCP on one server: the app, its database, cache, web search and a
+# TLS proxy. install.sh writes .env beside this file; `osmcp` runs every
+# Compose command against it, so nothing here needs editing.
+name: opensuitemcp
+
+services:
+  app:
+    image: ${OSMCP_IMAGE:-ghcr.io/unstackedapps/opensuitemcp}:${OSMCP_VERSION:?OSMCP_VERSION is not set in .env}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_URL: postgres://opensuitemcp:${POSTGRES_PASSWORD}@postgres:5432/opensuitemcp
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      SEARXNG_ENDPOINT: http://searxng:8080
+      AUTH_URL: https://${OSMCP_DOMAIN}
+      AUTH_TRUST_HOST: "true"
+    volumes:
+      - app_data:/app/.data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      searxng:
+        condition: service_started
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/ping').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      # Boot migrates the database and syncs skill packs from GitHub first.
+      start_period: 180s
+      retries: 6
+
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: opensuitemcp
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is not set in .env}
+      POSTGRES_DB: opensuitemcp
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U opensuitemcp -d opensuitemcp"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?REDIS_PASSWORD is not set in .env}", "--appendonly", "yes"]
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  searxng:
+    image: searxng/searxng:2025.11.14-ba9803043
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/opt/osmcp/searxng-entrypoint.sh"]
+    volumes:
+      - ./searxng-entrypoint.sh:/opt/osmcp/searxng-entrypoint.sh:ro
+      - searxng_config:/etc/searxng
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      OSMCP_DOMAIN: ${OSMCP_DOMAIN:?OSMCP_DOMAIN is not set in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+volumes:
+  app_data:
+  postgres_data:
+  redis_data:
+  searxng_config:
+  caddy_data:
+  caddy_config:

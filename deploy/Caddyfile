@@ -1,0 +1,10 @@
+# Caddy requests the TLS certificate from Let's Encrypt on first start, so
+# OSMCP_DOMAIN must already resolve to this server and ports 80 and 443 must
+# be open.
+{$OSMCP_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy app:3000 {
+		# Chat replies stream; send each chunk as it arrives.
+		flush_interval -1
+	}
+}
