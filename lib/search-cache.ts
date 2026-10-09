@@ -2,7 +2,9 @@ import { createHash } from "node:crypto";
 import { createClient } from "redis";
 
 const SEARCH_CACHE_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
-const CACHE_KEY_PREFIX = "cache";
+// v2: results are kept to the resource's own pages. Unversioned keys can hold
+// off-site results for up to the TTL.
+const CACHE_KEY_PREFIX = "cache:v2";
 
 let redisClient: Awaited<ReturnType<typeof createClient>> | null = null;
 
