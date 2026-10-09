@@ -5,6 +5,17 @@ All notable changes to OpenSuiteMCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.10.0] - 2026-10-09
+
+### ✨ Added
+
+- **Tool calls from agent apps are counted.** Each tool an agent app calls over MCP adds one to an hourly total, kept per user, agent app (API key or OAuth grant) and tool. A call also counts as failed when the tool returned an error, rejected its arguments, or threw. Calls to an unknown tool and calls refused by the rate limit are not counted. Counting never fails or slows a call
+- **The instance report carries them.** `activity.agentToolCallsLast7Days` and `activity.agentToolErrorsLast7Days` give the last 7 days' totals. `reportVersion` stays `1`, because no field changed meaning
+
+### 📦 Database
+
+- Migration `0044_mcp_tool_calls` — `McpToolCallHourly`, one row per user, agent app and tool in each hour. Hourly totals rather than a row per call, so a busy agent adds rows by the hour. The rows go with their user
+
 ## [5.9.1] - 2026-10-09
 
 ### 🐛 Fixed
@@ -916,6 +927,8 @@ First stable release of OpenSuiteMCP - an open source, production-ready NetSuite
 
 ---
 
+[5.10.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.10.0
+[5.9.1]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.9.1
 [5.9.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.9.0
 [5.8.2]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.8.2
 [5.8.1]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.8.1

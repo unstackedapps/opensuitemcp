@@ -8,15 +8,15 @@ Source-available **NetSuite MCP client** — chat UI for NetSuite’s AI Connect
 
 Bring your own LLM keys (**Google Gemini**, **Anthropic Claude**, **OpenAI**, or an **OpenAI-compatible** endpoint). Self-host for internal use. Commercial rights reserved by [Unstacked Apps, LLC](https://www.unstackedapps.com/).
 
-**Current release:** [v5.9.1](https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.9.1) · [Changelog](CHANGELOG.md)
+**Current release:** [v5.10.0](https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.10.0) · [Changelog](CHANGELOG.md)
 
 <img src="./docs/screenshot-chat.png" alt="OpenSuiteMCP chat UI" width="100%" />
 
 _Main chat UI._
 
-## What’s in 5.9
+## What’s in 5.10
 
-- **An instance reports its health to whoever operates it** — set `OSMCP_INSTANCE_REPORT_TOKEN`, and `GET /api/instance/report` answers that bearer token with the version, usage counts, NetSuite accounts that need connecting again, and the 50 most recent server errors. Counts only: no message text, emails or names. See [Instance report](docs/instance-report.md)
+- **Tool calls from agent apps are counted** — each tool an agent app calls over MCP adds to an hourly total per user, agent app and tool, with failed calls counted as well. The [instance report](docs/instance-report.md) gives the last 7 days' totals
 
 Earlier releases are in the [changelog](CHANGELOG.md).
 
