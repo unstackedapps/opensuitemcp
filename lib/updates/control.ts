@@ -219,7 +219,13 @@ export async function setUpdatePolicy(
       "This install has no updater. Update it from its server.",
     );
   }
-  const next = { ...(await readUpdatePolicy()), ...change };
+  const current = await readUpdatePolicy();
+  // A switch left out of `change` keeps its value; spreading an undefined
+  // field would drop it from the file and turn it off.
+  const next: UpdatePolicy = {
+    autoUpdate: change.autoUpdate ?? current.autoUpdate,
+    allowRemote: change.allowRemote ?? current.allowRemote,
+  };
   await writeJsonAtomic(path.join(dir, "policy.json"), next);
   return next;
 }
