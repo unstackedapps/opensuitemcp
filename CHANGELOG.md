@@ -5,6 +5,13 @@ All notable changes to OpenSuiteMCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.12.0] - 2026-10-09
+
+### ✨ Added
+
+- **`pnpm bootstrap:aws` deploys to a new EC2 server.** It asks for the AWS profile, region, a name, install mode, owner email and domain, then imports an SSH key, creates the security group, launches Ubuntu 24.04, attaches an Elastic IP, waits for DNS and SSH, and runs `deploy/install.sh` over SSH. A Free plan account gets `c7i-flex.large`. On a clean run the app answered 100 seconds after start
+- **`pnpm teardown:aws` deletes what it created.** Each resource is tagged `Project=<name>`, and the IDs are saved to `~/.opensuitemcp/aws/<name>.json` after every step, so a stopped run continues when started again with the same name. Every prompt has a flag, and `--yes` runs either command unattended
+
 ## [5.11.0] - 2026-10-09
 
 ### ✨ Added
@@ -951,6 +958,7 @@ First stable release of OpenSuiteMCP - an open source, production-ready NetSuite
 
 ---
 
+[5.12.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.12.0
 [5.11.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.11.0
 [5.10.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.10.0
 [5.9.1]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.9.1
