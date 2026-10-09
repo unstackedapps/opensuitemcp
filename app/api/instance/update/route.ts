@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import {
-  bearerToken,
-  configuredReportToken,
-  reportTokenMatches,
-} from "@/lib/instance-report/auth";
+import { bearerToken } from "@/lib/instance-report/auth";
+import { verifyReportToken } from "@/lib/instance-report/token";
 import {
   readUpdatePolicy,
   requestUpdate,
@@ -23,13 +20,13 @@ const bodySchema = z
  * "Updates from your operator". See docs/instance-report.md.
  */
 export async function POST(request: Request) {
-  const expected = configuredReportToken();
-  if (!expected) {
+  const verdict = await verifyReportToken(
+    bearerToken(request.headers.get("authorization")),
+  );
+  if (verdict === "off") {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-
-  const presented = bearerToken(request.headers.get("authorization"));
-  if (!reportTokenMatches(presented, expected)) {
+  if (verdict === "unauthorized") {
     return NextResponse.json(
       { error: "Unauthorized" },
       {

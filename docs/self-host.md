@@ -38,7 +38,7 @@ Run each with `sudo` on the server.
 
 - **Update to `<version>`** installs the latest release now. The app restarts, then the page reloads.
 - **Automatic updates** installs each new release at 03:00 UTC. Set `OSMCP_AUTO_UPDATE_HOUR` in `.env` to use a different hour.
-- **Updates from your operator** appears when `OSMCP_INSTANCE_REPORT_TOKEN` is set. See [Instance report](instance-report.md#let-your-operator-update-this-install).
+- **Updates from your operator** appears once the instance report has a token. See [Instance report](instance-report.md#let-your-operator-update-this-install).
 
 The `updater` container does the work. It runs the same `osmcp update` as the command line.
 
@@ -80,7 +80,7 @@ Everything lives in `/opt/opensuitemcp`.
 | `OSMCP_DOMAIN` | `--domain` | Move to another domain, then run `osmcp compose up -d` |
 | `OSMCP_INSTALL_MODE` | `--mode` | Never; it decides how people sign in |
 | `OSMCP_ROOT_EMAIL` | `--root-email` | Name a different first owner before anyone signs in |
-| `OSMCP_INSTANCE_REPORT_TOKEN` | You | Turn on the [instance report](instance-report.md) |
+| `OSMCP_INSTANCE_REPORT_TOKEN` | You | Turn on the [instance report](instance-report.md) on a solo install. An org install uses **Admin → Instance report** instead |
 | `OSMCP_AUTO_UPDATE_HOUR` | You | Install automatic updates in a different hour, 0–23 UTC. Then run `osmcp compose up -d` |
 
 Every other variable in the [README](../README.md#install-environment-variables) can go in `.env` too. Run `osmcp compose up -d app` after editing it.

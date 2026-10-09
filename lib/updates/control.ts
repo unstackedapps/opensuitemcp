@@ -10,7 +10,7 @@ import {
   getLatestReleasedVersion,
   isNewerVersion,
 } from "@/lib/app-release";
-import { configuredReportToken } from "@/lib/instance-report/auth";
+import { getReportTokenState } from "@/lib/instance-report/token";
 import { isOrgInstallMode } from "@/lib/org/install-config";
 import { canManageUpdates } from "@/lib/updates/access";
 
@@ -138,13 +138,17 @@ export async function readUpdatePolicy(): Promise<UpdatePolicy> {
 
 export async function getUpdateStatus(): Promise<UpdateStatus> {
   const dir = controlDir();
-  const [latestVersion, updater, policy, request, lastRun] = await Promise.all([
-    getLatestReleasedVersion({ maxAgeSeconds: 300 }),
-    updaterState(dir),
-    readUpdatePolicy(),
-    dir ? readJson<{ version?: string }>(path.join(dir, "request.json")) : null,
-    dir ? readJson<UpdateRun>(path.join(dir, "status.json")) : null,
-  ]);
+  const [latestVersion, updater, policy, request, lastRun, reportToken] =
+    await Promise.all([
+      getLatestReleasedVersion({ maxAgeSeconds: 300 }),
+      updaterState(dir),
+      readUpdatePolicy(),
+      dir
+        ? readJson<{ version?: string }>(path.join(dir, "request.json"))
+        : null,
+      dir ? readJson<UpdateRun>(path.join(dir, "status.json")) : null,
+      getReportTokenState(),
+    ]);
   const latest = latestVersion?.replace(/^v/i, "") ?? null;
 
   return {
@@ -158,7 +162,7 @@ export async function getUpdateStatus(): Promise<UpdateStatus> {
     pending: request?.version ?? null,
     lastRun,
     policy,
-    remoteAvailable: configuredReportToken() !== null,
+    remoteAvailable: reportToken.source !== "none",
     autoUpdateHourUtc: autoUpdateHourUtc(),
   };
 }
