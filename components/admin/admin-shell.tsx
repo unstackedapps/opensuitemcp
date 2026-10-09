@@ -120,6 +120,7 @@ const ADMIN_NAV = [
   { href: "/admin/skills", label: "Skills" },
   { href: "/admin/personas", label: "Personas" },
   { href: "/admin/agent-access", label: "Agent apps" },
+  { href: "/admin/updates", label: "App updates" },
 ] as const;
 
 export function AdminShell({

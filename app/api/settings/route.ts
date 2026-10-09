@@ -68,6 +68,7 @@ import {
   listOrgSearchResources,
   orgSearchResourceToClient,
 } from "@/lib/org/search-resources";
+import { appUpdatesHref } from "@/lib/updates/control";
 
 const aiProviderSchema = z.enum(["google", "anthropic", "openai"]);
 const aiProviderTypeSchema = z.enum([
@@ -287,6 +288,9 @@ export async function GET() {
 
   try {
     const installMode = getInstallMode();
+    // Solo installs with an updater show App updates under General.
+    const showAppUpdates =
+      installMode === "solo" && appUpdatesHref(session) !== null;
     const settings = await getUserSettings({ userId: session.user.id });
 
     console.log("[Settings API] Raw settings from DB:", {
@@ -446,6 +450,7 @@ export async function GET() {
             ? { managedByOrg: true }
             : undefined,
         installMode,
+        showAppUpdates,
       });
     }
 
@@ -745,6 +750,7 @@ export async function GET() {
           ? { managedByOrg: true }
           : undefined,
       installMode,
+      showAppUpdates,
     };
 
     console.log("[Settings API] Sending response:", {

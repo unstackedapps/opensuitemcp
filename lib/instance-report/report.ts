@@ -4,6 +4,7 @@ import { sql } from "drizzle-orm";
 import { APP_VERSION } from "@/lib/app-release";
 import { db } from "@/lib/db/client";
 import { getInstallMode } from "@/lib/org/install-config";
+import { getUpdateStatus, type UpdateStatus } from "@/lib/updates/control";
 import { type RecordedError, serverErrorLog } from "./errors";
 
 /**
@@ -71,6 +72,14 @@ export type InstanceReport = {
   database: {
     migrations: number;
     latestMigrationAt: string | null;
+  };
+  /** How this install updates, and how its last update went. */
+  updates: Pick<
+    UpdateStatus,
+    "updater" | "latestVersion" | "pending" | "lastRun"
+  > & {
+    autoUpdate: boolean;
+    allowRemote: boolean;
   };
 };
 
@@ -241,6 +250,7 @@ export async function buildInstanceReport(): Promise<InstanceReport> {
 
   const errors = serverErrorLog();
   const latestMigration = Number(migrations.latest);
+  const updates = await getUpdateStatus();
 
   return {
     reportVersion: REPORT_VERSION,
@@ -295,6 +305,14 @@ export async function buildInstanceReport(): Promise<InstanceReport> {
         Number.isFinite(latestMigration) && latestMigration > 0
           ? new Date(latestMigration).toISOString()
           : null,
+    },
+    updates: {
+      updater: updates.updater,
+      latestVersion: updates.latestVersion,
+      pending: updates.pending,
+      lastRun: updates.lastRun,
+      autoUpdate: updates.policy.autoUpdate,
+      allowRemote: updates.policy.allowRemote,
     },
   };
 }

@@ -29,15 +29,29 @@ Run each with `sudo` on the server.
 | `osmcp restart` | Restarts every container |
 | `osmcp compose ARGS` | Runs any `docker compose` command against this install |
 
+## Update from the app
+
+| Install | Where |
+|---|---|
+| Organization | **Admin → App updates**, for owners and admins |
+| Solo | **Settings → General** |
+
+- **Update to `<version>`** installs the latest release now. The app restarts, then the page reloads.
+- **Automatic updates** installs each new release at 03:00 UTC. Set `OSMCP_AUTO_UPDATE_HOUR` in `.env` to use a different hour.
+- **Updates from your operator** appears when `OSMCP_INSTANCE_REPORT_TOKEN` is set. See [Instance report](instance-report.md#let-your-operator-update-this-install).
+
+The `updater` container does the work. It runs the same `osmcp update` as the command line.
+
 ## How an update runs
 
-1. `osmcp update` backs up the database to `backups/`.
-2. It pulls `ghcr.io/unstackedapps/opensuitemcp:<version>` and restarts the app on it.
-3. The app migrates the database as it starts.
-4. `osmcp` waits up to 7 minutes for the app to answer.
-5. If the app never answers, `osmcp` restores the backup and starts the previous version again.
+1. `osmcp update` pulls `ghcr.io/unstackedapps/opensuitemcp:<version>`.
+2. It backs up the database to `backups/`.
+3. It replaces `compose.yml`, `Caddyfile`, `osmcp` and `updater/` with the release's copies.
+4. It restarts the app on the new version. The app migrates the database as it starts.
+5. It waits up to 7 minutes for the app to answer.
+6. If the app never answers, `osmcp` puts back the previous files, restores the backup, and starts the previous version.
 
-`update-status.json` records the result of the last update. A failed start leaves its log in `logs/`.
+`control/status.json` records the result of the last update. A failed start leaves its log in `logs/`.
 
 `osmcp rollback` after a **successful** update loses anything saved since that update. It asks you to type the version before it runs.
 
@@ -48,11 +62,15 @@ Everything lives in `/opt/opensuitemcp`.
 | File | Holds |
 |---|---|
 | `.env` | Version, domain, install mode and generated secrets |
-| `compose.yml` | The containers: app, Postgres, Redis, SearXNG and Caddy |
+| `compose.yml` | The containers: app, Postgres, Redis, SearXNG, Caddy and the updater |
 | `Caddyfile` | The HTTPS proxy. Caddy gets the certificate from Let's Encrypt |
+| `updater/` | The updater container's image and script |
+| `control/` | Shared by the app and the updater: update requests, the last result, and the update settings |
 | `backups/` | Database backups. The newest 10 are kept |
 
-**Back up `.env` somewhere else.** `ENCRYPTION_KEY` in it decrypts stored API keys and NetSuite tokens; a database backup is unreadable without it.
+**Back up `.env` somewhere else.** `ENCRYPTION_KEY` in it decrypts the API keys and NetSuite tokens stored in the database. Without it, those values in a backup can't be read.
+
+**The updater holds the Docker socket,** which gives it control of every container on the server. It publishes no port. The app reaches it only through `control/`.
 
 ## Settings in `.env`
 
@@ -63,5 +81,6 @@ Everything lives in `/opt/opensuitemcp`.
 | `OSMCP_INSTALL_MODE` | `--mode` | Never; it decides how people sign in |
 | `OSMCP_ROOT_EMAIL` | `--root-email` | Name a different first owner before anyone signs in |
 | `OSMCP_INSTANCE_REPORT_TOKEN` | You | Turn on the [instance report](instance-report.md) |
+| `OSMCP_AUTO_UPDATE_HOUR` | You | Install automatic updates in a different hour, 0–23 UTC. Then run `osmcp compose up -d` |
 
 Every other variable in the [README](../README.md#install-environment-variables) can go in `.env` too. Run `osmcp compose up -d app` after editing it.
