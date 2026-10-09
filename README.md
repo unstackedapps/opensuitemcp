@@ -8,11 +8,15 @@ Source-available **NetSuite MCP client** — chat UI for NetSuite’s AI Connect
 
 Bring your own LLM keys (**Google Gemini**, **Anthropic Claude**, **OpenAI**, or an **OpenAI-compatible** endpoint). Self-host for internal use. Commercial rights reserved by [Unstacked Apps, LLC](https://www.unstackedapps.com/).
 
-**Current release:** [v5.11.0](https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.11.0) · [Changelog](CHANGELOG.md)
+**Current release:** [v5.12.0](https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.12.0) · [Changelog](CHANGELOG.md)
 
 <img src="./docs/screenshot-chat.png" alt="OpenSuiteMCP chat UI" width="100%" />
 
 _Main chat UI._
+
+## What’s in 5.12
+
+- **Deploy to AWS from this repo** — `pnpm bootstrap:aws` creates the EC2 server, installs OpenSuiteMCP over SSH and prints the address; `pnpm teardown:aws` deletes what it created. See [docs/deploy-aws.md](docs/deploy-aws.md)
 
 ## What’s in 5.11
 
