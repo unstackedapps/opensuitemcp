@@ -133,7 +133,7 @@ curl -fsSL https://raw.githubusercontent.com/unstackedapps/opensuitemcp/main/dep
 ```
 
 - **Server requirements and the `osmcp` command:** [docs/self-host.md](docs/self-host.md)
-- **Creating the server on AWS:** [docs/deploy-aws.md](docs/deploy-aws.md)
+- **Creating the server on AWS:** `pnpm bootstrap:aws` from this repo, or the steps in [docs/deploy-aws.md](docs/deploy-aws.md)
 - **Updates:** [opensuitemcp.com/docs/upgrades](https://opensuitemcp.com/docs/upgrades)
 
 The rest of this README runs OpenSuiteMCP from source, for development.

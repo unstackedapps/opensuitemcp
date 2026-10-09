@@ -1,6 +1,31 @@
 # Deploy on AWS
 
-Run steps 1–6 on your own computer with the [AWS CLI v2](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html). Run step 7 on the new server over SSH.
+**Decide first:** let `pnpm bootstrap:aws` run every step, or run steps 1–7 yourself.
+
+## Fastest: `pnpm bootstrap:aws`
+
+Needs Node 22+, [pnpm](https://pnpm.io) and the [AWS CLI v2](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) on your computer.
+
+```bash
+git clone https://github.com/unstackedapps/opensuitemcp.git
+cd opensuitemcp
+pnpm install
+pnpm bootstrap:aws
+```
+
+It asks for the AWS profile, region, a name, install mode, owner email and domain. Then it creates the server, installs OpenSuiteMCP over SSH, and prints the address. A Free plan account gets `c7i-flex.large` automatically.
+
+| To | Run |
+|---|---|
+| Continue a run that stopped | `pnpm bootstrap:aws --name <name>` |
+| Delete everything it created | `pnpm teardown:aws --name <name>` |
+| Run it without prompts | `pnpm bootstrap:aws --yes --name acme --mode org --root-email you@example.com --domain osmcp.example.com` |
+
+It saves what it created in `~/.opensuitemcp/aws/<name>.json`.
+
+## Step by step
+
+Run steps 1–6 on your own computer with the AWS CLI. Run step 7 on the new server over SSH.
 
 ## Step 1: Sign the AWS CLI in to the account
 
