@@ -8,6 +8,10 @@ import { ThemeProvider } from "@/components/theme-provider";
 import "./globals.css";
 import { SessionProvider } from "next-auth/react";
 
+// One published image serves every install, so nothing may be prerendered at
+// build time: pages read the install's env (OSMCP_INSTALL_MODE) and database.
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   metadataBase: new URL("https://chat.vercel.ai"),
   title: "OpenSuiteMCP",

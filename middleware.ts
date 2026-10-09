@@ -105,15 +105,19 @@ export async function middleware(request: NextRequest) {
       return NextResponse.next();
     }
 
+    // A path, not request.url: behind a proxy, request.url is the address Next
+    // listens on (https://0.0.0.0:3000), not the one the browser used.
+    const returnPath = `${pathname}${request.nextUrl.search}`;
+
     if (isGuestAuthEnabled()) {
-      const redirectUrl = encodeURIComponent(request.url);
+      const redirectUrl = encodeURIComponent(returnPath);
       return NextResponse.redirect(
         new URL(`/api/auth/guest?redirectUrl=${redirectUrl}`, request.url),
       );
     }
 
     const loginUrl = new URL(getUnauthenticatedRedirectPath(), request.url);
-    loginUrl.searchParams.set("callbackUrl", request.url);
+    loginUrl.searchParams.set("callbackUrl", returnPath);
     return NextResponse.redirect(loginUrl);
   }
 

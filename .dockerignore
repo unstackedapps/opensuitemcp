@@ -1,0 +1,12 @@
+**/node_modules
+.git
+.next
+.data
+dist
+.env
+.env.*
+docker/.env
+playwright-report
+test-results
+tests
+tsconfig.tsbuildinfo

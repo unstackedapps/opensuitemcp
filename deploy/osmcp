@@ -1,0 +1,216 @@
+#!/usr/bin/env bash
+# osmcp: run and update an OpenSuiteMCP install made by install.sh.
+#
+# Every update path (this command over SSH, and later the in-app buttons) runs
+# `osmcp update`, so there is one procedure: back up, switch the image, wait
+# for the app to answer, and roll back if it never does.
+set -euo pipefail
+
+SELF="$(readlink -f "${BASH_SOURCE[0]}")"
+OSMCP_DIR="${OSMCP_DIR:-$(dirname "$SELF")}"
+ENV_FILE="$OSMCP_DIR/.env"
+BACKUP_DIR="$OSMCP_DIR/backups"
+LOG_DIR="$OSMCP_DIR/logs"
+STATUS_FILE="$OSMCP_DIR/update-status.json"
+LOCK_FILE="$OSMCP_DIR/.update.lock"
+RELEASES_API="https://api.github.com/repos/unstackedapps/opensuitemcp/releases/latest"
+HEALTH_TIMEOUT="${OSMCP_HEALTH_TIMEOUT:-420}"
+KEEP_BACKUPS="${OSMCP_KEEP_BACKUPS:-10}"
+
+die() { echo "osmcp: $*" >&2; exit 1; }
+say() { echo "[$(date -u +%H:%M:%S)] $*"; }
+
+dc() { docker compose --project-directory "$OSMCP_DIR" -f "$OSMCP_DIR/compose.yml" "$@"; }
+
+env_get() { grep -E "^$1=" "$ENV_FILE" | tail -n1 | cut -d= -f2- | tr -d '"'; }
+
+env_set() {
+  local key="$1" value="$2"
+  if grep -qE "^$key=" "$ENV_FILE"; then
+    sed -i "s|^$key=.*|$key=$value|" "$ENV_FILE"
+  else
+    printf '%s=%s\n' "$key" "$value" >> "$ENV_FILE"
+  fi
+}
+
+image_ref() {
+  local name
+  name="$(env_get OSMCP_IMAGE)"
+  echo "${name:-ghcr.io/unstackedapps/opensuitemcp}:$1"
+}
+
+latest_version() {
+  curl -fsSL "$RELEASES_API" | sed -n 's/.*"tag_name": *"v\{0,1\}\([^"]*\)".*/\1/p' | head -n1
+}
+
+app_health() {
+  local id
+  id="$(dc ps -q app 2>/dev/null || true)"
+  [ -n "$id" ] || { echo "missing"; return; }
+  docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$id"
+}
+
+wait_healthy() {
+  local waited=0 state
+  while [ "$waited" -lt "$HEALTH_TIMEOUT" ]; do
+    state="$(app_health)"
+    [ "$state" = "healthy" ] && return 0
+    sleep 5
+    waited=$((waited + 5))
+  done
+  return 1
+}
+
+write_status() {
+  # state from to started [finished] [message]
+  cat > "$STATUS_FILE" <<JSON
+{"state":"$1","from":"$2","to":"$3","startedAt":"$4","finishedAt":"${5:-}","message":"${6:-}"}
+JSON
+}
+
+cmd_backup() {
+  mkdir -p "$BACKUP_DIR"
+  chmod 700 "$BACKUP_DIR"
+  local label="${1:-manual}" file
+  umask 077
+  file="$BACKUP_DIR/opensuitemcp-$(env_get OSMCP_VERSION)-$label-$(date -u +%Y%m%dT%H%M%SZ).dump"
+  say "Backing up the database to $file"
+  dc exec -T postgres pg_dump -U opensuitemcp -d opensuitemcp -Fc > "$file"
+  # Keep the newest $KEEP_BACKUPS dumps.
+  ls -1t "$BACKUP_DIR"/*.dump 2>/dev/null | tail -n +"$((KEEP_BACKUPS + 1))" | xargs -r rm -f
+  echo "$file"
+}
+
+restore_dump() {
+  local file="$1"
+  [ -f "$file" ] || die "no backup at $file"
+  say "Restoring the database from $file"
+  dc stop app
+  # Drop and recreate rather than pg_restore --clean: tables that a newer
+  # migration added are not in the dump, and would block that migration later.
+  dc exec -T postgres psql -U opensuitemcp -d postgres -v ON_ERROR_STOP=1 \
+    -c 'DROP DATABASE IF EXISTS opensuitemcp WITH (FORCE);' \
+    -c 'CREATE DATABASE opensuitemcp OWNER opensuitemcp;'
+  dc exec -T postgres pg_restore -U opensuitemcp -d opensuitemcp --no-owner < "$file"
+}
+
+cmd_update() {
+  local target="${1:-latest}" current started backup image prev_version prev_backup
+  exec 9>"$LOCK_FILE"
+  flock -n 9 || die "another update is already running"
+
+  current="$(env_get OSMCP_VERSION)"
+  if [ "$target" = "latest" ]; then
+    target="$(latest_version)"
+    [ -n "$target" ] || die "could not read the latest release from GitHub"
+  fi
+  target="${target#v}"
+  if [ "$target" = "$current" ] && [ "$(app_health)" = "healthy" ]; then
+    say "Already on $current."
+    return 0
+  fi
+
+  mkdir -p "$LOG_DIR"
+  started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  write_status running "$current" "$target" "$started"
+  say "Updating OpenSuiteMCP from $current to $target"
+
+  # Release tags never change, so an image already on this server is used as is.
+  image="$(image_ref "$target")"
+  if ! docker image inspect "$image" >/dev/null 2>&1; then
+    say "Pulling $image"
+    if ! docker pull --quiet "$image" >/dev/null; then
+      write_status failed "$current" "$target" "$started" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "Could not pull $image"
+      die "could not pull $image; still on $current"
+    fi
+  fi
+
+  backup="$(cmd_backup "pre-$target" | tail -n1)"
+  prev_version="$(env_get OSMCP_PREVIOUS_VERSION)"
+  prev_backup="$(env_get OSMCP_PREVIOUS_BACKUP)"
+  env_set OSMCP_PREVIOUS_VERSION "$current"
+  env_set OSMCP_PREVIOUS_BACKUP "$backup"
+  env_set OSMCP_VERSION "$target"
+
+  dc up -d app
+  say "Waiting up to ${HEALTH_TIMEOUT}s for the app to answer"
+  if wait_healthy; then
+    write_status succeeded "$current" "$target" "$started" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    say "Updated to $target."
+    return 0
+  fi
+
+  say "The app did not become healthy on $target. Rolling back to $current."
+  dc logs --no-color --tail=80 app > "$LOG_DIR/failed-$target-$(date -u +%Y%m%dT%H%M%SZ).log" 2>&1 || true
+  # The new version may have migrated the database before failing, so the old
+  # version gets the database it was running with.
+  restore_dump "$backup"
+  env_set OSMCP_VERSION "$current"
+  # `osmcp rollback` should still undo the last update that worked.
+  env_set OSMCP_PREVIOUS_VERSION "$prev_version"
+  env_set OSMCP_PREVIOUS_BACKUP "$prev_backup"
+  dc up -d app
+  if wait_healthy; then
+    write_status rolled_back "$current" "$target" "$started" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$target did not start; restored $current"
+    die "update to $target failed; rolled back to $current. Logs: $LOG_DIR"
+  fi
+  write_status failed "$current" "$target" "$started" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "Rollback to $current did not start either"
+  die "rollback to $current did not start either. Check: osmcp logs app"
+}
+
+cmd_rollback() {
+  local previous backup
+  previous="$(env_get OSMCP_PREVIOUS_VERSION)"
+  backup="$(env_get OSMCP_PREVIOUS_BACKUP)"
+  [ -n "$previous" ] || die "no previous version recorded"
+  echo "This restores the database from $backup and returns to $previous."
+  echo "Anything saved since that update is lost."
+  if [ "${1:-}" != "--yes" ]; then
+    read -r -p "Type the version to confirm ($previous): " answer
+    [ "$answer" = "$previous" ] || die "cancelled"
+  fi
+  restore_dump "$backup"
+  env_set OSMCP_VERSION "$previous"
+  dc up -d app
+  wait_healthy || die "$previous did not become healthy. Check: osmcp logs app"
+  say "Rolled back to $previous."
+}
+
+cmd_status() {
+  echo "Version:  $(env_get OSMCP_VERSION)"
+  echo "Address:  https://$(env_get OSMCP_DOMAIN)"
+  echo "App:      $(app_health)"
+  [ -f "$STATUS_FILE" ] && echo "Last update: $(cat "$STATUS_FILE")"
+  echo
+  dc ps --format 'table {{.Service}}\t{{.Status}}'
+}
+
+usage() {
+  cat <<'USAGE'
+Usage: osmcp <command>
+
+  status              Version, address, and the state of each container
+  update [VERSION]    Back up, then move to VERSION (default: the latest release)
+  rollback [--yes]    Return to the version before the last update, restoring its backup
+  backup              Write a database backup to backups/
+  restore FILE        Replace the database with a backup file
+  logs [SERVICE]      Print the last 200 log lines (add -f to follow)
+  restart             Restart every container
+  compose ARGS...     Run any docker compose command against this install
+USAGE
+}
+
+[ -f "$ENV_FILE" ] || die "no .env in $OSMCP_DIR. Run install.sh first."
+
+case "${1:-}" in
+  status) cmd_status ;;
+  update) shift; cmd_update "${1:-latest}" ;;
+  rollback) shift; cmd_rollback "${1:-}" ;;
+  backup) cmd_backup manual | tail -n1 ;;
+  restore) shift; [ -n "${1:-}" ] || die "usage: osmcp restore FILE"; restore_dump "$1"; dc up -d app; wait_healthy ;;
+  logs) shift; dc logs --no-color --tail=200 "$@" ;;
+  restart) dc restart ;;
+  compose) shift; dc "$@" ;;
+  ""|-h|--help|help) usage ;;
+  *) usage; exit 1 ;;
+esac
