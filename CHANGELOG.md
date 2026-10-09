@@ -5,6 +5,13 @@ All notable changes to OpenSuiteMCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.9.1] - 2026-10-09
+
+### 🐛 Fixed
+
+- **NetSuite docs search returns only Oracle NetSuite Help Center pages.** `osmcp_search_netsuite_docs` and the Help Center search in chat returned general web results labelled as Help Center results: a query about Ship Central SuiteApp access returned Medicare SHIP pages and the Wikipedia article "Ship". SearXNG sends `site:` with the query, and Bing, often the only engine that answers, ignores it. Every result outside a search resource's host and path is dropped now, on custom resources too. The Help Center query also names NetSuite and the Oracle Help Center, because Bing ranks on the leading words and the filter alone left most searches empty
+- **A search that found nothing runs again the next time it is asked.** An empty result usually means the engines refused the request, and it was cached for 7 days like any other
+
 ## [5.9.0] - 2026-10-08
 
 ### ✨ Added
