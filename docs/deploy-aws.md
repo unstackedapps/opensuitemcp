@@ -2,14 +2,17 @@
 
 Run steps 1–6 on your own computer with the [AWS CLI v2](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html). Run step 7 on the new server over SSH.
 
-## Step 1: Sign the AWS CLI in
+## Step 1: Sign the AWS CLI in to the account
+
+| Account | Do this |
+|---|---|
+| Yours | `aws login --profile osmcp --region us-east-1 --remote` |
+| A customer's, with access | The customer creates an IAM user with **AmazonEC2FullAccess** and an access key for **Command Line Interface (CLI)**, and sends you the key. Run `aws configure --profile osmcp` and paste it |
+| A customer's, without sharing access | The customer opens **AWS CloudShell** in their console and runs steps 2–5 there. Send them your public key for step 2 |
 
 ```bash
-aws login --profile osmcp --region us-east-1 --remote
 export AWS_PROFILE=osmcp AWS_REGION=us-east-1
 ```
-
-`aws login` opens the AWS console sign-in and gives the CLI that user's access. Any credentials that can create EC2 resources work instead.
 
 ## Step 2: Create an SSH key
 
@@ -18,6 +21,8 @@ ssh-keygen -t ed25519 -f ~/.ssh/opensuitemcp -N ""
 aws ec2 import-key-pair --key-name opensuitemcp \
   --public-key-material fileb://$HOME/.ssh/opensuitemcp.pub
 ```
+
+In CloudShell: upload your `opensuitemcp.pub` with **Actions → Upload file**, then run only the `import-key-pair` command, with `fileb://opensuitemcp.pub`.
 
 ## Step 3: Create the security group
 
@@ -33,7 +38,7 @@ aws ec2 authorize-security-group-ingress --group-id $SG --ip-permissions \
   "IpProtocol=tcp,FromPort=443,ToPort=443,IpRanges=[{CidrIp=0.0.0.0/0}]"
 ```
 
-- **Port 22** opens only to the IP address you run this from.
+- **Port 22** opens only to the IP address you run this from. In CloudShell, set `MYIP` to the address you will SSH from.
 - **Ports 80 and 443** serve the app. Let's Encrypt also needs port 80 to issue the certificate.
 - **Using your own VPC?** Set `VPC` to its ID, and add `--subnet-id` with a public subnet in step 4.
 
@@ -48,9 +53,9 @@ aws ec2 authorize-security-group-ingress --group-id $SG --ip-permissions \
 
 ```bash
 TYPE=t3.medium
-AMI=$(aws ssm get-parameter \
-  --name /aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id \
-  --query Parameter.Value --output text)
+AMI=$(aws ec2 describe-images --owners 099720109477 \
+  --filters 'Name=name,Values=ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-amd64-server-*' \
+  --query 'sort_by(Images,&CreationDate)[-1].ImageId' --output text)
 IID=$(aws ec2 run-instances --image-id $AMI --instance-type $TYPE \
   --key-name opensuitemcp --security-group-ids $SG \
   --block-device-mappings 'DeviceName=/dev/sda1,Ebs={VolumeSize=30,VolumeType=gp3}' \
