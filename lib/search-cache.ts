@@ -82,6 +82,11 @@ export async function setCachedSearch(
   value: CachedSearchPayload,
   ttlSeconds: number = SEARCH_CACHE_TTL_SECONDS,
 ): Promise<void> {
+  // No results usually means the engines refused this request, and caching
+  // that would repeat it for the whole TTL.
+  if (value.results.length === 0) {
+    return;
+  }
   const client = await getClient();
   if (!client) {
     return;
