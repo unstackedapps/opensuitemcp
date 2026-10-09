@@ -9,7 +9,7 @@ A read-only JSON report for whoever operates this instance: version, usage count
 **Navigate to:** Admin → Instance report
 
 1. Click **Generate token**
-2. Copy **Report address** and **Token** from the dialog, and send both to your operator
+2. Copy **Address** and **Token** from the dialog, and send both to your operator
 
 The report answers at once. The token isn't shown again.
 
@@ -22,7 +22,7 @@ The report answers at once. The token isn't shown again.
    ```
 
 2. Set `OSMCP_INSTANCE_REPORT_TOKEN` to it in `.env`, then restart the app (`sudo osmcp compose up -d app` on an install made with `deploy/install.sh`).
-3. Send your operator the address, `https://<your host>/api/instance/report`, and the token.
+3. Send your operator the address, `https://<your host>`, and the token.
 
 `OSMCP_INSTANCE_REPORT_TOKEN`, when set, replaces a token generated in the app.
 
