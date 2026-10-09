@@ -41,6 +41,9 @@ export type InstanceReport = {
     runsLast7Days: number;
     failedRunsLast7Days: number;
     toolErrorsLast7Days: number;
+    /** Tools agent apps called over MCP, and how many of those calls failed. */
+    agentToolCallsLast7Days: number;
+    agentToolErrorsLast7Days: number;
   };
   netsuite: {
     usersConnected: number;
@@ -113,6 +116,7 @@ export async function buildInstanceReport(): Promise<InstanceReport> {
     messages,
     runs,
     toolErrors,
+    agentToolCalls,
     netsuite,
     agentApps,
     userProviders,
@@ -153,6 +157,13 @@ export async function buildInstanceReport(): Promise<InstanceReport> {
         ) AS part
       WHERE m."createdAt" >= ${week}::timestamp
         AND part->>'state' = 'output-error'
+    `),
+    one(sql`
+      SELECT
+        COALESCE(sum(calls), 0) AS calls,
+        COALESCE(sum(errors), 0) AS errors
+      FROM "McpToolCallHourly"
+      WHERE hour >= ${week}::timestamp
     `),
     one(sql`
       WITH saved AS (
@@ -255,6 +266,8 @@ export async function buildInstanceReport(): Promise<InstanceReport> {
       runsLast7Days: count(runs, "total"),
       failedRunsLast7Days: count(runs, "failed"),
       toolErrorsLast7Days: count(toolErrors, "total"),
+      agentToolCallsLast7Days: count(agentToolCalls, "calls"),
+      agentToolErrorsLast7Days: count(agentToolCalls, "errors"),
     },
     netsuite: {
       usersConnected: count(netsuite, "usersConnected"),
