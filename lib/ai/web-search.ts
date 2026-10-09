@@ -1,3 +1,8 @@
+import {
+  builtinSearchResource,
+  searchResultUrlInResource,
+} from "@/lib/ai/search-resources";
+
 type SearXNGResult = {
   url: string;
   title: string;
@@ -259,7 +264,11 @@ export async function executeSearXNGDomainSearch(
     maxResults,
     fetchImpl,
   } = params;
-  const combinedQuery = `${siteFilter} ${query}`.trim();
+  const builtin = builtinSearchResource(domainId);
+  const engineQuery = builtin?.queryTemplate
+    ? builtin.queryTemplate.replace("{query}", () => query)
+    : query;
+  const combinedQuery = `${siteFilter} ${engineQuery}`.trim();
 
   const searchResults = await searchSearXNG(combinedQuery, fetchImpl);
   const normalized = searchResults
@@ -273,14 +282,28 @@ export async function executeSearXNGDomainSearch(
         snippet: string;
         engine?: string;
       } => Boolean(result),
-    )
-    .slice(0, maxResults);
+    );
+  const inResource = normalized.flatMap((result) => {
+    const url = searchResultUrlInResource(
+      result.url,
+      domainUrl,
+      builtin?.mirrorHosts,
+    );
+    return url ? [{ ...result, url }] : [];
+  });
+  if (inResource.length < normalized.length) {
+    console.warn("[WebSearch] Dropped results outside the resource", {
+      domainUrl,
+      dropped: normalized.length - inResource.length,
+      kept: inResource.length,
+    });
+  }
 
   return {
     provider: "searxng",
     domain: { id: domainId, label: domainLabel, url: domainUrl },
     query: combinedQuery,
-    results: normalized,
+    results: inResource.slice(0, maxResults),
     fetchedAt: new Date().toISOString(),
     metadata: { siteFilter },
   };

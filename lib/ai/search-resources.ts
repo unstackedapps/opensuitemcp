@@ -16,6 +16,8 @@ export const BUILTIN_SEARCH_RESOURCES: Array<{
   label: string;
   url: string;
   toolDescription: string;
+  queryTemplate?: string;
+  mirrorHosts?: string[];
 }> = [
   {
     catalogId: ORACLE_HELP_CATALOG_ID,
@@ -23,6 +25,11 @@ export const BUILTIN_SEARCH_RESOURCES: Array<{
     url: "https://docs.oracle.com/en/cloud/saas/netsuite",
     toolDescription:
       "Official Oracle NetSuite Help Center. Use this for foundational truth, standard UI navigation, permission setup, official SuiteScript API references, and security best practices. Priority 1 for 'How-to' questions regarding native features and core ERP modules.",
+    // Bing, often the only engine SearXNG reaches, ignores `site:` and ranks on
+    // the leading words: "Ship Central SuiteApp" alone returns ships.
+    queryTemplate: "NetSuite {query} Oracle Help Center",
+    // Redirects to docs.oracle.com with the same path.
+    mirrorHosts: ["docs.cloud.oracle.com"],
   },
 ];
 
@@ -148,6 +155,52 @@ export function searchResourceSiteFilter(url: string): string {
     .replace(TRAILING_SLASH_REGEX, "")
     .replace(LEADING_SLASH_REGEX, "");
   return path ? `site:${parsed.hostname}/${path}` : `site:${parsed.hostname}`;
+}
+
+/**
+ * A search result's URL if it lies inside the resource, or null. Engines treat
+ * `site:` as a hint at best, so every result is checked here. A mirror host's
+ * URL comes back on the resource's own host.
+ */
+export function searchResultUrlInResource(
+  resultUrl: string,
+  resourceUrl: string,
+  mirrorHosts: string[] = [],
+): string | null {
+  let result: URL;
+  let resource: URL;
+  try {
+    result = new URL(resultUrl);
+    resource = new URL(resourceUrl);
+  } catch {
+    return null;
+  }
+  if (result.protocol !== "https:" && result.protocol !== "http:") {
+    return null;
+  }
+
+  const host = result.hostname.toLowerCase();
+  const home = resource.hostname.toLowerCase();
+  const mirrored = mirrorHosts.includes(host);
+  if (!(mirrored || host === home || host.endsWith(`.${home}`))) {
+    return null;
+  }
+
+  const base = resource.pathname.replace(TRAILING_SLASH_REGEX, "");
+  if (
+    base &&
+    result.pathname !== base &&
+    !result.pathname.startsWith(`${base}/`)
+  ) {
+    return null;
+  }
+
+  if (!mirrored) {
+    return resultUrl;
+  }
+  result.protocol = "https:";
+  result.hostname = home;
+  return result.toString();
 }
 
 export function searchResourceToolName(resource: SearchResourceEntry): string {
