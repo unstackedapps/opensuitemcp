@@ -316,6 +316,13 @@
       "when": 1790244320197,
       "tag": "0044_mcp_tool_calls",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1791561600000,
+      "tag": "0045_instance_report_token",
+      "breakpoints": true
     }
   ]
 }

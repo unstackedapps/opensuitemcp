@@ -918,6 +918,20 @@ export const mcpToolCallHourly = pgTable(
 export type McpToolCallHourly = InferSelectModel<typeof mcpToolCallHourly>;
 
 /**
+ * The instance report's token, when an admin generated it in the app. Only
+ * its SHA-256 is kept. One row at most; OSMCP_INSTANCE_REPORT_TOKEN, when set,
+ * takes its place.
+ */
+export const instanceReportToken = pgTable("InstanceReportToken", {
+  id: integer("id").primaryKey().notNull().default(1),
+  tokenHash: varchar("tokenHash", { length: 64 }).notNull(),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  createdBy: uuid("createdBy").references(() => user.id, {
+    onDelete: "set null",
+  }),
+});
+
+/**
  * Members allowed to create agent apps when the org narrows it to a list.
  * Ignored while the org policy is "all".
  */

@@ -1,17 +1,30 @@
 # Instance report
 
-A read-only JSON report for whoever operates this instance: version, usage counts, NetSuite connection health and recent server errors. Counts only: no message text, no emails, no names. Off unless you set a token.
+A read-only JSON report for whoever operates this instance: version, usage counts, NetSuite connection health and recent server errors. Counts only: no message text, no emails, no names. Off until a token is set.
 
 ## Turn it on
 
-1. Generate a token of at least 32 characters:
+**Organization install**
+
+**Navigate to:** Admin → Instance report
+
+1. Click **Generate token**
+2. Copy **Report address** and **Token** from the dialog, and send both to your operator
+
+The report answers at once. The token isn't shown again.
+
+**Solo install**, or an install managed from the server:
+
+1. Generate a token on the server:
 
    ```bash
    openssl rand -hex 32
    ```
 
-2. Set `OSMCP_INSTANCE_REPORT_TOKEN` to it in the app's environment, then restart the app.
-3. Give your operator the report URL, `https://<your host>/api/instance/report`, and the token.
+2. Set `OSMCP_INSTANCE_REPORT_TOKEN` to it in `.env`, then restart the app (`sudo osmcp compose up -d app` on an install made with `deploy/install.sh`).
+3. Send your operator the address, `https://<your host>/api/instance/report`, and the token.
+
+`OSMCP_INSTANCE_REPORT_TOKEN`, when set, replaces a token generated in the app.
 
 **Check your work:**
 
@@ -19,9 +32,9 @@ A read-only JSON report for whoever operates this instance: version, usage count
 curl -H "Authorization: Bearer <token>" https://<your host>/api/instance/report
 ```
 
-A `404` means the token is unset or shorter than 32 characters. A `401` means the token sent does not match.
+A `404` means no token is set. A `401` means the token sent does not match.
 
-**Afterward:** to change who can read the report, replace the token and restart. To turn it off, remove the variable and restart.
+**Afterward:** **Replace** on Admin → Instance report gives a new token and stops the old one. **Turn off** stops the report.
 
 ## What it contains
 
