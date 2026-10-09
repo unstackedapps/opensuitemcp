@@ -15,6 +15,8 @@
     "setup:backend": "tsx docker/scripts/setup-backend.ts",
     "teardown:backend": "bash docker/scripts/teardown-backend.sh",
     "bootstrap:local": "tsx docker/scripts/local-orchestrator.ts bootstrap",
+    "bootstrap:aws": "tsx docker/scripts/bootstrap-aws.ts",
+    "teardown:aws": "tsx docker/scripts/bootstrap-aws.ts teardown",
     "reset:backend": "tsx docker/scripts/local-orchestrator.ts reset",
     "skills:sync": "tsx lib/ai/skills/cli-sync-oracle.ts",
     "db:generate": "drizzle-kit generate",
