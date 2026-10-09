@@ -878,6 +878,46 @@ export const mcpApiKey = pgTable(
 export type McpApiKey = InferSelectModel<typeof mcpApiKey>;
 
 /**
+ * Tool calls agent apps made over MCP, totalled per hour: one row per user,
+ * agent app and tool in each hour, so a busy agent adds rows by the hour rather
+ * than by the call. An hour stops changing once the clock passes it, so a
+ * reader that counts only past hours counts each one once.
+ */
+export const mcpToolCallHourly = pgTable(
+  "McpToolCallHourly",
+  {
+    /** Start of the hour, UTC. */
+    hour: timestamp("hour").notNull(),
+    userId: uuid("userId")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    credentialKind: varchar("credentialKind", {
+      length: 8,
+      enum: ["key", "oauth"],
+    }).notNull(),
+    /** `McpApiKey.id` or `OAuthGrant.id`; no foreign key, as it can be either. */
+    credentialId: uuid("credentialId").notNull(),
+    tool: varchar("tool", { length: 128 }).notNull(),
+    calls: integer("calls").notNull().default(0),
+    /** Calls that returned an error, failed validation, or threw. */
+    errors: integer("errors").notNull().default(0),
+  },
+  (table) => ({
+    pk: primaryKey({
+      columns: [
+        table.hour,
+        table.userId,
+        table.credentialKind,
+        table.credentialId,
+        table.tool,
+      ],
+    }),
+  }),
+);
+
+export type McpToolCallHourly = InferSelectModel<typeof mcpToolCallHourly>;
+
+/**
  * Members allowed to create agent apps when the org narrows it to a list.
  * Ignored while the org policy is "all".
  */

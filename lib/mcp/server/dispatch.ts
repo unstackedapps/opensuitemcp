@@ -28,8 +28,13 @@ import { buildMcpServerInfo } from "./server-info";
 import { buildToolSurface, findTool, toWireTool } from "./tools";
 import { toolSurfaceDigest } from "./tools/digest";
 import { loadNetSuitePromptsOrNone } from "./tools/prompts";
-import { type McpToolDefinition, toolError } from "./tools/types";
+import {
+  type McpToolDefinition,
+  type McpToolResult,
+  toolError,
+} from "./tools/types";
 import { validateToolArgs } from "./tools/validate-args";
+import { recordMcpToolCall, toolCallFailed } from "./usage";
 
 /** Discovery results are per-user, so they must never be cached across keys. */
 const PRIVATE_CACHE = { ttlMs: 60_000, cacheScope: "private" as const };
@@ -196,18 +201,25 @@ async function callTool(
   // retries, the way every other tool-level failure here behaves.
   const invalid = validateToolArgs(name, tool.inputSchema, args);
   if (invalid) {
+    void recordMcpToolCall(principal, name, true);
     return ok(id, { ...toolError(invalid), resultType: "complete" });
   }
 
   // Assembled at most once per call, and only if a tool asks for it.
   let surface: McpToolDefinition[] | null = null;
-  const result = await tool.execute(args, principal, {
-    toolSurface: async () => {
-      surface ??= await buildToolSurface(principal);
-      return surface;
-    },
-  });
-  return ok(id, { ...result, resultType: "complete" });
+  let result: McpToolResult | null = null;
+  try {
+    result = await tool.execute(args, principal, {
+      toolSurface: async () => {
+        surface ??= await buildToolSurface(principal);
+        return surface;
+      },
+    });
+    return ok(id, { ...result, resultType: "complete" });
+  } finally {
+    // Counted whether the tool returned, reported an error, or threw.
+    void recordMcpToolCall(principal, name, toolCallFailed(result));
+  }
 }
 
 function discoverResult(protocolVersion: McpProtocolVersion, origin: string) {

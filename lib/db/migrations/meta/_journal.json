@@ -309,6 +309,13 @@
       "when": 1790240720197,
       "tag": "0043_memory_enabled",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1790244320197,
+      "tag": "0044_mcp_tool_calls",
+      "breakpoints": true
     }
   ]
 }

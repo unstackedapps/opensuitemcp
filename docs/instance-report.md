@@ -30,7 +30,7 @@ A `404` means the token is unset or shorter than 32 characters. A `401` means th
 | `app` | Version, install mode (`solo` or `org`), Node version, when the process started |
 | `users` | Total, disabled, new in 30 days, signed in within 7 and 30 days |
 | `orgs` | Number of organizations |
-| `activity` | Messages people sent in 24 hours and 7 days, active users, runs and failed runs, tool errors — all over 7 days |
+| `activity` | Messages people sent in 24 hours and 7 days, active users, runs and failed runs, tool errors, and tools agent apps called over MCP with how many failed — all over 7 days |
 | `netsuite` | Users connected, saved accounts, accounts with no token, tokens refreshed in 7 days |
 | `agentApps` | API keys and OAuth apps not revoked, and how many were used in 7 days |
 | `aiProviders` | Users with each provider type, and org-wide providers that are enabled |
