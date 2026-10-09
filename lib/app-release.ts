@@ -34,7 +34,15 @@ export function isNewerVersion(latest: string, current: string): boolean {
   return false;
 }
 
-export async function getLatestReleasedVersion(): Promise<string | null> {
+/**
+ * The latest release's tag. Cached for six hours by default; the App updates
+ * panel asks for a fresher answer.
+ */
+export async function getLatestReleasedVersion({
+  maxAgeSeconds = 21_600,
+}: {
+  maxAgeSeconds?: number;
+} = {}): Promise<string | null> {
   try {
     const response = await fetch(
       `https://api.github.com/repos/${APP_GITHUB_REPO}/releases/latest`,
@@ -43,7 +51,9 @@ export async function getLatestReleasedVersion(): Promise<string | null> {
           Accept: "application/vnd.github+json",
           "User-Agent": "OpenSuiteMCP",
         },
-        next: { revalidate: 21_600 },
+        ...(maxAgeSeconds > 0
+          ? { next: { revalidate: maxAgeSeconds } }
+          : { cache: "no-store" as const }),
       },
     );
 
@@ -59,17 +69,27 @@ export async function getLatestReleasedVersion(): Promise<string | null> {
   }
 }
 
-export async function getAppReleaseBadge() {
+/**
+ * The header chip. `updatesHref` is where this person installs updates; without
+ * it the chip only names the version.
+ */
+export async function getAppReleaseBadge({
+  updatesHref = null,
+}: {
+  updatesHref?: string | null;
+} = {}) {
   const latestVersion = await getLatestReleasedVersion();
   const installMode = getInstallMode();
+  const updateAvailable = latestVersion
+    ? isNewerVersion(latestVersion, APP_VERSION)
+    : false;
 
   return {
     version: APP_VERSION,
     latestVersion,
-    updateAvailable: latestVersion
-      ? isNewerVersion(latestVersion, APP_VERSION)
-      : false,
+    updateAvailable,
     installMode,
+    updatesHref,
   };
 }
 

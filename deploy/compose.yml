@@ -14,8 +14,11 @@ services:
       SEARXNG_ENDPOINT: http://searxng:8080
       AUTH_URL: https://${OSMCP_DOMAIN}
       AUTH_TRUST_HOST: "true"
+      # Where the app asks the updater for an update and reads the result.
+      OSMCP_CONTROL_DIR: /app/.control
     volumes:
       - app_data:/app/.data
+      - ./control:/app/.control
     depends_on:
       postgres:
         condition: service_healthy
@@ -87,6 +90,23 @@ services:
       - caddy_config:/config
     depends_on:
       - app
+
+  # Runs `osmcp update` when the app asks (control/request.json), and nightly
+  # when automatic updates are on. It holds the Docker socket, publishes no
+  # port, and the app reaches it only through the control/ folder.
+  updater:
+    build: ./updater
+    image: opensuitemcp-updater:local
+    restart: unless-stopped
+    entrypoint: ["bash", "${OSMCP_DIR:?OSMCP_DIR is not set in .env}/updater/updater.sh"]
+    environment:
+      OSMCP_DIR: ${OSMCP_DIR}
+      OSMCP_AUTO_UPDATE_HOUR: ${OSMCP_AUTO_UPDATE_HOUR:-3}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Mounted at the same path, so Compose resolves ./Caddyfile and the
+      # other relative paths to the same host files from inside.
+      - ${OSMCP_DIR}:${OSMCP_DIR}
 
 volumes:
   app_data:

@@ -6,6 +6,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { getAppReleaseBadge } from "@/lib/app-release";
 import { redirectIfNeedsOnboarding } from "@/lib/onboarding/guards";
 import { redirectIfNeedsOrgSetup } from "@/lib/org/setup";
+import { appUpdatesHref } from "@/lib/updates/control";
 import { auth } from "../(auth)/auth";
 
 export const experimental_ppr = true;
@@ -29,7 +30,7 @@ export default async function Layout({
   await redirectIfNeedsOnboarding(session);
   const [cookieStore, appRelease] = await Promise.all([
     cookies(),
-    getAppReleaseBadge(),
+    getAppReleaseBadge({ updatesHref: appUpdatesHref(session) }),
   ]);
   const isCollapsed = cookieStore.get("sidebar_state")?.value !== "true";
 

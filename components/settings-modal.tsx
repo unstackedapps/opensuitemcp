@@ -59,6 +59,7 @@ import {
 } from "@/lib/netsuite/accounts";
 import { ORACLE_DOC_LINKS } from "@/lib/netsuite/integration-checklist";
 import { isMenuTypeaheadKey } from "@/lib/ui/menu-typeahead";
+import { AppUpdates } from "./app-updates";
 import { DictationSettings } from "./dictation-settings";
 import { toast } from "./toast";
 
@@ -194,6 +195,7 @@ async function fetchSettings() {
         managedByOrg: boolean;
       };
       installMode?: "org" | "solo";
+      showAppUpdates?: boolean;
     };
   } catch (error) {
     console.error("[Settings] Error in fetchSettings:", error);
@@ -1220,6 +1222,8 @@ export function SettingsPanel({ active, section }: SettingsPanelProps) {
               title="Timezone"
             />
             <DictationSettings />
+            {/* Org installs update from Admin → App updates. */}
+            {settings?.showAppUpdates ? <AppUpdates /> : null}
           </div>
         ) : null}
 

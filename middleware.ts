@@ -39,8 +39,14 @@ function isMcpServerPath(pathname: string): boolean {
   );
 }
 
-/** The instance report; see app/api/instance/report/route.ts. */
-const INSTANCE_REPORT_PATH = "/api/instance/report";
+/**
+ * The instance report and the operator's update request. Both authenticate
+ * with the report token in their route handlers; see app/api/instance/.
+ */
+const INSTANCE_OPERATOR_PATHS = new Set([
+  "/api/instance/report",
+  "/api/instance/update",
+]);
 
 /** Next.js metadata routes must stay public so favicons load on /login and /setup. */
 function isAppMetadataPath(pathname: string): boolean {
@@ -79,7 +85,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Authenticates with its own bearer token in the route handler.
-  if (pathname === INSTANCE_REPORT_PATH) {
+  if (INSTANCE_OPERATOR_PATHS.has(pathname)) {
     return NextResponse.next();
   }
 

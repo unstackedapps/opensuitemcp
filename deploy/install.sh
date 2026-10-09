@@ -15,7 +15,7 @@ DOMAIN=""
 MODE=""
 ROOT_EMAIL=""
 IMAGE=""
-BUNDLE_FILES="compose.yml Caddyfile osmcp searxng-entrypoint.sh"
+BUNDLE_FILES="compose.yml Caddyfile osmcp searxng-entrypoint.sh updater/Dockerfile updater/updater.sh"
 
 die() { echo "install.sh: $*" >&2; exit 1; }
 say() { echo "==> $*"; }
@@ -68,6 +68,7 @@ say "Installing OpenSuiteMCP $VERSION into $DIR"
 mkdir -p "$DIR"
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || true)"
 for f in $BUNDLE_FILES; do
+  mkdir -p "$DIR/$(dirname "$f")"
   if [ -n "$SRC" ] && [ -f "$SRC/$f" ] && [ "$SRC" != "$DIR" ]; then
     cp "$SRC/$f" "$DIR/$f"
   elif [ "$SRC" != "$DIR" ] || [ ! -f "$DIR/$f" ]; then
@@ -76,12 +77,17 @@ for f in $BUNDLE_FILES; do
 done
 chmod 755 "$DIR/osmcp"
 ln -sf "$DIR/osmcp" /usr/local/bin/osmcp
+# The app (uid 1001) and the updater share this folder.
+mkdir -p "$DIR/control"
+chown 1001:1001 "$DIR/control"
+chmod 775 "$DIR/control"
 
 # 4. Settings and secrets, written once.
 ENV_FILE="$DIR/.env"
 if [ -f "$ENV_FILE" ]; then
   say "Keeping the existing $ENV_FILE"
   sed -i "s|^OSMCP_VERSION=.*|OSMCP_VERSION=$VERSION|" "$ENV_FILE"
+  grep -q '^OSMCP_DIR=' "$ENV_FILE" || echo "OSMCP_DIR=$DIR" >> "$ENV_FILE"
 else
   [ -n "$DOMAIN" ] || die "--domain is required"
   case "$MODE" in
@@ -94,6 +100,7 @@ else
   cat > "$ENV_FILE" <<ENV
 # OpenSuiteMCP settings. osmcp and Docker Compose both read this file.
 OSMCP_VERSION=$VERSION
+OSMCP_DIR=$DIR
 OSMCP_DOMAIN=$DOMAIN
 OSMCP_INSTALL_MODE=$MODE
 OSMCP_ROOT_EMAIL=$ROOT_EMAIL
@@ -119,7 +126,7 @@ fi
 
 # 6. Start
 say "Starting containers (the first start pulls images and migrates the database)"
-docker compose --project-directory "$DIR" -f "$DIR/compose.yml" up -d --pull missing
+docker compose --project-directory "$DIR" -f "$DIR/compose.yml" up -d --build --pull missing
 
 say "Waiting for the app to answer"
 for _ in $(seq 1 84); do

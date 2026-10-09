@@ -90,6 +90,7 @@ function PureChatHeader({
           installMode={appRelease.installMode}
           latestVersion={appRelease.latestVersion}
           updateAvailable={appRelease.updateAvailable}
+          updatesHref={appRelease.updatesHref}
           version={appRelease.version}
         />
         {!isReadonly ? <NetSuiteStatusChip /> : null}
