@@ -5,6 +5,14 @@ All notable changes to OpenSuiteMCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.12.1] - 2026-10-09
+
+### 🐛 Fixed
+
+- **`pnpm bootstrap:aws` checks the AWS CLI before anything else.** A missing CLI, or one too old for `aws login`, printed the CLI's whole help text partway through. It now says which, offers to run AWS's installer for macOS or Linux, and stops cleanly when declined. With several CLIs installed, it uses one that has `aws login`
+- **The AWS profile is picked from a list.** The prompt pre-filled the first saved profile, which can belong to another company's AWS account. **New profile: osmcp** is highlighted, and the summary names the profile and the signed-in identity
+- **`pnpm teardown:aws` checks the account.** It deletes nothing when the profile is signed in to a different account from the one the server was created in
+
 ## [5.12.0] - 2026-10-09
 
 ### ✨ Added
@@ -958,6 +966,7 @@ First stable release of OpenSuiteMCP - an open source, production-ready NetSuite
 
 ---
 
+[5.12.1]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.12.1
 [5.12.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.12.0
 [5.11.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.11.0
 [5.10.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.10.0

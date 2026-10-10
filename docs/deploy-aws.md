@@ -4,7 +4,7 @@
 
 ## Fastest: `pnpm bootstrap:aws`
 
-Needs Node 22+, [pnpm](https://pnpm.io) and the [AWS CLI v2](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) on your computer.
+Needs Node 22+ and [pnpm](https://pnpm.io) on your computer. The script checks the AWS CLI first, and offers to install or update it.
 
 ```bash
 git clone https://github.com/unstackedapps/opensuitemcp.git
@@ -13,7 +13,7 @@ pnpm install
 pnpm bootstrap:aws
 ```
 
-It asks for the AWS profile, region, a name, install mode, owner email and domain. Then it creates the server, installs OpenSuiteMCP over SSH, and prints the address. A Free plan account gets `c7i-flex.large` automatically.
+It asks for the AWS profile (from a list, when your computer has more than one), region, a name, install mode, owner email and domain. Then it creates the server, installs OpenSuiteMCP over SSH, and prints the address. A Free plan account gets `c7i-flex.large` automatically.
 
 | To | Run |
 |---|---|
