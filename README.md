@@ -8,7 +8,7 @@ Source-available **NetSuite MCP client** — chat UI for NetSuite’s AI Connect
 
 Bring your own LLM keys (**Google Gemini**, **Anthropic Claude**, **OpenAI**, or an **OpenAI-compatible** endpoint). Self-host for internal use. Commercial rights reserved by [Unstacked Apps, LLC](https://www.unstackedapps.com/).
 
-**Current release:** [v5.12.0](https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.12.0) · [Changelog](CHANGELOG.md)
+**Current release:** [v5.12.1](https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.12.1) · [Changelog](CHANGELOG.md)
 
 <img src="./docs/screenshot-chat.png" alt="OpenSuiteMCP chat UI" width="100%" />
 

@@ -137,15 +137,106 @@ function listStates(): Deployment[] {
 
 // ---------------------------------------------------------------- AWS CLI
 
-function awsBinary(): string {
-  const found = spawnSync("aws", ["--version"], { stdio: "ignore" });
-  if (found.status === 0) {
-    return "aws";
-  }
-  const local = path.join(os.homedir(), ".local", "bin", "aws");
-  return existsSync(local) ? local : "aws";
+const AWS_INSTALL_DOCS =
+  "https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html";
+
+/** `aws login` needs a 2025 or later AWS CLI v2. */
+function supportsLogin(bin: string): boolean {
+  return spawnSync(bin, ["login", "help"], { stdio: "ignore" }).status === 0;
 }
-const AWS = awsBinary();
+
+function cliVersion(bin: string): string {
+  const out = spawnSync(bin, ["--version"], { encoding: "utf8" }).stdout ?? "";
+  return out.match(/aws-cli\/(\S+)/)?.[1] ?? "unknown";
+}
+
+/**
+ * Every AWS CLI on this machine, first on PATH first. A Mac can carry two:
+ * AWS's installer and Homebrew each add one, and the older may come first.
+ */
+function findAwsClis(): string[] {
+  const onPath = (
+    spawnSync("which", ["-a", "aws"], { encoding: "utf8" }).stdout ?? ""
+  )
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const known = [
+    path.join(os.homedir(), ".local", "bin", "aws"),
+    "/usr/local/bin/aws",
+    "/opt/homebrew/bin/aws",
+  ].filter((bin) => existsSync(bin));
+  return [...new Set([...onPath, ...known])];
+}
+
+/** The commands that install or update the AWS CLI here, or null. */
+function installCommands(): string[] | null {
+  if (process.platform === "darwin") {
+    return [
+      "curl -fsSL https://awscli.amazonaws.com/AWSCLIV2.pkg -o /tmp/AWSCLIV2.pkg",
+      "sudo installer -pkg /tmp/AWSCLIV2.pkg -target /",
+    ];
+  }
+  if (process.platform === "linux") {
+    const arch = process.arch === "arm64" ? "aarch64" : "x86_64";
+    return [
+      `curl -fsSL https://awscli.amazonaws.com/awscli-exe-linux-${arch}.zip -o /tmp/awscliv2.zip`,
+      "rm -rf /tmp/aws && unzip -q /tmp/awscliv2.zip -d /tmp",
+      "sudo /tmp/aws/install --update",
+    ];
+  }
+  return null;
+}
+
+let AWS = "aws";
+
+/**
+ * The first thing bootstrap:aws does. Finds an AWS CLI that has `aws login`,
+ * and offers to install or update one when there is none.
+ */
+async function ensureAwsCli(): Promise<void> {
+  const clis = findAwsClis();
+  const ready = clis.find(supportsLogin);
+  if (ready) {
+    AWS = ready;
+    log.success(`AWS CLI ${cliVersion(ready)}`);
+    return;
+  }
+
+  const problem = clis[0]
+    ? `AWS CLI ${cliVersion(clis[0])} is too old for aws login.`
+    : "The AWS CLI isn't installed.";
+  const commands = installCommands();
+  if (!commands) {
+    fail(`${problem} Install AWS CLI v2: ${AWS_INSTALL_DOCS}`);
+  }
+  note((commands as string[]).join("\n"), `${problem} AWS's installer:`);
+  const install =
+    !unattended &&
+    unwrap(
+      await confirm({
+        message: clis[0]
+          ? "Update it now? It asks for your password."
+          : "Install it now? It asks for your password.",
+      }),
+    );
+  if (!install) {
+    outro("Run those commands, then pnpm bootstrap:aws again.");
+    process.exit(1);
+  }
+
+  const ran = spawnSync("sh", ["-c", (commands as string[]).join(" && ")], {
+    stdio: "inherit",
+  });
+  const installed = findAwsClis().find(supportsLogin);
+  if (ran.status !== 0 || !installed) {
+    fail(
+      `The AWS CLI installer didn't finish. Install it by hand: ${AWS_INSTALL_DOCS}`,
+    );
+  }
+  AWS = installed as string;
+  log.success(`AWS CLI ${cliVersion(AWS)}`);
+}
 
 type AwsTarget = { profile: string; region: string };
 
@@ -217,18 +308,32 @@ async function chooseTarget(): Promise<AwsTarget & { name: string }> {
     .map((line) => line.trim())
     .filter(Boolean);
 
+  // Each saved profile is a sign-in to some AWS account, possibly another
+  // company's, so one is chosen from a list and never pre-filled into a field.
   let profile = flag("profile");
+  if (!profile && (unattended || !profiles?.length)) {
+    profile = "osmcp";
+  }
   if (!profile) {
-    profile = unattended
-      ? "osmcp"
-      : unwrap(
-          await text({
-            message: "AWS CLI profile",
-            placeholder: "osmcp",
-            defaultValue: "osmcp",
-            initialValue: profiles?.includes("osmcp") ? "osmcp" : profiles?.[0],
-          }),
-        );
+    const known = profiles ?? [];
+    profile = unwrap(
+      await select({
+        message: "AWS CLI profile",
+        initialValue: "osmcp",
+        options: [
+          ...(known.includes("osmcp")
+            ? []
+            : [
+                {
+                  value: "osmcp",
+                  label: "New profile: osmcp",
+                  hint: "signs in with aws login",
+                },
+              ]),
+          ...known.map((saved) => ({ value: saved, label: saved })),
+        ],
+      }),
+    );
   }
 
   const region =
@@ -262,10 +367,12 @@ async function chooseTarget(): Promise<AwsTarget & { name: string }> {
   return { profile, region, name };
 }
 
-async function ensureSignedIn(target: AwsTarget): Promise<string> {
+type Identity = { Account: string; Arn: string };
+
+async function ensureSignedIn(target: AwsTarget): Promise<Identity> {
   const identity = aws(target, ["sts", "get-caller-identity"]);
   if (identity.ok) {
-    return (JSON.parse(identity.stdout) as { Account: string }).Account;
+    return JSON.parse(identity.stdout) as Identity;
   }
   if (unattended) {
     fail(
@@ -296,7 +403,7 @@ async function ensureSignedIn(target: AwsTarget): Promise<string> {
   if (!retry.ok) {
     fail(retry.stderr);
   }
-  return (JSON.parse(retry.stdout) as { Account: string }).Account;
+  return JSON.parse(retry.stdout) as Identity;
 }
 
 /** Free plan accounts may only launch a short list of types. */
@@ -637,6 +744,7 @@ async function deploy(): Promise<void> {
   console.log(`\n${formatOpenSuiteMcpBanner()}\n`);
   intro("Deploy to AWS");
 
+  await ensureAwsCli();
   const target = await chooseTarget();
   const state: Deployment = loadState(target.name) ?? { ...target };
   state.profile = target.profile;
@@ -647,14 +755,17 @@ async function deploy(): Promise<void> {
     );
   }
 
-  state.accountId = await ensureSignedIn(state);
-  log.success(`Signed in to AWS account ${state.accountId}.`);
+  const identity = await ensureSignedIn(state);
+  state.accountId = identity.Account;
+  log.success(
+    `Signed in to AWS account ${identity.Account} as ${identity.Arn}.`,
+  );
   await askInstall(state);
 
   const domainLabel = state.domain || "<ip>.sslip.io";
   note(
     [
-      `Account     ${state.accountId} · ${state.region}`,
+      `Account     ${state.accountId} · ${state.region} · profile ${state.profile}`,
       `Server      ${state.instanceType}, Ubuntu 24.04, 30 GB`,
       `Install     ${state.mode}${state.rootEmail ? `, owner ${state.rootEmail}` : ""}`,
       `Address     https://${domainLabel}`,
@@ -786,6 +897,15 @@ async function teardown(): Promise<void> {
         ));
   const state = loadState(name) ?? fail(`No deployment named ${name}.`);
   const target = state as AwsTarget;
+
+  // Deleting needs only EC2 calls, which any AWS CLI v2 makes.
+  AWS = findAwsClis().find(supportsLogin) ?? findAwsClis()[0] ?? "aws";
+  const identity = await ensureSignedIn(target);
+  if (state.accountId && identity.Account !== state.accountId) {
+    fail(
+      `Profile ${state.profile} is signed in to account ${identity.Account}, but ${state.name} is in ${state.accountId}. Sign in to ${state.accountId} first.`,
+    );
+  }
 
   note(
     [
