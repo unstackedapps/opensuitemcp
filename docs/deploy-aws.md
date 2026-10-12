@@ -15,6 +15,8 @@ pnpm bootstrap:aws
 
 It asks for the AWS profile (from a list, when your computer has more than one), region, a name, install mode, owner email and domain. Then it creates the server, installs OpenSuiteMCP over SSH, and prints the address. A Free plan account gets `c7i-flex.large` automatically.
 
+**With a domain,** it pauses to show the IP to point the A record at, and continues once Cloudflare's and Google's public DNS return that IP. A Cloudflare record must be **DNS only** (grey cloud).
+
 | To | Run |
 |---|---|
 | Continue a run that stopped | `pnpm bootstrap:aws --name <name>` |
