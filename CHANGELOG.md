@@ -5,6 +5,12 @@ All notable changes to OpenSuiteMCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.12.2] - 2026-10-12
+
+### 🐛 Fixed
+
+- **`pnpm bootstrap:aws` checks a domain against public DNS.** It asked the local network's resolver, which on the first run with a domain had cached "doesn't exist" from before the record was added; Cloudflare's negative TTL keeps that for 30 minutes, so the run sat waiting with the record already correct. It asks 1.1.1.1 and 8.8.8.8 directly now, as Let's Encrypt does, and continues within about 10 seconds of the record being right. While it waits, it says whether the domain is not found yet or which IP it points at
+
 ## [5.12.1] - 2026-10-09
 
 ### 🐛 Fixed
@@ -966,6 +972,7 @@ First stable release of OpenSuiteMCP - an open source, production-ready NetSuite
 
 ---
 
+[5.12.2]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.12.2
 [5.12.1]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.12.1
 [5.12.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.12.0
 [5.11.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.11.0

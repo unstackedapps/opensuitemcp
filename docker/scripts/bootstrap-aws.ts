@@ -709,16 +709,40 @@ function ensureAddress(state: Deployment): void {
   saveState(state);
 }
 
-async function waitForDns(domain: string, ip: string): Promise<boolean> {
+/**
+ * Asked directly, past the local network's resolver: on the first Mac run it
+ * had cached "doesn't exist" from before the record was added, and
+ * Cloudflare's negative TTL kept that for 30 minutes. Let's Encrypt checks
+ * public DNS too, so this is the answer that matters.
+ */
+const PUBLIC_DNS = ["1.1.1.1", "8.8.8.8"];
+
+async function publicLookup(domain: string): Promise<string[]> {
+  const resolver = new dns.Resolver({ timeout: 4000, tries: 1 });
+  resolver.setServers(PUBLIC_DNS);
+  try {
+    return await resolver.resolve4(domain);
+  } catch {
+    return [];
+  }
+}
+
+async function waitForDns(
+  domain: string,
+  ip: string,
+  report: (status: string) => void,
+): Promise<boolean> {
   const deadline = Date.now() + DNS_WAIT_MS;
   while (Date.now() < deadline) {
-    try {
-      if ((await dns.resolve4(domain)).includes(ip)) {
-        return true;
-      }
-    } catch {
-      // Not resolvable yet.
+    const found = await publicLookup(domain);
+    if (found.includes(ip)) {
+      return true;
     }
+    report(
+      found.length === 0
+        ? `Waiting for ${domain} to resolve to ${ip}: not found yet`
+        : `Waiting for ${domain} to resolve to ${ip}: it points at ${found.join(", ")}. A Cloudflare record must also be DNS only (grey cloud)`,
+    );
     await sleep(10_000);
   }
   return false;
@@ -812,7 +836,9 @@ async function deploy(): Promise<void> {
     );
     const dnsWait = spinner();
     dnsWait.start(`Waiting for ${state.domain} to resolve to ${ip}`);
-    if (!(await waitForDns(state.domain, ip))) {
+    if (
+      !(await waitForDns(state.domain, ip, (status) => dnsWait.message(status)))
+    ) {
       dnsWait.stop("DNS didn't point at the server within 30 minutes.");
       fail(
         `Fix the A record, then run pnpm bootstrap:aws --name ${state.name} again.`,
