@@ -10,6 +10,7 @@ import {
   pairedSkillIdsFor,
   personasCarryingSkill,
 } from "@/lib/ai/personas/pairing";
+import { pageSkillFile } from "@/lib/ai/skills/catalog";
 import {
   readUserSkillContent,
   resolveUserSkillSurface,
@@ -365,7 +366,7 @@ const listSkills: McpToolDefinition = {
           ? `${skill.agentAuthor.keyName}${skill.agentAuthor.connectsFrom ? ` (${skill.agentAuthor.connectsFrom})` : ""}`
           : null,
         managedByOrg: skill.managedByOrg === true,
-        files: skill.files?.length ?? 0,
+        files: skill.fileCount ?? skill.files?.length ?? 0,
         carriedBy: personasCarryingSkill(personaSkillIds, skill.id),
       }));
 
@@ -495,6 +496,17 @@ const getSkill: McpToolDefinition = {
       );
     }
 
+    const page = pageSkillFile(found.content);
+    const files = found.skill.files ?? [];
+    const notes = [
+      page.nextOffset === undefined
+        ? null
+        : `This is the first ${page.nextOffset} of ${page.totalChars} characters. Read the rest with osmcp_read_skill_file, path \`SKILL.md\`, offset ${page.nextOffset}.`,
+      files.length === 0
+        ? null
+        : `Files in this skill${found.skill.fileCount ? ` (${files.length} of ${found.skill.fileCount} listed; open the others by the paths this document gives)` : ""}: ${files.join(", ")}. Read one with osmcp_read_skill_file when this document points at it.`,
+    ].filter(Boolean);
+
     return toolResult(
       {
         id: found.skill.id,
@@ -502,12 +514,15 @@ const getSkill: McpToolDefinition = {
         description: found.skill.description,
         source: found.skill.source,
         mode: found.skill.mode,
-        content: found.content,
-        files: found.skill.files ?? [],
+        content: page.content,
+        totalChars: page.totalChars,
+        ...(page.nextOffset === undefined
+          ? {}
+          : { nextOffset: page.nextOffset }),
+        files,
+        ...(found.skill.fileCount ? { fileCount: found.skill.fileCount } : {}),
       },
-      found.skill.files?.length
-        ? `${found.content}\n\nFiles in this skill: ${found.skill.files.join(", ")}. Read one with osmcp_read_skill_file when this document points at it.`
-        : found.content,
+      [page.content, ...notes].join("\n\n"),
     );
   },
 };

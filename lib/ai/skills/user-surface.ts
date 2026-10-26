@@ -6,6 +6,7 @@ import {
   getCommunitySkillContent,
   getConnectedSkillContent,
   getOracleSkillContent,
+  isSkillMd,
   listCommunityCatalogSkills,
   listConnectedCatalogSkills,
   listOracleCatalogSkills,
@@ -13,6 +14,7 @@ import {
   normalizeUserSkillSettings,
   oracleSkillDir,
   parseConnectedSkillId,
+  readPackSkillFile,
   readSkillPackFile,
   skillDescription,
 } from "@/lib/ai/skills/catalog";
@@ -48,6 +50,8 @@ export type ResolvedUserSkill = {
   agentAuthor?: AgentAuthor;
   /** Reference files beside SKILL.md, by path. */
   files?: string[];
+  /** Every reference file, when a pack skill has more than `files` lists. */
+  fileCount?: number;
 };
 
 type SettingsRow = Parameters<typeof normalizeUserSkillSettings>[0];
@@ -168,7 +172,9 @@ export async function resolveUserSkillSurface(params: {
 
   const resolved: ResolvedUserSkill[] = [];
 
-  const packFilesFor = (skill: (typeof catalog)[number]): string[] => {
+  const packFilesFor = (
+    skill: (typeof catalog)[number],
+  ): ReturnType<typeof listSkillPackFiles> => {
     const dir =
       skill.source === "oracle"
         ? oracleSkillDir(skill.id)
@@ -189,7 +195,7 @@ export async function resolveUserSkillSurface(params: {
                   : null;
               })()
             : null;
-    return dir ? listSkillPackFiles(dir) : [];
+    return dir ? listSkillPackFiles(dir) : { files: [], total: 0 };
   };
 
   for (const skill of [...catalog, ...connectedSkills]) {
@@ -199,6 +205,7 @@ export async function resolveUserSkillSurface(params: {
     if (kind === "builtin" || kind === "custom") {
       continue;
     }
+    const packFiles = packFilesFor(skill);
     resolved.push({
       id: skill.id,
       name: skill.name,
@@ -213,7 +220,10 @@ export async function resolveUserSkillSurface(params: {
       }),
       slug: skill.slug ?? null,
       sourceId: skill.sourceId ?? null,
-      ...(packFilesFor(skill).length > 0 ? { files: packFilesFor(skill) } : {}),
+      ...(packFiles.files.length > 0 ? { files: packFiles.files } : {}),
+      ...(packFiles.total > packFiles.files.length
+        ? { fileCount: packFiles.total }
+        : {}),
     });
   }
 
@@ -243,16 +253,12 @@ export async function resolveUserSkillSurface(params: {
 }
 
 /**
- * The body of one skill, or null when the user has no such skill or has
- * switched it off. Off is reported the same as missing on purpose: a caller
- * should not be able to read a skill it cannot see in the listing.
- */
-/**
- * One reference file from a skill, whatever source it came from.
+ * One file from a skill, whatever source it came from.
  *
  * Custom skills keep their files in `UserSkillFile`; Oracle, Community and
  * Connected keep the folder the repo laid out. Both answer the same question,
- * so the caller does not branch on source.
+ * so the caller does not branch on source. `SKILL.md` reads the skill's own
+ * instructions, so a turn that got them cut short can page through the rest.
  */
 export async function readUserSkillFile(params: {
   userId: string;
@@ -261,14 +267,28 @@ export async function readUserSkillFile(params: {
   skill: ResolvedUserSkill;
   path: string;
 }): Promise<string | null> {
+  if (isSkillMd(params.path.trim())) {
+    return skillBody(params.skill, params);
+  }
   switch (params.skill.source) {
-    case "oracle": {
-      const dir = oracleSkillDir(params.skill.id);
-      return dir ? readSkillPackFile(dir, params.path) : null;
-    }
+    case "oracle":
+      return readPackSkillFile(
+        params.path,
+        params.skill.id,
+        (folder) => folder,
+        oracleSkillDir,
+        getOracleSkillContent,
+      );
     case "community": {
-      const dir = communitySkillDir(params.skill.id);
-      return dir ? readSkillPackFile(dir, params.path) : null;
+      const slug =
+        params.skill.slug ?? params.skill.id.slice("community:".length);
+      return readPackSkillFile(
+        params.path,
+        slug,
+        (folder) => `community:${folder}`,
+        communitySkillDir,
+        getCommunitySkillContent,
+      );
     }
     case "connected": {
       const parsed = parseConnectedSkillId(params.skill.id);
@@ -291,6 +311,34 @@ export async function readUserSkillFile(params: {
   }
 }
 
+function skillBody(
+  skill: ResolvedUserSkill,
+  params: { userId: string; orgId: string | null; settings: SettingsRow },
+): string | null {
+  switch (skill.source) {
+    case "oracle":
+      return getOracleSkillContent(skill.id);
+    case "community":
+      return getCommunitySkillContent(skill.id);
+    case "connected":
+      return getConnectedSkillContent(
+        resolveConnectedSkillsScopeId(params.userId, params.orgId),
+        skill.id,
+      );
+    case "custom": {
+      const custom = normalizeUserSkillSettings(params.settings).customSkills;
+      return custom.find((entry) => entry.id === skill.id)?.content ?? null;
+    }
+    default:
+      return null;
+  }
+}
+
+/**
+ * The body of one skill, or null when the user has no such skill or has
+ * switched it off. Off is reported the same as missing on purpose: a caller
+ * should not be able to read a skill it cannot see in the listing.
+ */
 export async function readUserSkillContent(params: {
   userId: string;
   orgId: string | null;
@@ -305,29 +353,6 @@ export async function readUserSkillContent(params: {
   if (!skill) {
     return null;
   }
-
-  let content: string | null = null;
-  switch (skill.source) {
-    case "oracle":
-      content = getOracleSkillContent(skill.id);
-      break;
-    case "community":
-      content = getCommunitySkillContent(skill.id);
-      break;
-    case "connected":
-      content = getConnectedSkillContent(
-        resolveConnectedSkillsScopeId(params.userId, params.orgId),
-        skill.id,
-      );
-      break;
-    case "custom": {
-      const custom = normalizeUserSkillSettings(params.settings).customSkills;
-      content = custom.find((entry) => entry.id === skill.id)?.content ?? null;
-      break;
-    }
-    default:
-      content = null;
-  }
-
+  const content = skillBody(skill, params);
   return content === null ? null : { skill, content };
 }

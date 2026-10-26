@@ -28,8 +28,8 @@ import {
   type AgentAuthor,
   type CustomSkill,
   MAX_SKILL_DESCRIPTION,
-  normalizeSkillFilePath,
   normalizeUserSkillSettings,
+  pageSkillFile,
   skillDescription,
 } from "@/lib/ai/skills/catalog";
 import {
@@ -789,7 +789,7 @@ const readSkillFileTool: McpToolDefinition = {
   name: "osmcp_read_skill_file",
   title: "Read a skill reference file",
   description:
-    "Read one reference file beside a skill's SKILL.md. A skill is a folder: SKILL.md is the entry point, and the material it points at — intake questions, troubleshooting tables, worked patterns — sits in files beside it. osmcp_get_skill lists them; read one when SKILL.md tells you to, rather than pulling them all in advance.",
+    "Read one reference file beside a skill's SKILL.md. A skill is a folder: SKILL.md is the entry point, and the material it points at — intake questions, troubleshooting tables, worked patterns — sits in files beside it. osmcp_get_skill lists them; read one when SKILL.md tells you to, rather than pulling them all in advance. Path `SKILL.md` continues a skill osmcp_get_skill returned in part. A long file comes back in pages: pass `nextOffset` from one page as `offset` to read the next.",
   inputSchema: {
     type: "object",
     properties: {
@@ -800,7 +800,12 @@ const readSkillFileTool: McpToolDefinition = {
       path: {
         type: "string",
         description:
-          "A path from the `files` list on osmcp_get_skill, e.g. `references/intake.md`.",
+          "A path from the `files` list on osmcp_get_skill, or one the skill's instructions give, e.g. `references/intake.md`.",
+      },
+      offset: {
+        type: "integer",
+        minimum: 0,
+        description: "Character to start from; `nextOffset` of the last page.",
       },
     },
     required: ["skillId", "path"],
@@ -809,7 +814,10 @@ const readSkillFileTool: McpToolDefinition = {
   annotations: { title: "Read a skill reference file", ...READ_ONLY },
   execute: async (args, principal) => {
     const skillId = readString(args, "skillId");
-    const path = normalizeSkillFilePath(readString(args, "path"));
+    // Validated where it is read: a link into a sibling skill starts `../`.
+    const path = readString(args, "path");
+    const offset =
+      typeof args.offset === "number" && args.offset >= 0 ? args.offset : 0;
     if (!skillId) {
       return toolError("Pass the `skillId` of a skill from osmcp_list_skills.");
     }
@@ -849,7 +857,13 @@ const readSkillFileTool: McpToolDefinition = {
       );
     }
 
-    return toolResult({ skillId, path, content }, content);
+    const page = pageSkillFile(content, offset);
+    return toolResult(
+      { skillId, path, ...page },
+      page.nextOffset === undefined
+        ? page.content
+        : `${page.content}\n\nCharacters ${page.offset} to ${page.nextOffset} of ${page.totalChars}. Read on with offset ${page.nextOffset}.`,
+    );
   },
 };
 

@@ -1,6 +1,7 @@
 /**
  * Sync public GitHub skill packs without the REST API (no rate-limit bucket).
- * Downloads a branch tarball from codeload.github.com and walks SKILL.md files.
+ * Downloads a branch tarball from codeload.github.com and walks SKILL.md
+ * folders.
  */
 import { spawnSync } from "node:child_process";
 import {
@@ -12,7 +13,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { type FetchedSkillMd, MAX_SKILL_BODY_CHARS } from "./github-sync";
+import { type FetchedSkillMd, TEXT_FILE_PATTERN } from "./github-sync";
 
 const REF_CANDIDATES = ["main", "master"] as const;
 const MAX_ARCHIVE_BYTES = 64 * 1024 * 1024;
@@ -109,6 +110,7 @@ function walkPublicSkillMdFiles(
     skills: FetchedSkillMd[];
     maxSkills: number;
     skipDirNames: Set<string>;
+    skippedFiles: string[];
   },
 ): void {
   if (options.skills.length >= options.maxSkills) {
@@ -117,7 +119,10 @@ function walkPublicSkillMdFiles(
 
   let entries: ReturnType<typeof readdirSync>;
   try {
-    entries = readdirSync(absoluteDir, { withFileTypes: true });
+    // Sorted, so two runs over the same archive find skills in the same order.
+    entries = readdirSync(absoluteDir, { withFileTypes: true }).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
   } catch {
     return;
   }
@@ -163,15 +168,54 @@ function walkPublicSkillMdFiles(
         )
       : parentRelativePath;
 
+    const files = readSkillFolderFiles(absoluteDir, options.skippedFiles);
     options.skills.push({
       slug,
       relativeDir: relativeFromRoot || slug,
-      markdown:
-        markdown.length > MAX_SKILL_BODY_CHARS
-          ? markdown.slice(0, MAX_SKILL_BODY_CHARS)
-          : markdown,
+      markdown,
+      ...(files.length > 0 ? { files } : {}),
     });
   }
+}
+
+/**
+ * Every file beside a SKILL.md, whole.
+ *
+ * No count or length cap: an Oracle SuiteSkill keeps up to 355 files behind
+ * one SKILL.md, and a file cut short or left behind is a link that leads
+ * nowhere. The archive size cap bounds the total.
+ */
+function readSkillFolderFiles(
+  skillDir: string,
+  skippedFiles: string[],
+): Array<{ path: string; content: string }> {
+  const out: Array<{ path: string; content: string }> = [];
+  const walk = (dir: string, prefix: string): void => {
+    const entries = readdirSync(dir, { withFileTypes: true }).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
+    for (const entry of entries) {
+      const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+      const absolute = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        // A folder with its own SKILL.md is a skill of its own.
+        if (!existsSync(path.join(absolute, "SKILL.md"))) {
+          walk(absolute, relative);
+        }
+        continue;
+      }
+      if (!entry.isFile() || relative === "SKILL.md") {
+        continue;
+      }
+      if (!TEXT_FILE_PATTERN.test(entry.name)) {
+        skippedFiles.push(path.join(path.basename(skillDir), relative));
+        continue;
+      }
+      out.push({ path: relative, content: readFileSync(absolute, "utf8") });
+    }
+  };
+  walk(skillDir, "");
+  return out;
 }
 
 function escapeRegExp(value: string): string {
@@ -179,20 +223,19 @@ function escapeRegExp(value: string): string {
 }
 
 /**
- * List SKILL.md files from a public GitHub repo via tarball download.
+ * List SKILL.md files, each with its whole folder, from a public GitHub repo
+ * via tarball download. `skippedFiles` names the files left out because they
+ * are not text.
  */
 export async function listPublicSkillMdFiles(
   options: PublicSkillMdListOptions,
-): Promise<{ ref: string; skills: FetchedSkillMd[] }> {
+): Promise<{ ref: string; skills: FetchedSkillMd[]; skippedFiles: string[] }> {
   const ref = await resolvePublicRepoRef(
     options.owner,
     options.repo,
     options.ref,
   );
   const rootPath = (options.path ?? "").replace(/^\/+|\/+$/g, "");
-  const maxSkills = options.maxSkills ?? 200;
-  const skipDirNames = new Set(options.skipDirNames ?? ["in-progress"]);
-  const skills: FetchedSkillMd[] = [];
 
   const { rootDir, cleanup } = await extractPublicRepoArchive(
     options.owner,
@@ -205,16 +248,26 @@ export async function listPublicSkillMdFiles(
     if (!existsSync(startDir)) {
       throw new Error(`Path not found in public repo: ${rootPath || "/"}`);
     }
-
-    walkPublicSkillMdFiles(startDir, rootPath, {
-      rootPath,
-      skills,
-      maxSkills,
-      skipDirNames,
-    });
-
-    return { ref, skills };
+    return { ref, ...collectSkillFolders(startDir, rootPath, options) };
   } finally {
     cleanup();
   }
+}
+
+/** Walk an extracted tree for SKILL.md folders. */
+export function collectSkillFolders(
+  startDir: string,
+  rootPath: string,
+  options: { maxSkills?: number; skipDirNames?: string[] } = {},
+): { skills: FetchedSkillMd[]; skippedFiles: string[] } {
+  const skills: FetchedSkillMd[] = [];
+  const skippedFiles: string[] = [];
+  walkPublicSkillMdFiles(startDir, rootPath, {
+    rootPath,
+    skills,
+    maxSkills: options.maxSkills ?? 200,
+    skipDirNames: new Set(options.skipDirNames ?? ["in-progress"]),
+    skippedFiles,
+  });
+  return { skills, skippedFiles };
 }
