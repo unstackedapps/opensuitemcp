@@ -46,9 +46,9 @@ import { skillsPackSyncEnabled } from "@/lib/product-features";
 import { cn } from "@/lib/utils";
 import { toast } from "./toast";
 
-/** Official Oracle SuiteCloud Agent Skills pack on GitHub */
+/** Oracle's plug-ins on GitHub; its README covers Agent Skills and SuiteSkills */
 const ORACLE_SKILLS_GITHUB_URL =
-  "https://github.com/oracle/netsuite-suitecloud-sdk/tree/master/packages/agent-skills";
+  "https://github.com/oracle/netsuite-suitecloud-sdk/tree/master/packages/ai-plugins";
 
 /** Official Help Center docs for SuiteCloud Agent Skills */
 const ORACLE_SKILLS_DOCS_URL =

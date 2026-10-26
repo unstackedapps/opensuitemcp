@@ -61,7 +61,7 @@ Shared packs are **not** vendored in git. Sync them with:
 pnpm skills:sync
 ```
 
-That downloads Oracle’s [agent-skills](https://github.com/oracle/netsuite-suitecloud-sdk/tree/master/packages/agent-skills) into `.data/oracle-skills` (or `ORACLE_SKILLS_DIR`) and Community skills into `.data/community-skills` (or `COMMUNITY_SKILLS_DIR`). Run after setup, on deploy (production entrypoint), and on a **weekly cron**. New upstream skills appear as Off until you set a mode; removed upstream skills are pruned. Optional: `GITHUB_TOKEN` for higher GitHub API limits.
+That downloads every `netsuite-` skill folder in Oracle’s [SuiteCloud SDK repo](https://github.com/oracle/netsuite-suitecloud-sdk) — [Agent Skills](https://github.com/oracle/netsuite-suitecloud-sdk/tree/master/packages/agent-skills) and [SuiteSkills](https://github.com/oracle/netsuite-suitecloud-sdk/tree/master/packages/ai-plugins/common/skills/suiteskills) — into `.data/oracle-skills` (or `ORACLE_SKILLS_DIR`), and Community skills into `.data/community-skills` (or `COMMUNITY_SKILLS_DIR`). The container runs it on every start. New upstream skills appear as Off until you set a mode; removed upstream skills are pruned. Optional: `GITHUB_TOKEN` for higher GitHub API limits.
 
 **Connected** examples:
 
@@ -264,6 +264,7 @@ Official references:
 - [MCP Standard Tools](https://docs.oracle.com/en/cloud/saas/netsuite/ns-online-help/article_0902023450.html)
 - [Companion SuiteApp](https://docs.oracle.com/en/cloud/saas/netsuite/ns-online-help/article_9091153093.html)
 - [SuiteCloud Agent Skills](https://github.com/oracle/netsuite-suitecloud-sdk/tree/master/packages/agent-skills)
+- [SuiteSkills](https://github.com/oracle/netsuite-suitecloud-sdk/tree/master/packages/ai-plugins/common/skills/suiteskills)
 
 ## Usage limits (optional)
 

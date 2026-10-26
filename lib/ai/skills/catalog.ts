@@ -110,10 +110,31 @@ function titleFromSkillId(id: string): string {
     .join(" ");
 }
 
+const SUITESKILLS_PREFIX = "netsuite-suiteskills-";
+
+/**
+ * A SuiteSkill is titled by its `# ` heading — "Customers & Sales" — under
+ * the SuiteSkills name Oracle ships it with, not by its folder name.
+ */
+export function oracleSkillName(
+  id: string,
+  frontmatterName: string | undefined,
+  body: string,
+): string {
+  if (id.startsWith(SUITESKILLS_PREFIX)) {
+    const heading = /^#\s+(.+)$/m.exec(body)?.[1]?.trim();
+    return `SuiteSkills ${heading || titleFromSkillId(id.slice(SUITESKILLS_PREFIX.length))}`;
+  }
+  return titleFromSkillId(frontmatterName || id);
+}
+
 const ALWAYS_ON_SKILL_ID = "netsuite-ai-connector-instructions";
 
-/** Max chars injected per optional skill; connector skill is uncapped within TOTAL. */
-const MAX_OPTIONAL_SKILL_CHARS = 12_000;
+/**
+ * Max chars injected per optional skill. 15,000 fits every Oracle SuiteSkill
+ * whole (Finance is 14,161); past it the model is told how to read on.
+ */
+export const MAX_OPTIONAL_SKILL_CHARS = 15_000;
 /** Soft budget for all appended skill text per turn */
 const MAX_TOTAL_SKILL_CHARS = 40_000;
 
@@ -221,29 +242,38 @@ export function getCommunitySkillContent(skillId: string): string | null {
  * Disk-backed skills — Oracle, Community, Connected — keep their folder as the
  * repo laid it out, so the files SKILL.md points at are already there.
  */
-export function listSkillPackFiles(skillDir: string): string[] {
+export function listSkillPackFiles(skillDir: string): {
+  files: string[];
+  total: number;
+} {
   if (!existsSync(skillDir)) {
-    return [];
+    return { files: [], total: 0 };
   }
-  const out: string[] = [];
-  const walk = (dir: string, prefix: string): void => {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      if (out.length >= MAX_SKILL_FILES) {
-        return;
+  // Breadth-first, so a capped list shows the top of the folder — the index
+  // and shared guidance an Oracle SuiteSkill points at first — rather than
+  // the first 32 files of whichever subfolder sorts first.
+  const all: string[] = [];
+  let level: Array<{ dir: string; prefix: string }> = [
+    { dir: skillDir, prefix: "" },
+  ];
+  while (level.length > 0) {
+    const next: typeof level = [];
+    for (const { dir, prefix } of level) {
+      const entries = readdirSync(dir, { withFileTypes: true }).sort((a, b) =>
+        a.name.localeCompare(b.name),
+      );
+      for (const entry of entries) {
+        const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+        if (entry.isDirectory()) {
+          next.push({ dir: path.join(dir, entry.name), prefix: relative });
+        } else if (relative !== "SKILL.md") {
+          all.push(relative);
+        }
       }
-      const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
-      if (entry.isDirectory()) {
-        walk(path.join(dir, entry.name), relative);
-        continue;
-      }
-      if (entry.name === "SKILL.md") {
-        continue;
-      }
-      out.push(relative);
     }
-  };
-  walk(skillDir, "");
-  return out.sort((left, right) => left.localeCompare(right));
+    level = next;
+  }
+  return { files: all.slice(0, MAX_SKILL_FILES), total: all.length };
 }
 
 export function readSkillPackFile(
@@ -262,6 +292,66 @@ export function readSkillPackFile(
     return null;
   }
   return readFileSync(target, "utf8");
+}
+
+/** Characters one read returns. `records.json` in an Oracle skill is 3.35 MB. */
+export const SKILL_FILE_PAGE_CHARS = 64_000;
+
+/** One page of a skill file, and where the next page starts. */
+export function pageSkillFile(
+  content: string,
+  offset = 0,
+): {
+  content: string;
+  offset: number;
+  totalChars: number;
+  nextOffset?: number;
+} {
+  const start = Math.max(0, Math.min(Math.floor(offset), content.length));
+  const end = Math.min(content.length, start + SKILL_FILE_PAGE_CHARS);
+  return {
+    content: content.slice(start, end),
+    offset: start,
+    totalChars: content.length,
+    ...(end < content.length ? { nextOffset: end } : {}),
+  };
+}
+
+export const isSkillMd = (filePath: string): boolean =>
+  filePath.replace(/^\.\//, "").toUpperCase() === "SKILL.MD";
+
+/**
+ * `../netsuite-sdf-roles-and-permissions/SKILL.md` — Oracle's skills link to
+ * each other by folder, with or without the leading `../`.
+ */
+const SIBLING_SKILL_PATH = /^(?:\.\.\/)?([a-z0-9][a-z0-9._-]*)\/(.+)$/i;
+
+/**
+ * A file from a pack skill's own folder, or from another skill in the same
+ * pack when the path names that skill's folder.
+ */
+export function readPackSkillFile(
+  filePath: string,
+  folder: string,
+  toId: (folder: string) => string,
+  dirOf: (id: string) => string | null,
+  bodyOf: (id: string) => string | null,
+): string | null {
+  const ownDir = dirOf(toId(folder));
+  const own = ownDir ? readSkillPackFile(ownDir, filePath) : null;
+  if (own !== null) {
+    return own;
+  }
+  const sibling = SIBLING_SKILL_PATH.exec(filePath.trim());
+  if (!sibling) {
+    return null;
+  }
+  const siblingId = toId(sibling[1]);
+  if (isSkillMd(sibling[2])) {
+    return bodyOf(siblingId);
+  }
+  const siblingDir = dirOf(siblingId);
+  return siblingDir ? readSkillPackFile(siblingDir, sibling[2]) : null;
 }
 
 export function oracleSkillDir(skillId: string): string | null {
@@ -300,7 +390,7 @@ export function listOracleCatalogSkills(): CatalogSkill[] {
     }
     return {
       id,
-      name: fm.name ? titleFromSkillId(fm.name) : titleFromSkillId(id),
+      name: oracleSkillName(id, fm.name, body),
       description: fm.description ?? "Oracle SuiteCloud Agent Skill",
       author: "Oracle NetSuite" as const,
       source: "oracle" as const,
@@ -822,24 +912,48 @@ export function buildSkillsPromptSection(
   },
 ): string {
   const parts: string[] = [];
+  const leftOut: string[] = [];
   let used = 0;
   const enabledNames = listEnabledSkillNames(userSettings, options);
 
-  const push = (title: string, body: string, maxChars?: number) => {
+  // `readAs` is the name the readSkillFile tool finds the skill by; `note`
+  // goes after any cut, so a long skill still says what it carries.
+  const push = (
+    title: string,
+    body: string,
+    maxChars?: number,
+    extra?: { readAs?: string; note?: string },
+  ) => {
     const trimmed = body.trim();
     if (!trimmed) {
       return;
     }
+    const readAs = extra?.readAs ?? title;
     const limited =
       maxChars && trimmed.length > maxChars
-        ? `${trimmed.slice(0, maxChars)}\n\n[Skill truncated for context budget]`
+        ? `${trimmed.slice(0, maxChars)}\n\n[Cut at ${maxChars} of ${trimmed.length} characters. Read the rest with the readSkillFile tool: skill "${readAs}", path "SKILL.md", offset ${maxChars}.]`
         : trimmed;
-    const block = `### ${title}\n\n${limited}`;
+    const block = [`### ${title}`, limited, extra?.note]
+      .filter(Boolean)
+      .join("\n\n");
     if (used + block.length > MAX_TOTAL_SKILL_CHARS) {
+      leftOut.push(readAs);
       return;
     }
     parts.push(block);
     used += block.length;
+  };
+
+  const packNote = (name: string, dir: string | null): string | undefined => {
+    const { files, total } = dir
+      ? listSkillPackFiles(dir)
+      : { files: [], total: 0 };
+    if (total === 0) {
+      return;
+    }
+    return total > files.length
+      ? `${name} carries ${total} files beside these instructions. Read one with the readSkillFile tool — pass skill "${name}" and the path these instructions give.`
+      : withReferenceNote("", name, files).trim();
   };
 
   if (options?.includeAlwaysOn) {
@@ -870,7 +984,9 @@ export function buildSkillsPromptSection(
     }
     const body = readOracleSkillBody(skill.id);
     if (body) {
-      push(skill.name, body, MAX_OPTIONAL_SKILL_CHARS);
+      push(skill.name, body, MAX_OPTIONAL_SKILL_CHARS, {
+        note: packNote(skill.name, oracleSkillDir(skill.id)),
+      });
     }
   }
 
@@ -886,7 +1002,9 @@ export function buildSkillsPromptSection(
     }
     const body = readCommunitySkillBody(skill.slug ?? "");
     if (body) {
-      push(skill.name, body, MAX_OPTIONAL_SKILL_CHARS);
+      push(skill.name, body, MAX_OPTIONAL_SKILL_CHARS, {
+        note: packNote(skill.name, communitySkillDir(skill.id)),
+      });
     }
   }
 
@@ -926,9 +1044,15 @@ export function buildSkillsPromptSection(
         mode === "slash" ? `${skill.name} (invoked)` : skill.name,
         body,
         MAX_OPTIONAL_SKILL_CHARS,
+        { readAs: skill.name },
       );
     }
   }
+
+  const leftOutNote =
+    leftOut.length > 0
+      ? `\n\nLeft out of this turn to fit the context budget: ${leftOut.join(", ")}. When the request needs one, read it with the readSkillFile tool, path "SKILL.md".`
+      : "";
 
   const inventory = `==============================
 ENABLED SKILLS
@@ -937,7 +1061,7 @@ ENABLED SKILLS
 These skills are active for this session. If the user asks what skills you have access to, list them by name (do not invent others):
 ${enabledNames.map((name) => `- ${name}`).join("\n")}
 
-AI Connector Instructions are always on (core NetSuite MCP rules are already in your system prompt). Skills set to Auto are injected every turn. Skills set to Slash command are injected when the user types /skill-name.`;
+AI Connector Instructions are always on (core NetSuite MCP rules are already in your system prompt). Skills set to Auto are injected every turn. Skills set to Slash command are injected when the user types /skill-name.${leftOutNote}`;
 
   if (parts.length === 0) {
     return `\n\n${inventory}\n`;

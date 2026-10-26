@@ -2,6 +2,7 @@ import "server-only";
 
 import { tool } from "ai";
 import { z } from "zod";
+import { pageSkillFile } from "@/lib/ai/skills/catalog";
 import {
   readUserSkillFile,
   resolveUserSkillSurface,
@@ -27,7 +28,7 @@ export function createReadSkillFileTool({
 }: ReadSkillFileOptions) {
   return tool({
     description:
-      "Read a reference file belonging to one of the skills active in this conversation. A skill's instructions may point at files beside it, such as `references/intake.md`; call this to read one when the instructions say to. Pass the skill's name or id and the path exactly as the instructions give it.",
+      "Read a reference file belonging to one of the skills active in this conversation. A skill's instructions may point at files beside it, such as `references/intake.md`; call this to read one when the instructions say to. Pass the skill's name or id and the path exactly as the instructions give it. Path `SKILL.md` reads the skill's own instructions, for one cut short or left out of this turn. A long file comes back in pages: pass `nextOffset` from one page as `offset` to read the next.",
     inputSchema: z.object({
       skill: z
         .string()
@@ -35,8 +36,14 @@ export function createReadSkillFileTool({
       path: z
         .string()
         .describe("Path relative to the skill, e.g. `references/intake.md`."),
+      offset: z
+        .number()
+        .int()
+        .min(0)
+        .optional()
+        .describe("Character to start from; `nextOffset` of the last page."),
     }),
-    execute: async ({ skill, path }) => {
+    execute: async ({ skill, path, offset }) => {
       const settings = await getUserSettings({ userId });
       const surface = await resolveUserSkillSurface({
         userId,
@@ -73,10 +80,11 @@ export function createReadSkillFileTool({
         return {
           error: `${match.name} has no file "${path}".`,
           files: match.files ?? [],
+          ...(match.fileCount ? { fileCount: match.fileCount } : {}),
         };
       }
 
-      return { skill: match.name, path, content };
+      return { skill: match.name, path, ...pageSkillFile(content, offset) };
     },
   });
 }

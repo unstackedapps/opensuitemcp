@@ -9,7 +9,7 @@ const COMMUNITY_SKILLS_PATH = "skills";
 
 /**
  * On-disk Community skill pack (shared for all users).
- * Populated by `pnpm skills:sync` (boot + weekly cron).
+ * Populated by `pnpm skills:sync`, which runs on every container start.
  */
 export function getCommunitySkillsDir(): string {
   const fromEnv = process.env.COMMUNITY_SKILLS_DIR?.trim();

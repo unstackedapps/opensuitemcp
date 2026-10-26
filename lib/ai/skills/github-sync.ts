@@ -400,7 +400,12 @@ async function fetchSkillSiblings(
   return out;
 }
 
-const TEXT_FILE_PATTERN = /\.(md|markdown|txt|json|ya?ml|csv|sql|ts|js|py)$/i;
+/**
+ * Reference files a skill folder can carry. Markup and styles are here because
+ * Oracle's SuiteSkills ship dashboard templates as `.html` and `.css`.
+ */
+export const TEXT_FILE_PATTERN =
+  /\.(md|markdown|txt|json|ya?ml|csv|sql|ts|js|mjs|cjs|py|html?|css|svg|xml)$/i;
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -434,6 +439,9 @@ export function writeSkillPack(
       continue;
     }
     const skillDir = path.join(destDir, skill.localId);
+    // Start from an empty folder, so a file the pack dropped upstream is
+    // dropped here too.
+    rmSync(skillDir, { recursive: true, force: true });
     mkdirSync(skillDir, { recursive: true });
     writeFileSync(path.join(skillDir, "SKILL.md"), skill.markdown, "utf8");
     for (const file of skill.files ?? []) {
