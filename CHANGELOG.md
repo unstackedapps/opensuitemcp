@@ -5,6 +5,19 @@ All notable changes to OpenSuiteMCP will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.13.0] - 2026-10-26
+
+### ✨ Added
+
+- **Oracle’s SuiteSkills sync with the rest of Oracle’s skills.** The sync reads every `netsuite-` skill folder in Oracle’s SuiteCloud SDK repo, so the five SuiteSkills — Customers & Sales, Finance, Onboarding, Operations and Workforce, holding 48 runbooks — arrive beside the ten Agent Skills. They start Off, named **SuiteSkills Finance** and so on
+- **Skill files read in pages.** `readSkillFile` in chat and `osmcp_read_skill_file` over MCP return 64,000 characters at a time, with `nextOffset` for the next page, and take path `SKILL.md` to continue a skill that was cut. `osmcp_get_skill` pages the same way
+
+### 🐛 Fixed
+
+- **Oracle and Community skills sync whole.** The sync kept only `SKILL.md` and cut it at 32,000 characters, so four Oracle skills were missing up to 81% of their instructions and every reference file they pointed at. Each folder now syncs whole, and a file removed upstream is removed here
+- **A link from one Oracle skill into another resolves**, e.g. `../netsuite-sdf-roles-and-permissions/SKILL.md`
+- **Chat says how to read past a cut.** A skill longer than 15,000 characters (was 12,000) ends with the exact `readSkillFile` call for the rest, and a skill left out for the context budget is named instead of dropped
+
 ## [5.12.2] - 2026-10-12
 
 ### 🐛 Fixed
@@ -972,6 +985,7 @@ First stable release of OpenSuiteMCP - an open source, production-ready NetSuite
 
 ---
 
+[5.13.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.13.0
 [5.12.2]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.12.2
 [5.12.1]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.12.1
 [5.12.0]: https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.12.0

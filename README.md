@@ -8,11 +8,16 @@ Source-available **NetSuite MCP client** — chat UI for NetSuite’s AI Connect
 
 Bring your own LLM keys (**Google Gemini**, **Anthropic Claude**, **OpenAI**, or an **OpenAI-compatible** endpoint). Self-host for internal use. Commercial rights reserved by [Unstacked Apps, LLC](https://www.unstackedapps.com/).
 
-**Current release:** [v5.12.2](https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.12.2) · [Changelog](CHANGELOG.md)
+**Current release:** [v5.13.0](https://github.com/unstackedapps/opensuitemcp/releases/tag/v5.13.0) · [Changelog](CHANGELOG.md)
 
 <img src="./docs/screenshot-chat.png" alt="OpenSuiteMCP chat UI" width="100%" />
 
 _Main chat UI._
+
+## What’s in 5.13
+
+- **Oracle’s SuiteSkills** — the five business skills Oracle announced on 2026-10-26, holding 48 runbooks, sync with the rest of Oracle’s skills. Switch one on under **Skills → Oracle**
+- **Oracle skills sync whole** — every reference file, and no 32,000-character cut on `SKILL.md`
 
 ## What’s in 5.12
 
